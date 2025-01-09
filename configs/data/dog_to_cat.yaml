@@ -1,0 +1,28 @@
+_target_: src.data_modules.BaseDSBDM
+
+start_dataset:
+  _target_: src.dataset.AFHQDataset
+  split: 'dog'
+  img_size: 32
+  train: True
+  augment: True
+start_dataset_val:
+  _target_: src.dataset.AFHQDataset
+  split: 'dog'
+  img_size: 32
+  train: False
+
+end_dataset:
+  _target_: src.dataset.AFHQDataset
+  split: 'cat'
+  img_size: 32
+  train: True
+  augment: True
+end_dataset_val:
+  _target_: src.dataset.AFHQDataset
+  split: 'cat'
+  img_size: 32
+  train: False
+  
+batch_size: 64
+num_workers: 4

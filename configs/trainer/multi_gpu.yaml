@@ -1,0 +1,12 @@
+max_epochs: 200
+accelerator: gpu
+log_every_n_steps: 1
+reload_dataloaders_every_n_epochs: 1
+val_check_interval: 2000
+num_sanity_val_steps: 0
+profiler: 'simple'
+precision: 'bf16'
+limit_val_batches: 5
+fast_dev_run: False
+devices: -1
+strategy: 'ddp_find_unused_parameters_true'

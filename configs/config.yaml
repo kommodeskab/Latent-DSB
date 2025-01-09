@@ -1,0 +1,14 @@
+# @package _global_
+project_name: ???
+task_name: ???
+seed: 42
+compile: True
+continue_from_id: False
+
+defaults:
+  - trainer: ???
+  - data: ???
+  - model: ???
+  - callbacks: ???
+  - logger: ???
+  - _self_

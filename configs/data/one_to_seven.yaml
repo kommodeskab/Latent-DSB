@@ -1,0 +1,14 @@
+_target_: src.data_modules.BaseDSBDM
+
+start_dataset:
+  _target_: src.dataset.FilteredMNIST
+  digit: 1
+  img_size: 16
+end_dataset:
+  _target_: src.dataset.FilteredMNIST
+  digit: 7
+  img_size: 16
+  
+batch_size: 256
+cache_num_iters: 500
+num_workers: 8

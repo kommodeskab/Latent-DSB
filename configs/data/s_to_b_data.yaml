@@ -1,0 +1,13 @@
+_target_: src.data_modules.base_dm.BaseDSBDM
+
+start_dataset:
+  _target_: src.dataset.TextDataset
+  text: S
+  size: 50_000
+end_dataset:
+  _target_: src.dataset.TextDataset
+  text: B
+  size: 50_000
+  
+batch_size: 512
+num_workers: 8

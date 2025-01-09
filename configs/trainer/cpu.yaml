@@ -1,0 +1,6 @@
+max_epochs: -1
+accelerator: cpu
+reload_dataloaders_every_n_epochs: 1
+fast_dev_run: False
+num_sanity_val_steps: 0
+profiler: 'simple'

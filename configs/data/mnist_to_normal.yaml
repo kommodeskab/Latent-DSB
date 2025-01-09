@@ -1,0 +1,14 @@
+_target_: src.data_modules.BaseDSBDM
+
+start_dataset:
+  _target_: src.dataset.EMNISTNoLabel
+  split: 'digits'
+  img_size: 32
+end_dataset:
+  _target_: src.dataset.StandardNormalDataset
+  dim: [1, 32, 32]
+  size: 10000
+  
+batch_size: 256
+cache_num_iters: 20
+num_workers: 4

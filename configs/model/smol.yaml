@@ -1,0 +1,30 @@
+_target_: src.lightning_modules.DSB
+
+model:
+  _target_: src.networks.SimpleNetworkImages
+  channels: 1
+  height: 16
+  width: 16
+  num_time_embeddings: 31
+
+encoder_decoder_id: 'downsampler'
+
+optimizer:
+  _target_: torch.optim.AdamW
+  _partial_: True
+  lr: 1e-4
+
+scheduler:
+  _target_: torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
+  _partial_: True
+  T_0: 100
+  T_mult: 2
+
+max_gamma: 1.0
+min_gamma: 0.1
+num_steps: 30
+max_iterations: 200
+cache_max_size: 50
+cache_num_iters: 5
+T: 1.0
+max_norm: 1.0

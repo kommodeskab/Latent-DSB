@@ -1,0 +1,6 @@
+defaults:
+  - learningratemonitor
+  - richprogressbar
+  - richmodelsummary
+  - test_encoder_decoder
+  - plot_image_samples
