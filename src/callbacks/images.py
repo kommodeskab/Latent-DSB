@@ -45,12 +45,24 @@ class TestEncoderDecoderCB(Callback):
         axs[1, 1].imshow(x1_decoded[0, 0], cmap = cmap)
         axs[1, 1].set_title('x1 decoded')
         
+        for ax in axs.flatten():
+            ax.axis('off')
+        
         logger.log_image(
             key="test_encoder_decoder",
             images=[wandb.Image(fig)],
             step=trainer.global_step
         )
         plt.close(fig)
+        
+        # get the total size (number of pixels) of the images and the latent space
+        original_size = x0.flatten(1).size(1)
+        latent_size = x0_encoded.flatten(1).size(1)
+        # log the sizes
+        logger.log_metrics({
+                "original_size": original_size,
+                "latent_size": latent_size,
+            })
         
 class PlotSamplesCB(Callback):
     def __init__(self):
@@ -120,7 +132,7 @@ class PlotSamplesCB(Callback):
         logger.log_image(
             key = f"Samples iteration {iteration}",
             images = [wandb.Image(samples_fig)],
-            step = pl_module.global_step,
             caption = [caption],
+            step = pl_module.global_step,
         )
         plt.close(samples_fig)

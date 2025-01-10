@@ -2,6 +2,7 @@ import torch
 from torch import Tensor
 import random
 import math
+from typing import Callable
 
 def get_symmetric_schedule(min_value : float, max_value : float, num_steps : int) -> Tensor:
     gammas = torch.zeros(num_steps)
@@ -84,14 +85,57 @@ class Cache:
     def __len__(self) -> int:
         return len(self.cache)
 
+_NETWORK = Callable[[Tensor], Tensor]
 
-def get_encoder_decoder(id : str):
+from diffusers import AutoencoderKL
+from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
+
+class StableDiffusionVAE:
+    def __init__(self):
+        self.vae : AutoencoderKL = AutoencoderKL.from_pretrained("stable-diffusion-vae")
+        print("Loaded stable-diffusion-vae")
+        
+    @torch.no_grad()
+    def encode(self, x : Tensor) -> Tensor:
+        num_channels = x.size(1)
+        dist : DiagonalGaussianDistribution = self.vae.encode(x).latent_dist
+        return dist.mean.detach()
+    
+    @torch.no_grad()
+    def decode(self, z : Tensor) -> Tensor:
+        return self.vae.decode(z).sample.detach().clip(-1, 1)
+    
+class StableDiffusionEncoder:
+    def __init__(self, vae : StableDiffusionVAE):
+        self.vae = vae
+        
+    def __call__(self, x : Tensor) -> Tensor:
+        return self.vae.encode(x)
+    
+class StableDiffusionDecoder:
+    def __init__(self, vae : StableDiffusionVAE):
+        self.vae = vae
+        
+    def __call__(self, z : Tensor) -> Tensor:
+        return self.vae.decode(z)
+
+def get_encoder_decoder(id : str) -> tuple[_NETWORK, _NETWORK]:
     match id:
         case "downsampler":
             encoder = torch.nn.Upsample(scale_factor=0.5, mode='bilinear', align_corners=False)
             decoder = torch.nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
+        
         case "identity":
             encoder = torch.nn.Identity()
             decoder = torch.nn.Identity()
+            
+        case "stable-diffusion":
+                
+            vae = StableDiffusionVAE()
+            encoder = StableDiffusionEncoder(vae)
+            decoder = StableDiffusionDecoder(vae)
+            
+        case _:
+            raise ValueError(f"Unknown id {id}")
             
     return encoder, decoder

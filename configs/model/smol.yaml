@@ -3,8 +3,8 @@ _target_: src.lightning_modules.DSB
 model:
   _target_: src.networks.SimpleNetworkImages
   channels: 1
-  height: 16
-  width: 16
+  height: 8
+  width: 8
   num_time_embeddings: 31
 
 encoder_decoder_id: 'downsampler'
@@ -23,7 +23,7 @@ scheduler:
 max_gamma: 1.0
 min_gamma: 0.1
 num_steps: 30
-max_iterations: 200
+max_iterations: 2000
 cache_max_size: 50
 cache_num_iters: 5
 T: 1.0
