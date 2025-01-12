@@ -3,6 +3,8 @@ from torch import Tensor
 import random
 import math
 from typing import Callable
+from torch import device
+
 
 def get_symmetric_schedule(min_value : float, max_value : float, num_steps : int) -> Tensor:
     gammas = torch.zeros(num_steps)
@@ -90,8 +92,9 @@ _NETWORK = Callable[[Tensor], Tensor]
 from diffusers import AutoencoderKL
 from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
 
-class StableDiffusionVAE:
+class StableDiffusionVAE(torch.nn.Module):
     def __init__(self):
+        super().__init__()
         self.vae : AutoencoderKL = AutoencoderKL.from_pretrained("stable-diffusion-vae")
         print("Loaded stable-diffusion-vae")
         
@@ -119,7 +122,7 @@ class StableDiffusionDecoder:
     def __call__(self, z : Tensor) -> Tensor:
         return self.vae.decode(z)
 
-def get_encoder_decoder(id : str) -> tuple[_NETWORK, _NETWORK]:
+def get_encoder_decoder(id : str, device : device = device('cpu')) -> tuple[_NETWORK, _NETWORK]:
     match id:
         case "downsampler":
             encoder = torch.nn.Upsample(scale_factor=0.5, mode='bilinear', align_corners=False)
@@ -130,8 +133,8 @@ def get_encoder_decoder(id : str) -> tuple[_NETWORK, _NETWORK]:
             decoder = torch.nn.Identity()
             
         case "stable-diffusion":
-                
             vae = StableDiffusionVAE()
+            vae.to(device)
             encoder = StableDiffusionEncoder(vae)
             decoder = StableDiffusionDecoder(vae)
             

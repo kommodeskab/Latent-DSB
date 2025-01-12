@@ -1,0 +1,21 @@
+# @package _global_
+defaults:
+  - override /trainer: cpu
+  - override /data: fm_mnist
+  - override /callbacks: fm_callbacks
+  - override /model: fm
+  - override /logger: default
+
+project_name: 'flow matching'
+task_name: 'test'
+
+trainer:
+  enable_checkpointing: False
+  val_check_interval: 1.0
+  log_every_n_steps: 1
+  max_epochs: -1
+  limit_val_batches: 1
+  limit_train_batches: 200
+
+data:
+  batch_size: 32

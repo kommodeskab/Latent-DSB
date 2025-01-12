@@ -1,6 +1,4 @@
 import pytorch_lightning as pl
-import torch
-import torch.utils
 from torch.utils.data import DataLoader, random_split, Dataset
 
 def split_dataset(train_dataset : Dataset, val_dataset : Dataset | None, train_val_split : float) -> tuple[Dataset, Dataset]:

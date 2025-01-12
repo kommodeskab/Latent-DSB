@@ -1,0 +1,6 @@
+_target_: src.data_modules.BaseDM
+dataset:
+  _target_: src.dataset.EMNISTNoLabel
+  split: 'digits'
+  img_size: 16
+batch_size: 32

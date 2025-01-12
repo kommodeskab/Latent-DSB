@@ -1,12 +1,57 @@
 import pytorch_lightning as pl
-from .utils import get_batches
-from src.lightning_modules.schrodinger_bridge import DSB
+from .utils import get_batches, get_batch_from_dataset
+from src.lightning_modules import DSB, FM
 import matplotlib.pyplot as plt
 import wandb
 from pytorch_lightning import Callback, Trainer
 from torch import Tensor
 import torch
 from matplotlib.figure import Figure
+
+def plot_samples(samples : Tensor) -> Figure:
+    # assume samples have shape (16, c, h, w)
+    # and have values between -1 and 1
+    samples = (samples + 1) / 2
+    cmap = 'gray' if samples.shape[1] == 1 else None
+    fig, axs = plt.subplots(4, 4, figsize = (10, 10))
+    for i in range(16):
+        ax = axs[i // 4, i % 4]
+        ax.imshow(samples[i, 0], cmap = cmap)
+        ax.axis('off')
+    return fig
+
+class FlowMatchingCB(Callback):
+    def __init__(self):
+        super().__init__()
+        
+    def on_train_start(self, trainer : Trainer, pl_module : FM):
+        logger = pl_module.logger
+        
+        dataset = trainer.datamodule.val_dataset
+        self.x0 = get_batch_from_dataset(dataset, batch_size=16) 
+        fig = plot_samples(self.x0)
+        logger.log_image(
+            key = "Initial samples",
+            images = [wandb.Image(fig)],
+        )
+        plt.close(fig)
+        
+        encoded_shape = pl_module.encode(self.x0).shape
+        self.noise = torch.randn(*encoded_shape)
+        
+    def on_validation_end(self, trainer : Trainer, pl_module : FM):
+        logger = pl_module.logger
+        device = pl_module.device
+        noise = self.noise.to(device)
+        sample = pl_module.sample(noise)
+        sample = pl_module.decode(sample)
+        fig = plot_samples(sample)
+        logger.log_image(
+            key = "Samples",
+            images = [wandb.Image(fig)],
+            step = pl_module.global_step,
+        )
+        plt.close(fig)
 
 class TestEncoderDecoderCB(Callback):
     def __init__(self):
@@ -68,18 +113,6 @@ class PlotSamplesCB(Callback):
     def __init__(self):
         super().__init__()
         
-    def plot_samples(self, samples : Tensor) -> Figure:
-        # assume samples have shape (16, c, h, w)
-        # and have values between -1 and 1
-        samples = (samples + 1) / 2
-        cmap = 'gray' if samples.shape[1] == 1 else None
-        fig, axs = plt.subplots(4, 4, figsize = (10, 10))
-        for i in range(16):
-            ax = axs[i // 4, i % 4]
-            ax.imshow(samples[i, 0], cmap = cmap)
-            ax.axis('off')
-        return fig
-        
     def on_train_start(self, trainer : Trainer, pl_module : DSB):
         device = pl_module.device
         logger = pl_module.logger
@@ -98,8 +131,8 @@ class PlotSamplesCB(Callback):
         self.x0_encoded, self.x1_encoded = x0_encoded.cpu(), x1_encoded.cpu()
         
         # plot the initial samples
-        x0_fig = self.plot_samples(self.x0)
-        x1_fig = self.plot_samples(self.x1)
+        x0_fig = plot_samples(self.x0)
+        x1_fig = plot_samples(self.x1)
         
         logger.log_image(
             key = "Initial samples",
@@ -126,7 +159,7 @@ class PlotSamplesCB(Callback):
         )
         samples_decoded = pl_module.decode(samples) # shape: (16, c, h, w)
         samples_decoded = samples_decoded.cpu() # move to cpu for plotting
-        samples_fig = self.plot_samples(samples_decoded)
+        samples_fig = plot_samples(samples_decoded)
 
         caption = "Forward" if not is_backward else "Backward"
         logger.log_image(
