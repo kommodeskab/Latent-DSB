@@ -93,14 +93,19 @@ from diffusers import AutoencoderKL
 from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
 
 class StableDiffusionVAE(torch.nn.Module):
-    def __init__(self):
+    def __init__(
+        self,
+        version : str
+        ):
         super().__init__()
-        self.vae : AutoencoderKL = AutoencoderKL.from_pretrained("stable-diffusion-vae")
-        print("Loaded stable-diffusion-vae")
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.vae = AutoencoderKL.from_pretrained(f"stable-diffusion-vae/{version}")
+        self.vae.to(device)
+        num_params = sum(p.numel() for p in self.vae.parameters())
+        print(f"Loaded stable-diffusion-vae/{version} with {num_params} parameters")
         
     @torch.no_grad()
     def encode(self, x : Tensor) -> Tensor:
-        num_channels = x.size(1)
         dist : DiagonalGaussianDistribution = self.vae.encode(x).latent_dist
         return dist.mean.detach()
     
@@ -122,7 +127,7 @@ class StableDiffusionDecoder:
     def __call__(self, z : Tensor) -> Tensor:
         return self.vae.decode(z)
 
-def get_encoder_decoder(id : str, device : device = device('cpu')) -> tuple[_NETWORK, _NETWORK]:
+def get_encoder_decoder(id : str) -> tuple[_NETWORK, _NETWORK]:
     match id:
         case "downsampler":
             encoder = torch.nn.Upsample(scale_factor=0.5, mode='bilinear', align_corners=False)
@@ -132,9 +137,13 @@ def get_encoder_decoder(id : str, device : device = device('cpu')) -> tuple[_NET
             encoder = torch.nn.Identity()
             decoder = torch.nn.Identity()
             
-        case "stable-diffusion":
-            vae = StableDiffusionVAE()
-            vae.to(device)
+        case "stable-diffusion-1.4":
+            vae = StableDiffusionVAE("1.4")
+            encoder = StableDiffusionEncoder(vae)
+            decoder = StableDiffusionDecoder(vae)
+            
+        case "stable-diffusion-3.5":
+            vae = StableDiffusionVAE("3.5")
             encoder = StableDiffusionEncoder(vae)
             decoder = StableDiffusionDecoder(vae)
             

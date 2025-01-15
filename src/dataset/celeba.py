@@ -4,7 +4,7 @@ from .basedataset import ImageDataset, BaseDataset
 import torchvision
 
 class CelebA(BaseDataset):
-    def __init__(self, attr : int, on_or_off : bool):
+    def __init__(self, attr : int | None = None, on_or_off : bool | None = None):
         """
         A special version of the CelebA dataset that only returns images with a specific attribute
         Can be used to create a dataset with only smiling faces, for example.
@@ -18,9 +18,11 @@ class CelebA(BaseDataset):
             transform=ToTensor(),
             target_type="attr",
         )
-        
-        mask = self.celeba.attr[:, attr] == on_or_off
-        self.indices = torch.arange(len(self.celeba))[mask]
+        # if attr is None, return all images
+        self.indices = torch.arange(len(self.celeba))
+        if attr is not None:
+            mask = self.attr[:, attr] == on_or_off
+            self.indices = self.indices[mask]
     
     @property
     def attr(self):
@@ -37,12 +39,11 @@ class CelebA(BaseDataset):
 class CelebADataset(ImageDataset):
     def __init__(
         self,
-        attr : int,
-        on_or_off : bool,
-        img_size : int, 
+        img_size : int = 64, 
+        attr : int | None = None,
+        on_or_off : bool | None = None,
         augment : bool = False,
-        size_multiplier : int = 1,
     ):
         dataset = CelebA(attr = attr, on_or_off = on_or_off)
-        super().__init__(dataset, img_size, augment, size_multiplier)
+        super().__init__(dataset, img_size, augment)
         

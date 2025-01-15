@@ -6,7 +6,8 @@ model:
   out_channels: 1
   down_block_types: ["DownBlock2D", "DownBlock2D", "DownBlock2D"]
   up_block_types: ["UpBlock2D", "UpBlock2D", "UpBlock2D"]
-  block_out_channels: [32, 32, 32]
+  block_out_channels: [32, 32, 64]
+  dropout: 0.1
 
 encoder_decoder_id: 'identity'
 
@@ -15,10 +16,4 @@ optimizer:
   _partial_: True
   lr: 1e-4
 
-scheduler:
-  _target_: torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
-  _partial_: True
-  T_0: 1000
-  T_mult: 1
-
-num_train_timesteps: 100
+beta_schedule: 'squaredcos_cap_v2'

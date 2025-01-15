@@ -1,0 +1,17 @@
+_target_: src.lightning_modules.FM
+
+model:
+  _target_: src.networks.UNet2D
+  in_channels: 16
+  out_channels: 16
+  down_block_types: ["DownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D"]
+  up_block_types: ["AttnUpBlock2D", "AttnUpBlock2D", "UpBlock2D"]
+  block_out_channels: [128, 256, 512]
+  dropout: 0.1
+
+encoder_decoder_id: 'stable-diffusion-3.5'
+
+optimizer:
+  _target_: torch.optim.AdamW
+  _partial_: True
+  lr: 1e-5

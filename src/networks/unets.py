@@ -1,5 +1,6 @@
 from diffusers import UNet2DModel, UNet1DModel
 import torch
+from torch.nn import Module
 
 class UNet2D(UNet2DModel):
     def __init__(
@@ -18,7 +19,7 @@ class PretrainedUNet2D(UNet2D):
         **kwargs,
     ):
         super().__init__()
-        dummy_model : torch.nn.Module = UNet2DModel.from_pretrained(pretrained_model_name_or_path = model_id, **kwargs)
+        dummy_model : Module = UNet2DModel.from_pretrained(model_id, **kwargs)
         self.__dict__ = dummy_model.__dict__.copy()
         self.load_state_dict(dummy_model.state_dict())
     
@@ -33,4 +34,5 @@ class UNet1D(UNet1DModel):
         return super().forward(x, time_step).sample
 
 if __name__ == "__main__":
-    model = PretrainedUNet2D("google/ddpm-cifar10-32")
+    model = PretrainedUNet2D("CompVis/ldm-celebahq-256", subfolder="pretrained/celeba2")
+    print(model)

@@ -22,7 +22,6 @@ class ImageDataset(BaseDataset):
         dataset : Dataset,
         img_size : int,
         augment : bool = False,
-        size_multiplier : int = 1,
     ):
         """
         The base image dataset class.
@@ -30,13 +29,12 @@ class ImageDataset(BaseDataset):
         """
         super().__init__()
         self.dataset = dataset
-        self.size_multiplier = size_multiplier
         
         if augment:
             self.transform = transforms.Compose([
                 transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
                 transforms.RandomHorizontalFlip(),
-                transforms.RandomResizedCrop((img_size, img_size), scale=(0.9, 1.0)),
+                transforms.RandomResizedCrop((img_size, img_size), scale=(0.9, 0.9), ratio=(1, 1)),
                 transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
                 ])
         else:
@@ -46,7 +44,7 @@ class ImageDataset(BaseDataset):
                 ])
             
     def __len__(self):
-        return int(len(self.dataset) * self.size_multiplier)
+        return len(self.dataset)
     
     def __getitem__(self, idx):
         idx = idx % len(self.dataset)

@@ -13,10 +13,11 @@ def plot_samples(samples : Tensor) -> Figure:
     # and have values between -1 and 1
     samples = (samples + 1) / 2
     cmap = 'gray' if samples.shape[1] == 1 else None
+    samples = samples.permute(0, 2, 3, 1)
     fig, axs = plt.subplots(4, 4, figsize = (10, 10))
     for i in range(16):
         ax = axs[i // 4, i % 4]
-        ax.imshow(samples[i, 0], cmap = cmap)
+        ax.imshow(samples[i], cmap = cmap)
         ax.axis('off')
     return fig
 
@@ -26,26 +27,42 @@ class FlowMatchingCB(Callback):
         
     def on_train_start(self, trainer : Trainer, pl_module : FM):
         logger = pl_module.logger
+        device = pl_module.device
         
         dataset = trainer.datamodule.val_dataset
-        self.x0 = get_batch_from_dataset(dataset, batch_size=16) 
-        fig = plot_samples(self.x0)
+        x0 = get_batch_from_dataset(dataset, batch_size=16) 
+        fig = plot_samples(x0)
         logger.log_image(
             key = "Initial samples",
             images = [wandb.Image(fig)],
         )
         plt.close(fig)
         
-        encoded_shape = pl_module.encode(self.x0).shape
-        self.noise = torch.randn(*encoded_shape)
+        encoded = pl_module.encode(x0.to(device))
+        self.noise = torch.randn(*encoded.shape)
+        
+        decoded = pl_module.decode(encoded)
+        fig = plot_samples(decoded.cpu())
+        logger.log_image(
+            key = "Initial decoded",
+            images = [wandb.Image(fig)],
+        )
+        plt.close(fig)
+        
+        original_size = x0.flatten(1).size(1)
+        latent_size = encoded.flatten(1).size(1)
+        logger.log_metrics({
+            "original_size": original_size,
+            "latent_size": latent_size,
+        })
         
     def on_validation_end(self, trainer : Trainer, pl_module : FM):
         logger = pl_module.logger
         device = pl_module.device
         noise = self.noise.to(device)
-        sample = pl_module.sample(noise)
-        sample = pl_module.decode(sample)
-        fig = plot_samples(sample)
+        samples = pl_module.sample(noise)
+        samples = pl_module.decode(samples).cpu()
+        fig = plot_samples(samples)
         logger.log_image(
             key = "Samples",
             images = [wandb.Image(fig)],

@@ -24,4 +24,4 @@
 
 module load python3/3.12
 source .venv/bin/activate
-python3 train.py +experiment=fm
+python3 train.py +experiment=fm_latent
