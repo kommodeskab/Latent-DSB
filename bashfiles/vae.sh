@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SET JOB NAME
-#BSUB -J g2g
+#BSUB -J vae
 
 # select gpu, choose gpuv100 or gpua100 (best)
 #BSUB -q gpuv100
@@ -18,13 +18,10 @@
 #BSUB -R "span[hosts=1]"
 
 # walltime
-#BSUB -W 4:00
+#BSUB -W 24:00
 #BSUB -o hpc/output_%J.out 
 #BSUB -e hpc/error_%J.err 
 
-module load python3/3.12.4
+module load python3/3.12
 source .venv/bin/activate
-python train.py +experiment=gaussian_test dim=16
-python train.py +experiment=gaussian_test dim=32
-python train.py +experiment=gaussian_test dim=64
-python train.py +experiment=gaussian_test dim=256
+python3 train.py +experiment=vae

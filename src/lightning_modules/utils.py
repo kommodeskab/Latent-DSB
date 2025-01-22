@@ -3,8 +3,11 @@ from torch import Tensor
 import random
 import math
 from typing import Callable
-from torch import device
-
+from diffusers import AutoencoderKL
+from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
+from src.lightning_modules.vae import VAE
+from src.utils import get_ckpt_path
+from src.networks import VQ
 
 def get_symmetric_schedule(min_value : float, max_value : float, num_steps : int) -> Tensor:
     gammas = torch.zeros(num_steps)
@@ -35,21 +38,7 @@ class GammaScheduler:
         self.sigma_forward = torch.cat([sigma_forward, torch.tensor([0])], 0)
     
     def _get_shape_for_constant(self, x : Tensor) -> list[int]:
-        return [-1] + [1] * (x.dim() - 1)    
-
-class VPScheduler:
-    def __init__(
-        self,
-        min_value : float,
-        max_value : float,
-        num_steps : int,
-    ):
-        gammas = get_symmetric_schedule(min_value, max_value, num_steps)
-        sigmas2 = torch.cumsum(gammas, 0)
-        alphas = torch.sqrt(1 - sigmas2)
-        alphas_ts = alphas[1:] / alphas[:-1]
-        sigmas2_ts = sigmas2[1:] - alphas_ts ** 2 * sigmas2[:-1]
-        sigmas2_Q = sigmas2_ts * sigmas2[1:] / sigmas2[:-1]
+        return [-1] + [1] * (x.dim() - 1)
 
 class Cache:
     def __init__(self, max_size : int):
@@ -89,45 +78,62 @@ class Cache:
 
 _NETWORK = Callable[[Tensor], Tensor]
 
-from diffusers import AutoencoderKL
-from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
+def load_stable_diffusion_vae(version : str, device : torch.device) -> AutoencoderKL:
+    vae = AutoencoderKL.from_pretrained(f"stable-diffusion-vae/{version}")
+    vae.to(device)
+    vae.eval()
+    num_params = sum(p.numel() for p in vae.parameters())
+    print(f"Loaded stable-diffusion-vae/{version} with {num_params} parameters")
+    return vae
 
-class StableDiffusionVAE(torch.nn.Module):
-    def __init__(
-        self,
-        version : str
-        ):
-        super().__init__()
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.vae = AutoencoderKL.from_pretrained(f"stable-diffusion-vae/{version}")
-        self.vae.to(device)
-        num_params = sum(p.numel() for p in self.vae.parameters())
-        print(f"Loaded stable-diffusion-vae/{version} with {num_params} parameters")
-        
-    @torch.no_grad()
-    def encode(self, x : Tensor) -> Tensor:
-        dist : DiagonalGaussianDistribution = self.vae.encode(x).latent_dist
-        return dist.mean.detach()
-    
-    @torch.no_grad()
-    def decode(self, z : Tensor) -> Tensor:
-        return self.vae.decode(z).sample.detach().clip(-1, 1)
+def load_pretrained_stable_diffusoion_vae(version : str, device : torch.device) -> AutoencoderKL:
+    ckpt_path = get_ckpt_path(f"vae", version)
+    module : VAE = VAE.load_from_checkpoint(ckpt_path)
+    vae = module.vae
+    vae.to(device)
+    vae.eval()
+    num_params = sum(p.numel() for p in vae.parameters())
+    print(f"Loaded a pretrained stable-diffusion-vae with {num_params} parameters")
+    return vae
     
 class StableDiffusionEncoder:
-    def __init__(self, vae : StableDiffusionVAE):
+    def __init__(self, vae : AutoencoderKL):
         self.vae = vae
         
+    @torch.no_grad()
     def __call__(self, x : Tensor) -> Tensor:
-        return self.vae.encode(x)
+        dist : DiagonalGaussianDistribution = self.vae.encode(x).latent_dist
+        return dist.mean
     
 class StableDiffusionDecoder:
-    def __init__(self, vae : StableDiffusionVAE):
+    def __init__(self, vae : AutoencoderKL):
         self.vae = vae
         
+    @torch.no_grad()
     def __call__(self, z : Tensor) -> Tensor:
-        return self.vae.decode(z)
+        return self.vae.decode(z).sample.clip(-1, 1)
+    
+class VQEncoder:
+    def __init__(self, model : VQ):
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = model
+        self.model.to(device)    
+    
+    @torch.no_grad()
+    def __call__(self, x : Tensor) -> Tensor:
+        return self.model.encode(x)
+    
+class VQDecoder:
+    def __init__(self, model : VQ):
+        self.model = model
+        
+    @torch.no_grad()
+    def __call__(self, z : Tensor) -> Tensor:
+        return self.model.decode(z)
 
 def get_encoder_decoder(id : str) -> tuple[_NETWORK, _NETWORK]:
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
     match id:
         case "downsampler":
             encoder = torch.nn.Upsample(scale_factor=0.5, mode='bilinear', align_corners=False)
@@ -138,14 +144,24 @@ def get_encoder_decoder(id : str) -> tuple[_NETWORK, _NETWORK]:
             decoder = torch.nn.Identity()
             
         case "stable-diffusion-1.4":
-            vae = StableDiffusionVAE("1.4")
+            vae = load_stable_diffusion_vae("1.4", device)
             encoder = StableDiffusionEncoder(vae)
             decoder = StableDiffusionDecoder(vae)
             
         case "stable-diffusion-3.5":
-            vae = StableDiffusionVAE("3.5")
+            vae = load_stable_diffusion_vae("3.5", device)
             encoder = StableDiffusionEncoder(vae)
             decoder = StableDiffusionDecoder(vae)
+            
+        case "stable-diffusion-celeba":
+            vae = load_pretrained_stable_diffusoion_vae("180125152041", device)
+            encoder = StableDiffusionEncoder(vae)
+            decoder = StableDiffusionDecoder(vae)
+            
+        case "celeba-vq":
+            vq = VQ("CompVis/ldm-celebahq-256", subfolder="vqvae")
+            encoder = VQEncoder(vq)
+            decoder = VQDecoder(vq)
             
         case _:
             raise ValueError(f"Unknown id {id}")

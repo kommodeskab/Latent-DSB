@@ -1,10 +1,10 @@
 #!/bin/sh
 
 # SET JOB NAME
-#BSUB -J male_tr
+#BSUB -J diffusion
 
 # select gpu, choose gpuv100 or gpua100 (best)
-#BSUB -q gpua100
+#BSUB -q gpuv100
 
 # number of GPUs to use
 #BSUB -gpu "num=1:mode=exclusive_process"
@@ -13,7 +13,7 @@
 #BSUB -n 4
 
 # gb memory per core
-#BSUB -R "rusage[mem=8G]"
+#BSUB -R "rusage[mem=4G]"
 # cores is on the same slot
 #BSUB -R "span[hosts=1]"
 
@@ -22,6 +22,6 @@
 #BSUB -o hpc/output_%J.out 
 #BSUB -e hpc/error_%J.err 
 
-module load python3/3.12.4
+module load python3/3.12
 source .venv/bin/activate
-python train.py +experiment=male_to_female
+python3 train.py +experiment=fm_pretrained

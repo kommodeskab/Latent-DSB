@@ -3,48 +3,38 @@ from src.lightning_modules.baselightningmodule import BaseLightningModule
 import torch
 from torch import Tensor
 from torch.optim import Optimizer
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-from src.lightning_modules.utils import get_encoder_decoder
+from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingWarmRestarts
+from src.networks import BaseEncoderDecoder
 
 class FM(BaseLightningModule):
     def __init__(
         self,
         model : torch.nn.Module,
-        encoder_decoder_id : str,
-        optimizer : Optimizer,
-        scheduler : str = 'ddpm',
-        **kwargs
+        scheduler : DDIMScheduler | DDPMScheduler,
+        encoder_decoder : BaseEncoderDecoder,
+        optimizer : Optimizer | None = None,
     ):
         super().__init__()
-        self.save_hyperparameters(ignore=['model', 'optimizer'])
+        self.save_hyperparameters(ignore=['model', 'optimizer', 'encoder_decoder'])
         
         self.model = model
         self.partial_optimizer = optimizer
-        match scheduler:
-            case 'ddim':
-                self.scheduler = DDIMScheduler(**kwargs)
-            case 'ddpm':
-                self.scheduler = DDPMScheduler(**kwargs)
-            case _:
-                raise ValueError(f"Unknown scheduler: {scheduler}")
-                
-        self.encoder, self.decoder = get_encoder_decoder(encoder_decoder_id)
+        self.scheduler = scheduler
+        
+        self.num_train_timesteps = self.scheduler.config.num_train_timesteps
+        self.encoder_decoder = encoder_decoder
         self.mse = torch.nn.MSELoss()
     
     def forward(self, x : Tensor, timesteps : Tensor) -> Tensor:
         return self.model(x, timesteps)
-    
-    @property
-    def num_train_timesteps(self) -> int:
-        return self.scheduler.timesteps[0].long().item()
+
+    @torch.no_grad()
+    def encode(self, x : Tensor):
+        return self.encoder_decoder.encode(x)
     
     @torch.no_grad()
-    def encode(self, x : Tensor) -> Tensor:
-        return self.encoder(x)
-    
-    @torch.no_grad()
-    def decode(self, x : Tensor) -> Tensor:
-        return self.decoder(x)
+    def decode(self, x : Tensor):
+        return self.encoder_decoder.decode(x)
         
     def forward(self, x : Tensor, timesteps : Tensor) -> Tensor:
         return self.model(x, timesteps)
@@ -78,25 +68,32 @@ class FM(BaseLightningModule):
         return loss
     
     @torch.no_grad()
-    def sample(self, noise : Tensor, num_inference_steps : int | None = None) -> Tensor:
+    def sample(self, noise : Tensor, return_trajectory : bool = False, num_steps : int | None = None) -> Tensor:
+        num_timesteps = num_steps or self.num_train_timesteps
+        self.scheduler.set_timesteps(num_timesteps, self.device)
         self.eval()
         batch_size = noise.size(0)
-        num_inference_steps = num_inference_steps or self.num_train_timesteps
-        self.scheduler.set_timesteps(num_inference_steps, self.device)
-        ts = self.scheduler.timesteps
         xt = noise
-        for t in ts:
+        trajectory = [xt]
+        for t in self.scheduler.timesteps:
             timesteps = self.t_to_timesteps(t, batch_size)
             model_output = self(xt, timesteps)
             xt = self.scheduler.step(model_output, t, xt).prev_sample
+            trajectory.append(xt)
             
-        return xt
+        trajectory = torch.stack(trajectory, dim=0)
+        self.train()
+        return trajectory if return_trajectory else trajectory[-1]
         
     def configure_optimizers(self):
         optim = self.partial_optimizer(self.model.parameters())
-        scheduler = ReduceLROnPlateau(optim, mode = 'min', factor=0.5, patience=5)
+        scheduler = CosineAnnealingWarmRestarts(optim, T_0 = 100, T_mult=2)
         return {
             'optimizer': optim,
-            'lr_scheduler': scheduler,
-            'monitor': 'val_loss',
+            'lr_scheduler':  {
+                'scheduler': scheduler,
+                'interval': 'step',
+                'frequency': 1,
+                'monitor': 'val_loss'
+            }
         }

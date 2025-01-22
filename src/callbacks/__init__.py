@@ -1,1 +1,1 @@
-from .images import TestEncoderDecoderCB, PlotSamplesCB, FlowMatchingCB
+from .images import TestEncoderDecoderCB, PlotSamplesCB, FlowMatchingCB, VAECB

@@ -9,6 +9,7 @@ from torch.nn import Module
 from pytorch_lightning.utilities import grad_norm
 import copy
 from src.lightning_modules.utils import Cache, GammaScheduler, get_encoder_decoder
+from src.lightning_modules.fm import FM
 
 class DSB(BaseLightningModule):
     def __init__(
@@ -23,6 +24,9 @@ class DSB(BaseLightningModule):
         max_iterations : int,
         cache_max_size : int,
         cache_num_iters : int,
+        pretrained_forward_model_path : str | None = None,
+        pretrained_backward_model_path : str | None = None,
+        backward_model : torch.nn.Module | None = None,
         T : int | None = None,
         target : Literal["terminal", "flow"] = "terminal",
         max_dsb_iterations : int | None = 20,
@@ -46,8 +50,18 @@ class DSB(BaseLightningModule):
         self.gamma_scheduler = GammaScheduler(min_gamma, max_gamma, num_steps, T)
         
         # if the backward model is not provided, make it a copy of the forward model 
-        self.forward_model : torch.nn.Module = model
-        self.backward_model= copy.deepcopy(model)
+        self.forward_model = model
+        self.backward_model = backward_model if backward_model is not None else copy.deepcopy(model)
+        
+        # most often, we want to utilize a pretrained diffusion model for the first iterations
+        if fp := pretrained_forward_model_path is not None:
+            self.forward_diffusion_model = FM.load_from_checkpoint(fp, model = self.forward_model)
+            self.forward_diffusion_model.scheduler.set_timesteps(num_steps)
+            self.forward_model = self.forward_diffusion_model.model
+            
+        if bp := pretrained_backward_model_path is not None:
+            self.backward_diffusion_model = FM.load_from_checkpoint(bp, model = self.backward_model)
+            self.backward_model = self.backward_diffusion_model.model
         
         self.encoder, self.decoder = get_encoder_decoder(encoder_decoder_id)
         
@@ -240,7 +254,17 @@ class DSB(BaseLightningModule):
         
         :return Tensor: the final point xN / x0 or the trajectory
         """
+        
+        # first check if we are using a pretrained diffusion model
+        # in that case, we would like to use the pretrained model for sampling in the very first iteration
+        if (
+            self.DSB_iteration == 1 and 
+            forward and
+            self.hparams.pretrained_forward_model_path is not None
+        ):
+            return self.forward_diffusion_model.sample(x_start, return_trajectory, clamp)
 
+        # otherwise, we sample using the diffusion schrödinger bridge
         trajectory = torch.zeros(self.hparams.num_steps + 1, *x_start.size()).to(self.device)
         
         if forward:
@@ -320,10 +344,10 @@ class DSB(BaseLightningModule):
             
             # raise exception if loss is nan
             if torch.isnan(loss).any():
-                raise ValueError(f"Loss is nan: {loss.item() = }")
+                raise ValueError(f"Loss is nan:")
             
-            if loss.item() > 1.e6:
-                raise ValueError(f"Loss is too high: {loss.item() = }")
+            if loss > 1.e6:
+                raise ValueError(f"Loss is too high: {loss = }")
 
             # clip the gradients. first, save the norm for later logging
             norm = grad_norm(model, norm_type=2).get('grad_2.0_norm_total', 0)
@@ -338,7 +362,7 @@ class DSB(BaseLightningModule):
         model_name = "backward_model" if training_backward else "forward_model"
         
         self.log_dict({
-            self._get_loss_name(is_backward = training_backward, is_training = True): loss.item(),
+            self._get_loss_name(is_backward = training_backward, is_training = True): loss,
             f"{model_name}_grad_norm_before_clip": norm
         }, on_step=True)
 
@@ -357,7 +381,7 @@ class DSB(BaseLightningModule):
             for k in range_:
                 ks = self.k_to_tensor(k, batch_size)
                 loss = self._backward_loss(trajectory[k], ks, x0) if is_backward else self._forward_loss(trajectory[k], ks, xN)
-                loss_sum += loss.item()
+                loss_sum += loss
             
             loss_avg = loss_sum / self.hparams.num_steps
             self.log(
@@ -379,7 +403,7 @@ class DSB(BaseLightningModule):
         if len(metrics) == 0:
             return
         
-        val_loss = metrics[self._get_loss_name(is_backward = is_backward, is_training = False)].item()
+        val_loss = metrics[self._get_loss_name(is_backward = is_backward, is_training = False)]
         
         if isinstance(scheduler, ReduceLROnPlateau):
             scheduler.step(val_loss)

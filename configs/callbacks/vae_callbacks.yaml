@@ -2,7 +2,7 @@ defaults:
   - learningratemonitor
   - richprogressbar
   - richmodelsummary
-  - flowmatching
+  - vae
   - swa
   - lr_monitor
   - timer

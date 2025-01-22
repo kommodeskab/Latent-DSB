@@ -33,7 +33,8 @@ class BaseDM(pl.LightningDataModule):
             drop_last=True,
             persistent_workers=True,
             batch_size = self.hparams.batch_size, 
-            num_workers = self.hparams.num_workers
+            num_workers = self.hparams.num_workers,
+            pin_memory=True
             )
         
     def val_dataloader(self):
@@ -43,7 +44,8 @@ class BaseDM(pl.LightningDataModule):
             drop_last=True,
             persistent_workers=True,
             batch_size = self.hparams.batch_size, 
-            num_workers = self.hparams.num_workers
+            num_workers = self.hparams.num_workers,
+            pin_memory=True
             )
 
 class BaseDSBDM(pl.LightningDataModule):
@@ -77,6 +79,7 @@ class BaseDSBDM(pl.LightningDataModule):
             "num_workers" : num_workers,
             "persistent_workers" : True,
             "drop_last" : True,
+            "pin_memory" : True
         }
     
     def train_dataloader(self):

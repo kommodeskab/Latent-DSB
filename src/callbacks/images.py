@@ -1,6 +1,6 @@
 import pytorch_lightning as pl
 from .utils import get_batches, get_batch_from_dataset
-from src.lightning_modules import DSB, FM
+from src.lightning_modules import DSB, FM, VAE
 import matplotlib.pyplot as plt
 import wandb
 from pytorch_lightning import Callback, Trainer
@@ -12,6 +12,7 @@ def plot_samples(samples : Tensor) -> Figure:
     # assume samples have shape (16, c, h, w)
     # and have values between -1 and 1
     samples = (samples + 1) / 2
+    samples = samples.clamp(0, 1)
     cmap = 'gray' if samples.shape[1] == 1 else None
     samples = samples.permute(0, 2, 3, 1)
     fig, axs = plt.subplots(4, 4, figsize = (10, 10))
@@ -21,9 +22,44 @@ def plot_samples(samples : Tensor) -> Figure:
         ax.axis('off')
     return fig
 
-class FlowMatchingCB(Callback):
+class VAECB(Callback):
     def __init__(self):
         super().__init__()
+        
+    def on_train_start(self, trainer : Trainer, pl_module : VAE):
+        logger = pl_module.logger
+        device = pl_module.device
+        
+        dataset = trainer.datamodule.val_dataset
+        self.x0 = get_batch_from_dataset(dataset, batch_size=16)
+        fig = plot_samples(self.x0)
+        logger.log_image(
+            key = "Initial samples",
+            images = [wandb.Image(fig)],
+        )
+        plt.close(fig)
+        
+    def on_validation_end(self, trainer : Trainer, pl_module : VAE):
+        logger = pl_module.logger
+        device = pl_module.device
+        
+        x0 = self.x0.to(device)
+        reconstructed = pl_module.encode_decode(x0)
+        fig = plot_samples(reconstructed.cpu())
+        logger.log_image(
+            key = "Reconstructed samples",
+            images = [wandb.Image(fig)],
+            step = pl_module.global_step,
+        )
+        plt.close(fig)
+
+class FlowMatchingCB(Callback):
+    def __init__(
+        self,
+        test_initial_samples : bool = False,
+        ):
+        super().__init__()
+        self.test_initial_samples = test_initial_samples
         
     def on_train_start(self, trainer : Trainer, pl_module : FM):
         logger = pl_module.logger
@@ -31,6 +67,7 @@ class FlowMatchingCB(Callback):
         
         dataset = trainer.datamodule.val_dataset
         x0 = get_batch_from_dataset(dataset, batch_size=16) 
+        
         fig = plot_samples(x0)
         logger.log_image(
             key = "Initial samples",
@@ -40,8 +77,8 @@ class FlowMatchingCB(Callback):
         
         encoded = pl_module.encode(x0.to(device))
         self.noise = torch.randn(*encoded.shape)
-        
         decoded = pl_module.decode(encoded)
+        
         fig = plot_samples(decoded.cpu())
         logger.log_image(
             key = "Initial decoded",
@@ -56,9 +93,13 @@ class FlowMatchingCB(Callback):
             "latent_size": latent_size,
         })
         
+        if self.test_initial_samples:
+            self.on_validation_end(trainer, pl_module)
+        
     def on_validation_end(self, trainer : Trainer, pl_module : FM):
         logger = pl_module.logger
         device = pl_module.device
+        
         noise = self.noise.to(device)
         samples = pl_module.sample(noise)
         samples = pl_module.decode(samples).cpu()

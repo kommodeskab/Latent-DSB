@@ -29,14 +29,14 @@ class ImageDataset(BaseDataset):
         """
         super().__init__()
         self.dataset = dataset
-        
+                
         if augment:
             self.transform = transforms.Compose([
-                transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
                 transforms.RandomHorizontalFlip(),
-                transforms.RandomResizedCrop((img_size, img_size), scale=(0.9, 0.9), ratio=(1, 1)),
+                transforms.RandomResizedCrop(img_size, scale=(0.8, 1.0), ratio=(0.9, 1.1)),
+                transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
                 transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-                ])
+            ])
         else:
             self.transform = transforms.Compose([
                 transforms.Resize((img_size, img_size)),
@@ -47,7 +47,6 @@ class ImageDataset(BaseDataset):
         return len(self.dataset)
     
     def __getitem__(self, idx):
-        idx = idx % len(self.dataset)
         img = self.dataset[idx]
         img = self.transform(img).clamp(-1, 1)
         return img

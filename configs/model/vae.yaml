@@ -1,0 +1,6 @@
+_target_: src.lightning_modules.VAE
+beta: 0.2
+optimizer:
+  _target_: torch.optim.AdamW
+  _partial_: True
+  lr: 1e-5

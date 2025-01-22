@@ -1,27 +1,31 @@
 import torch
 from src.utils import get_ckpt_path
+from hydra.utils import instantiate
+import wandb
+from torch.nn import Module
+from pytorch_lightning import LightningModule
 
-class BaseTorchModule(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
-    
-    def _load_weights_from_experiment(self, experiment_id, old_model_keyword):
-        ckpt_path = get_ckpt_path(experiment_id)
-        ckpt = torch.load(ckpt_path)
-        weights = {k: v for k, v in ckpt["state_dict"].items() if k.startswith(f"{old_model_keyword}.")}
-        weights = {k.split(".", 1)[1]: v for k, v in weights.items()}
-        self.load_state_dict(weights, strict=True)
-        
-class PretrainedModel(BaseTorchModule):
+class PretrainedModel(torch.nn.Module):
     def __init__(
-        self, 
-        module : BaseTorchModule, 
-        experiment_id : str, 
-        old_model_keyword : str
-        ):
+        self,
+        project_name : str,
+        experiment_id : str,
+        model_keyword : str,
+    ):
         super().__init__()
-        self.module = module
-        self.module._load_weights_from_experiment(experiment_id, old_model_keyword)
+        api = wandb.Api()
+        run = api.run(f"kommodeskab-danmarks-tekniske-universitet-dtu/{project_name}/{experiment_id}")
+        config = run.config
+        model_config = config['model'][model_keyword]
         
-    def forward(self, *args, **kwargs):
-        return self.module(*args, **kwargs)
+        dummy_model : Module = instantiate(model_config)
+        print("Loading pretrained model of type", type(dummy_model))
+        self.__dict__ = dummy_model.__dict__.copy()
+        ckpt_path = get_ckpt_path(project_name, experiment_id)
+        ckpt = torch.load(ckpt_path, map_location='cpu', weights_only=True)
+        state_dict = ckpt['state_dict']
+        state_dict = {k.replace(f'{model_keyword}.', ''): v for k, v in state_dict.items()}
+        self.load_state_dict(state_dict)
+        
+        self.forward = dummy_model.forward
+        

@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SET JOB NAME
-#BSUB -J s2b
+#BSUB -J diffusion
 
 # select gpu, choose gpuv100 or gpua100 (best)
 #BSUB -q gpuv100
@@ -18,11 +18,10 @@
 #BSUB -R "span[hosts=1]"
 
 # walltime
-#BSUB -W 3:00
+#BSUB -W 24:00
 #BSUB -o hpc/output_%J.out 
 #BSUB -e hpc/error_%J.err 
 
-module load python3/3.12.4
+module load python3/3.12
 source .venv/bin/activate
-python train.py +experiment=s_to_b model._target_=src.lightning_modules.FRDSB task_name=FR
-python train.py +experiment=s_to_b model._target_=src.lightning_modules.TRDSB task_name=TR
+python3 train.py +experiment=fm_huggingface
