@@ -81,8 +81,11 @@ class BaseDSBDM(pl.LightningDataModule):
             "drop_last" : True,
             "pin_memory" : True
         }
+        
+        self.training_backward = None
     
     def train_dataloader(self):
+        assert self.training_backward is not None, "Please set the training_backward attribute before calling train_dataloader."
         training_backward = self.training_backward
         dataset = self.start_dataset_train if training_backward else self.end_dataset_train
         return DataLoader(

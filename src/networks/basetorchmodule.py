@@ -19,12 +19,14 @@ class PretrainedModel(torch.nn.Module):
         model_config = config['model'][model_keyword]
         
         dummy_model : Module = instantiate(model_config)
-        print("Loading pretrained model of type", type(dummy_model))
         self.__dict__ = dummy_model.__dict__.copy()
         ckpt_path = get_ckpt_path(project_name, experiment_id)
-        ckpt = torch.load(ckpt_path, map_location='cpu', weights_only=True)
-        state_dict = ckpt['state_dict']
-        state_dict = {k.replace(f'{model_keyword}.', ''): v for k, v in state_dict.items()}
+        print("Loading pretrained model of type", type(dummy_model))
+        print("Loading checkpoint from", ckpt_path)
+        ckpt = torch.load(ckpt_path, map_location='cpu', weights_only=False)
+        state_dict : dict[str, Module] = ckpt['state_dict']
+        q = f'{model_keyword}.'
+        state_dict = {k[len(q):]: v for k, v in state_dict.items() if k.startswith(q)}
         self.load_state_dict(state_dict)
         
         self.forward = dummy_model.forward

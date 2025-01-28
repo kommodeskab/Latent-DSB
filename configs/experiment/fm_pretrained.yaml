@@ -11,14 +11,13 @@ task_name: 'test'
 
 data:
   dataset:
-    img_size: 128
+    img_size: 64
   batch_size: 128
 
 trainer:
   fast_dev_run: False
   enable_checkpointing: True
-  val_check_interval: 1.0
-  log_every_n_steps: 20
+  log_every_n_steps: 100
   max_epochs: -1
-  # slimit_val_batches: 1
-  # slimit_train_batches: 50
+  precision: '16-mixed'
+  check_val_every_n_epoch: 5

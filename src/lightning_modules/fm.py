@@ -3,30 +3,39 @@ from src.lightning_modules.baselightningmodule import BaseLightningModule
 import torch
 from torch import Tensor
 from torch.optim import Optimizer
-from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingWarmRestarts
+from torch.optim.lr_scheduler import LRScheduler
 from src.networks import BaseEncoderDecoder
+from typing import Any
+from pytorch_lightning.utilities import grad_norm
 
 class FM(BaseLightningModule):
     def __init__(
         self,
         model : torch.nn.Module,
         scheduler : DDIMScheduler | DDPMScheduler,
-        encoder_decoder : BaseEncoderDecoder,
+        encoder_decoder : BaseEncoderDecoder | None = None,
         optimizer : Optimizer | None = None,
+        lr_scheduler : dict[str, LRScheduler | str] | None = None
     ):
         super().__init__()
-        self.save_hyperparameters(ignore=['model', 'optimizer', 'encoder_decoder'])
+        self.save_hyperparameters(ignore=['model', 'encoder_decoder'])
         
         self.model = model
         self.partial_optimizer = optimizer
+        self.partial_lr_scheduler = lr_scheduler
         self.scheduler = scheduler
         
         self.num_train_timesteps = self.scheduler.config.num_train_timesteps
+        self.scheduler.set_timesteps(self.num_train_timesteps)
         self.encoder_decoder = encoder_decoder
         self.mse = torch.nn.MSELoss()
     
     def forward(self, x : Tensor, timesteps : Tensor) -> Tensor:
         return self.model(x, timesteps)
+    
+    def on_before_optimizer_step(self, optimizer):
+        grad_norms = grad_norm(self.model, norm_type=2)
+        self.log_dict(grad_norms)
 
     @torch.no_grad()
     def encode(self, x : Tensor):
@@ -35,6 +44,10 @@ class FM(BaseLightningModule):
     @torch.no_grad()
     def decode(self, x : Tensor):
         return self.encoder_decoder.decode(x)
+    
+    def on_save_checkpoint(self, checkpoint):
+        # dont save the encoder_decoder weights
+        del checkpoint['state_dict']['encoder_decoder']
         
     def forward(self, x : Tensor, timesteps : Tensor) -> Tensor:
         return self.model(x, timesteps)
@@ -47,14 +60,25 @@ class FM(BaseLightningModule):
     def t_to_timesteps(self, t : float, batch_size : int) -> Tensor:
         return torch.full((batch_size,), t).to(self.device)
     
+    @property
+    def prediction_type(self) -> str:
+        return self.scheduler.config.prediction_type
+    
     def common_step(self, batch : Tensor) -> Tensor:
         batch_size = batch.size(0)
         x0 = self.encode(batch)
         timesteps = self.sample_timesteps(batch_size)
         noise = torch.randn_like(x0).to(self.device)
         xt = self.scheduler.add_noise(x0, noise, timesteps)
+        
         model_output = self(xt, timesteps)
-        loss = self.mse(noise, model_output)
+        
+        if self.prediction_type == "epsilon":
+            target = noise
+        elif self.prediction_type == "sample":
+            target = x0
+            
+        loss = self.mse(target, model_output)
         return loss
     
     def training_step(self, batch : Tensor, batch_idx : int) -> Tensor:
@@ -63,14 +87,13 @@ class FM(BaseLightningModule):
         return loss
     
     def validation_step(self, batch : Tensor, batch_idx : int) -> Tensor:
+        torch.manual_seed(0)
         loss = self.common_step(batch)
         self.log('val_loss', loss)
         return loss
     
     @torch.no_grad()
-    def sample(self, noise : Tensor, return_trajectory : bool = False, num_steps : int | None = None) -> Tensor:
-        num_timesteps = num_steps or self.num_train_timesteps
-        self.scheduler.set_timesteps(num_timesteps, self.device)
+    def sample(self, noise : Tensor, return_trajectory : bool = False) -> Tensor:
         self.eval()
         batch_size = noise.size(0)
         xt = noise
@@ -87,13 +110,11 @@ class FM(BaseLightningModule):
         
     def configure_optimizers(self):
         optim = self.partial_optimizer(self.model.parameters())
-        scheduler = CosineAnnealingWarmRestarts(optim, T_0 = 100, T_mult=2)
+        scheduler = self.partial_lr_scheduler.pop('scheduler')(optim)
         return {
             'optimizer': optim,
             'lr_scheduler':  {
                 'scheduler': scheduler,
-                'interval': 'step',
-                'frequency': 1,
-                'monitor': 'val_loss'
+                **self.partial_lr_scheduler
             }
         }

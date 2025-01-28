@@ -1,2 +1,0 @@
-test_encoder_decoder:
-  _target_: src.callbacks.TestEncoderDecoderCB

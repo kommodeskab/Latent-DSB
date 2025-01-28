@@ -12,4 +12,4 @@ end_dataset:
   img_size: 64
   
 batch_size: 32
-num_workers: 8
+num_workers: 4

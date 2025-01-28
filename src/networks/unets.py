@@ -33,6 +33,10 @@ class PretrainedUNet2D(UNet2D):
         self.load_state_dict(dummy_state_dict)
         print("Done loading pretrained model.")
 
+class CelebAUNet2D(PretrainedUNet2D):
+    def __init__(self):
+        super().__init__(model_id='CompVis/ldm-celebahq-256', subfolder='unet')
+
 class UNet1D(UNet1DModel):
     def __init__(
         self,

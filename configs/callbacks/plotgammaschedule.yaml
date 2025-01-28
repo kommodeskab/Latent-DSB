@@ -1,2 +1,0 @@
-plotgammaschedule:
-  _target_: src.callbacks.PlotGammaScheduleCB

@@ -32,8 +32,8 @@ class VQ(VQModel):
         return super().decode(h).sample
     
 class CelebAVQ(VQ):
-    def __init__():
-        super().__init__(model_id='CompVis/ldm-celebahq-256', subfolder='unet')
+    def __init__(self):
+        super().__init__(model_id='CompVis/ldm-celebahq-256', subfolder='vqvae')
     
 class IdentityEncoderDecoder(Module):
     def __init__(self):

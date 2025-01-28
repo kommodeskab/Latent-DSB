@@ -1,4 +1,3 @@
-import pytorch_lightning as pl
 from .utils import get_batches, get_batch_from_dataset
 from src.lightning_modules import DSB, FM, VAE
 import matplotlib.pyplot as plt
@@ -9,15 +8,16 @@ import torch
 from matplotlib.figure import Figure
 
 def plot_samples(samples : Tensor) -> Figure:
-    # assume samples have shape (16, c, h, w)
+    # assume samples have shape (k, c, h, w)
     # and have values between -1 and 1
+    k = int(samples.size(0) ** 0.5)
     samples = (samples + 1) / 2
     samples = samples.clamp(0, 1)
     cmap = 'gray' if samples.shape[1] == 1 else None
     samples = samples.permute(0, 2, 3, 1)
-    fig, axs = plt.subplots(4, 4, figsize = (10, 10))
-    for i in range(16):
-        ax = axs[i // 4, i % 4]
+    fig, axs = plt.subplots(k, k, figsize = (10, 10))
+    for i in range(k * k):
+        ax = axs[i // k, i % k]
         ax.imshow(samples[i], cmap = cmap)
         ax.axis('off')
     return fig
@@ -111,63 +111,8 @@ class FlowMatchingCB(Callback):
         )
         plt.close(fig)
 
-class TestEncoderDecoderCB(Callback):
-    def __init__(self):
-        super().__init__()
-        
-    def on_train_start(self, trainer : Trainer, pl_module : DSB):
-        logger = pl_module.logger
-        device = pl_module.device
-        
-        x0, x1 = get_batches(trainer, batch_size = 1, shuffle = False)
-        x0 = x0.to(device)
-        x1 = x1.to(device)
-        
-        x0_encoded = pl_module.encode(x0)
-        x0_decoded = pl_module.decode(x0_encoded)
-        
-        x1_encoded = pl_module.encode(x1)
-        x1_decoded = pl_module.decode(x1_encoded)
-        
-        x0, x1 = x0.cpu(), x1.cpu()
-        x0_decoded, x1_decoded = x0_decoded.cpu(), x1_decoded.cpu()
-        
-        # shape of x0 and x1: (1, c, h, w)
-        cmap = 'gray' if x0.shape[1] == 1 else None
-        
-        fig, axs = plt.subplots(2, 2, figsize = (10, 10))
-        axs[0, 0].imshow(x0[0, 0], cmap = cmap)
-        axs[0, 0].set_title('x0')
-        
-        axs[0, 1].imshow(x0_decoded[0, 0], cmap = cmap)
-        axs[0, 1].set_title('x0 decoded')
-        
-        axs[1, 0].imshow(x1[0, 0], cmap = cmap)
-        axs[1, 0].set_title('x1')
-        
-        axs[1, 1].imshow(x1_decoded[0, 0], cmap = cmap)
-        axs[1, 1].set_title('x1 decoded')
-        
-        for ax in axs.flatten():
-            ax.axis('off')
-        
-        logger.log_image(
-            key="test_encoder_decoder",
-            images=[wandb.Image(fig)],
-            step=trainer.global_step
-        )
-        plt.close(fig)
-        
-        # get the total size (number of pixels) of the images and the latent space
-        original_size = x0.flatten(1).size(1)
-        latent_size = x0_encoded.flatten(1).size(1)
-        # log the sizes
-        logger.log_metrics({
-                "original_size": original_size,
-                "latent_size": latent_size,
-            })
-        
-class PlotSamplesCB(Callback):
+
+class DSBCB(Callback):
     def __init__(self):
         super().__init__()
         
@@ -176,21 +121,10 @@ class PlotSamplesCB(Callback):
         logger = pl_module.logger
         
         x0, x1 = get_batches(trainer, batch_size=16, shuffle=False)
-        
-        # move to device
-        x0 = x0.to(device)
-        x1 = x1.to(device)
-        
-        # encode the samples
-        x0_encoded = pl_module.encode(x0)
-        x1_encoded = pl_module.encode(x1)
-        
-        self.x0, self.x1 = x0.cpu(), x1.cpu()
-        self.x0_encoded, self.x1_encoded = x0_encoded.cpu(), x1_encoded.cpu()
-        
+                
         # plot the initial samples
-        x0_fig = plot_samples(self.x0)
-        x1_fig = plot_samples(self.x1)
+        x0_fig = plot_samples(x0.cpu())
+        x1_fig = plot_samples(x1.cpu())
         
         logger.log_image(
             key = "Initial samples",
@@ -200,6 +134,50 @@ class PlotSamplesCB(Callback):
         plt.close(x0_fig)
         plt.close(x1_fig)
         
+        # move to device
+        x0 = x0.to(device)
+        x1 = x1.to(device)
+        
+        # encode the samples
+        x0_encoded = pl_module.encode(x0)
+        x1_encoded = pl_module.encode(x1)
+        self.x0_encoded, self.x1_encoded = x0_encoded, x1_encoded
+        
+        x0_decoded = pl_module.decode(x0_encoded)
+        x1_decoded = pl_module.decode(x1_encoded)
+        
+        fig_1 = plot_samples(x0_decoded.cpu())
+        fig_2 = plot_samples(x1_decoded.cpu())
+        
+        logger.log_image(
+            key = "Initial decoded",
+            images = [wandb.Image(fig_1), wandb.Image(fig_2)],
+            caption = ["x0", "x1"],
+        )
+        plt.close(fig_1)
+        plt.close(fig_2)
+        
+        original_size = x0.flatten(1).size(1)
+        encoded_size = x0_encoded.flatten(1).size(1)
+        logger.log_metrics({
+            "original_size": original_size,
+            "encoded_size": encoded_size,
+        })
+        
+        initial_forward_process = pl_module.sample(x0_encoded, forward=True, return_trajectory=True)
+        selected_indices = torch.linspace(0, len(initial_forward_process) - 1, 5).round().long().to(device)
+        selected_forward_process = initial_forward_process[selected_indices, :5] # shape (5, 5, c, h, w)
+        selected_forward_process = selected_forward_process.flatten(0, 1) # shape (25, c, h, w)
+        selected_forward_process = pl_module.decode(selected_forward_process)
+        selected_forward_process_fig = plot_samples(selected_forward_process.cpu())
+        
+        logger.log_image(
+            key = "Initial forward process",
+            images = [wandb.Image(selected_forward_process_fig)],
+            step = pl_module.global_step,
+        )
+        plt.close(selected_forward_process_fig)
+        
     def on_validation_end(self, trainer : Trainer, pl_module : DSB):
         device      = pl_module.device
         logger      = pl_module.logger
@@ -207,17 +185,16 @@ class PlotSamplesCB(Callback):
         iteration   = pl_module.DSB_iteration
         
         x_start = self.x1_encoded if is_backward else self.x0_encoded
-        x_start = x_start.to(device)
         
+        # samples shape (num_steps, 16, c, h, w)
         samples = pl_module.sample(
             x_start = x_start,
             forward = not is_backward,
-            return_trajectory = False,
-            clamp = True,
+            return_trajectory = True,
         )
-        samples_decoded = pl_module.decode(samples) # shape: (16, c, h, w)
-        samples_decoded = samples_decoded.cpu() # move to cpu for plotting
-        samples_fig = plot_samples(samples_decoded)
+        final_samples = samples[0] if is_backward else samples[-1]
+        final_samples = pl_module.decode(final_samples) # shape: (16, c, h, w)
+        samples_fig = plot_samples(final_samples.cpu())
 
         caption = "Forward" if not is_backward else "Backward"
         logger.log_image(
@@ -227,3 +204,17 @@ class PlotSamplesCB(Callback):
             step = pl_module.global_step,
         )
         plt.close(samples_fig)
+        
+        selected_indices = torch.linspace(0, len(samples) - 1, 5).round().long().to(device)
+        selected_samples = samples[selected_indices, :5]
+        selected_samples = selected_samples.flatten(0, 1)
+        selected_samples = pl_module.decode(selected_samples)
+        selected_samples_fig = plot_samples(selected_samples.cpu())
+        logger.log_image(
+            key = f"Trajectory iteration {iteration}",
+            images = [wandb.Image(selected_samples_fig)],
+            caption = [caption],
+            step = pl_module.global_step,
+        )
+        plt.close(selected_samples_fig)
+        

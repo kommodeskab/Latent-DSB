@@ -17,9 +17,7 @@ data:
 trainer:
   fast_dev_run: False
   enable_checkpointing: True
-  log_every_n_steps: 20
+  log_every_n_steps: 100
   max_epochs: -1
   precision: '16-mixed'
   check_val_every_n_epoch: 5
-  # slimit_val_batches: 1
-  # slimit_train_batches: 50
