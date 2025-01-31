@@ -13,29 +13,33 @@ class UNet2D(UNet2DModel):
     def forward(self, x : torch.Tensor, time_step : torch.Tensor):
         return super().forward(x, time_step).sample
         
-class PretrainedUNet2D(UNet2D):
-    def __init__(
-        self,
+class PretrainedUNet2D:
+    def __new__(
         model_id : str,
         **kwargs,
     ):
-        """
-        Args:
-            model_id (str): The model id of the pretrained model.
-            keep_structure (bool): If True, the structure of the model will be kept, but the weights will be loaded from the pretrained model. If False, the weights and structure will be loaded from the pretrained model.
-        """
         subfolder = kwargs.pop("subfolder", "")
-        super().__init__(**kwargs)
         print("Loading pretrained model...")
-        dummy_model : Module = UNet2DModel.from_pretrained(model_id, subfolder=subfolder)
-        dummy_state_dict = dummy_model.state_dict()
-        self.__dict__ = dummy_model.__dict__
-        self.load_state_dict(dummy_state_dict)
+        dummy_model : UNet2D = UNet2D.from_pretrained(model_id, subfolder=subfolder, **kwargs)
         print("Done loading pretrained model.")
+        return dummy_model
+    
 
 class CelebAUNet2D(PretrainedUNet2D):
     def __init__(self):
         super().__init__(model_id='CompVis/ldm-celebahq-256', subfolder='unet')
+        
+class EMNISTUNet2D(UNet2D):
+    def __init__(self):
+        super().__init__(
+            in_channels=1,
+            out_channels=1,
+            down_block_types=["DownBlock2D", "DownBlock2D", "DownBlock2D"],
+            up_block_types=["UpBlock2D", "UpBlock2D", "UpBlock2D"],
+            block_out_channels=[32, 32, 32],
+            norm_num_groups=32,
+            sample_size=4,
+        )
 
 class UNet1D(UNet1DModel):
     def __init__(

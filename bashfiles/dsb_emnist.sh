@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SET JOB NAME
-#BSUB -J vae
+#BSUB -J dsb
 
 # select gpu, choose gpuv100 or gpua100 (best)
 #BSUB -q gpuv100
@@ -18,10 +18,10 @@
 #BSUB -R "span[hosts=1]"
 
 # walltime
-#BSUB -W 3:00
+#BSUB -W 6:00
 #BSUB -o hpc/output_%J.out 
 #BSUB -e hpc/error_%J.err 
 
 module load python3/3.12
 source .venv/bin/activate
-python3 train.py +experiment=vae
+python3 train.py +experiment=dsb_emnist

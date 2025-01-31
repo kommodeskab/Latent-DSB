@@ -4,5 +4,4 @@ defaults:
   - richmodelsummary
   - vae
   - swa
-  - lr_monitor
   - timer

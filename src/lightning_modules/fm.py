@@ -7,6 +7,7 @@ from torch.optim.lr_scheduler import LRScheduler
 from src.networks import BaseEncoderDecoder
 from typing import Any
 from pytorch_lightning.utilities import grad_norm
+from torch.nn.functional import mse_loss
 
 class FM(BaseLightningModule):
     def __init__(
@@ -28,7 +29,6 @@ class FM(BaseLightningModule):
         self.num_train_timesteps = self.scheduler.config.num_train_timesteps
         self.scheduler.set_timesteps(self.num_train_timesteps)
         self.encoder_decoder = encoder_decoder
-        self.mse = torch.nn.MSELoss()
     
     def forward(self, x : Tensor, timesteps : Tensor) -> Tensor:
         return self.model(x, timesteps)
@@ -44,10 +44,6 @@ class FM(BaseLightningModule):
     @torch.no_grad()
     def decode(self, x : Tensor):
         return self.encoder_decoder.decode(x)
-    
-    def on_save_checkpoint(self, checkpoint):
-        # dont save the encoder_decoder weights
-        del checkpoint['state_dict']['encoder_decoder']
         
     def forward(self, x : Tensor, timesteps : Tensor) -> Tensor:
         return self.model(x, timesteps)
@@ -78,7 +74,7 @@ class FM(BaseLightningModule):
         elif self.prediction_type == "sample":
             target = x0
             
-        loss = self.mse(target, model_output)
+        loss = mse_loss(target, model_output)
         return loss
     
     def training_step(self, batch : Tensor, batch_idx : int) -> Tensor:
@@ -101,7 +97,7 @@ class FM(BaseLightningModule):
         for t in self.scheduler.timesteps:
             timesteps = self.t_to_timesteps(t, batch_size)
             model_output = self(xt, timesteps)
-            xt = self.scheduler.step(model_output, t, xt).prev_sample
+            xt = self.scheduler.step(model_output, t, xt, eta=1.0).prev_sample
             trajectory.append(xt)
             
         trajectory = torch.stack(trajectory, dim=0)

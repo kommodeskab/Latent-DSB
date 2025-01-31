@@ -62,7 +62,7 @@ class Cache:
         """
         Randomly sample a batch from the cache. The batch is a random collection of samples from the saved batches.
         """
-        # each batch have shape (num_steps, batch_size, ...)
+        # batch.shape (num_steps, batch_size, ...)
         batch = []
         for _ in range(self.batch_size):
             rand_batch = random.choice(self.cache)

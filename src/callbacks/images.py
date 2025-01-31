@@ -6,6 +6,7 @@ from pytorch_lightning import Callback, Trainer
 from torch import Tensor
 import torch
 from matplotlib.figure import Figure
+import time
 
 def plot_samples(samples : Tensor) -> Figure:
     # assume samples have shape (k, c, h, w)
@@ -22,6 +23,20 @@ def plot_samples(samples : Tensor) -> Figure:
         ax.axis('off')
     return fig
 
+def plot_graph(y, x = None, title = None, xlabel = None, ylabel = None):
+    fig, _ = plt.subplots()
+    if x is None:
+        x = range(len(y))
+    plt.plot(x, y)
+    if title is not None:
+        plt.title(title)
+    if xlabel is not None:
+        plt.xlabel(xlabel)
+    if ylabel is not None:
+        plt.ylabel(ylabel)
+        
+    return fig
+
 class VAECB(Callback):
     def __init__(self):
         super().__init__()
@@ -31,19 +46,27 @@ class VAECB(Callback):
         device = pl_module.device
         
         dataset = trainer.datamodule.val_dataset
-        self.x0 = get_batch_from_dataset(dataset, batch_size=16)
-        fig = plot_samples(self.x0)
+        self.x0 = get_batch_from_dataset(dataset, batch_size=16).to(device)
+        fig = plot_samples(self.x0.cpu())
         logger.log_image(
             key = "Initial samples",
             images = [wandb.Image(fig)],
         )
         plt.close(fig)
         
+        encoded = pl_module.encode(self.x0)
+        encoded_size = encoded.flatten(1).size(1)
+        original_size = self.x0.flatten(1).size(1)
+        logger.log_metrics({
+            "encoded_size": encoded_size,
+            "original_size": original_size,
+        })
+        
     def on_validation_end(self, trainer : Trainer, pl_module : VAE):
         logger = pl_module.logger
         device = pl_module.device
         
-        x0 = self.x0.to(device)
+        x0 = self.x0
         reconstructed = pl_module.encode_decode(x0)
         fig = plot_samples(reconstructed.cpu())
         logger.log_image(
@@ -159,12 +182,16 @@ class DSBCB(Callback):
         
         original_size = x0.flatten(1).size(1)
         encoded_size = x0_encoded.flatten(1).size(1)
+        
+        t1 = time.time()
+        initial_forward_process = pl_module.sample(x0_encoded, forward=True, return_trajectory=True)
+        time_to_sample = time.time() - t1
         logger.log_metrics({
             "original_size": original_size,
             "encoded_size": encoded_size,
+            "time_to_sample": time_to_sample,
         })
         
-        initial_forward_process = pl_module.sample(x0_encoded, forward=True, return_trajectory=True)
         selected_indices = torch.linspace(0, len(initial_forward_process) - 1, 5).round().long().to(device)
         selected_forward_process = initial_forward_process[selected_indices, :5] # shape (5, 5, c, h, w)
         selected_forward_process = selected_forward_process.flatten(0, 1) # shape (25, c, h, w)
@@ -177,6 +204,22 @@ class DSBCB(Callback):
             step = pl_module.global_step,
         )
         plt.close(selected_forward_process_fig)
+        
+        fig_1 = plot_graph(pl_module.gamma_scheduler.gammas, title="Gammas")
+        fig_2 = plot_graph(pl_module.gamma_scheduler.gammas_bar, title="Gammas bar")
+        fig_3 = plot_graph(pl_module.gamma_scheduler.sigma_backward, title="Sigma backward")
+        fig_4 = plot_graph(pl_module.gamma_scheduler.sigma_forward, title="Sigma forward")
+        
+        logger.log_image(
+            key = "Gammas",
+            images = [wandb.Image(fig_1), wandb.Image(fig_2), wandb.Image(fig_3), wandb.Image(fig_4)],
+            caption = ["Gammas", "Gammas bar", "Sigma backward", "Sigma forward"],
+        )
+        plt.close(fig_1)
+        plt.close(fig_2)
+        plt.close(fig_3)
+        plt.close(fig_4)
+        
         
     def on_validation_end(self, trainer : Trainer, pl_module : DSB):
         device      = pl_module.device
@@ -196,11 +239,10 @@ class DSBCB(Callback):
         final_samples = pl_module.decode(final_samples) # shape: (16, c, h, w)
         samples_fig = plot_samples(final_samples.cpu())
 
-        caption = "Forward" if not is_backward else "Backward"
+        caption = "forward" if not is_backward else "backward"
         logger.log_image(
-            key = f"Samples iteration {iteration}",
+            key = f"iteration_{iteration}/{caption}_samples",
             images = [wandb.Image(samples_fig)],
-            caption = [caption],
             step = pl_module.global_step,
         )
         plt.close(samples_fig)
@@ -211,9 +253,8 @@ class DSBCB(Callback):
         selected_samples = pl_module.decode(selected_samples)
         selected_samples_fig = plot_samples(selected_samples.cpu())
         logger.log_image(
-            key = f"Trajectory iteration {iteration}",
+            key = f"iteration_{iteration}/{caption}_trajectory",
             images = [wandb.Image(selected_samples_fig)],
-            caption = [caption],
             step = pl_module.global_step,
         )
         plt.close(selected_samples_fig)

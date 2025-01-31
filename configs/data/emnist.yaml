@@ -1,0 +1,12 @@
+_target_: src.data_modules.BaseDM
+dataset:
+  _target_: torch.utils.data.ConcatDataset
+  datasets:
+    - _target_: src.dataset.EMNISTNoLabel
+      split: 'letters'
+      img_size: 32
+    - _target_: src.dataset.EMNISTNoLabel
+      split: 'digits'
+      img_size: 32
+
+batch_size: 128

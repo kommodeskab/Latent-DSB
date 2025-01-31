@@ -19,13 +19,13 @@ class DSB(BaseLightningModule):
         self,
         model : Module,
         encoder_decoder : BaseEncoderDecoder,
-        optimizer : Optimizer,
         max_gamma : float,
         min_gamma : float,
         num_steps : int,
         max_iterations : int,
         cache_max_size : int,
         cache_num_iters : int,
+        optimizer : Optimizer | None = None,
         pretrained_forward_model_id : str | None = None,
         pretrained_backward_model_id : str | None = None,
         backward_model : Module | None = None,
@@ -33,11 +33,12 @@ class DSB(BaseLightningModule):
         target : Literal["terminal", "flow"] = "terminal",
         max_dsb_iterations : int | None = 20,
         max_norm : float = float("inf"),
+        lr_multiplier : float = 0.9,
         **kwargs
     ):
         super().__init__()
         self.automatic_optimization = False
-        self.save_hyperparameters(ignore = ["model", "optimizer", "encoder_decoder", "backward_model"])
+        self.save_hyperparameters(ignore = ["model", "encoder_decoder", "backward_model"])
         
         self.training_backward = True
         self.curr_num_iters = 0
@@ -59,7 +60,7 @@ class DSB(BaseLightningModule):
             
         if pretrained_backward_model_id is not None:
             ckpt_path = get_ckpt_path('flow matching', pretrained_backward_model_id)
-            self.backward_diffusion_model = FM.load_from_checkpoint(ckpt_path, model = self.backward_model, encoder_decoder=encoder_decoder, strict=False)
+            self.backward_diffusion_model = FM.load_from_checkpoint(ckpt_path, model = self.backward_model, encoder_decoder=encoder_decoder)
         
         self.encoder_decoder = encoder_decoder
         self.partial_optimizer = optimizer
@@ -71,6 +72,7 @@ class DSB(BaseLightningModule):
 
     def on_fit_start(self) -> None:
         self.datamodule.training_backward = self.training_backward
+        assert self.trainer.reload_dataloaders_every_n_epochs == 1, "The trainer must reload dataloaders every epoch for the DSB algorithm to work."
 
     def _has_converged(self) -> bool:
         dsb_iters = self.DSB_iteration
@@ -87,11 +89,9 @@ class DSB(BaseLightningModule):
             self.cache.clear()
 
             if self.training_backward: 
-                # resetting the optimizers and schedulers
                 self._reset_optimizers()
                 # save checkpoint under "logs/project/version/checkpoints"
-                save_dir = f"logs/{self.logger.name}/{self.logger.version}/checkpoints"
-                save_dir = f"{save_dir}/DSB_iteration_{self.DSB_iteration}.ckpt"
+                save_dir = f"logs/{self.logger.name}/{self.logger.version}/checkpoints/DSB_iteration_{self.DSB_iteration}.ckpt"
                 self.trainer.save_checkpoint(save_dir)
                 print(f"Saved checkpoint at {save_dir}")
 
@@ -101,12 +101,22 @@ class DSB(BaseLightningModule):
         
     def on_save_checkpoint(self, checkpoint):
         checkpoint['DSB_iteration'] = self.DSB_iteration
+        checkpoint['curr_num_iters'] = self.curr_num_iters
+        checkpoint['training_backward'] = self.training_backward
         
     def on_load_checkpoint(self, checkpoint):
         self.DSB_iteration = checkpoint['DSB_iteration']
+        self.curr_num_iters = checkpoint['curr_num_iters']
+        self.training_backward = checkpoint['training_backward']
         
     def _reset_optimizers(self) -> None:
         backward_opt, forward_opt = self.configure_optimizers()
+        lr = backward_opt.param_groups[0]['lr']
+        new_lr = lr * self.hparams.lr_multiplier ** (self.DSB_iteration - 1)
+        for param_group in backward_opt.param_groups:
+            param_group['lr'] = new_lr
+        for param_group in forward_opt.param_groups:
+            param_group['lr'] = new_lr
         self.trainer.optimizers[0] = backward_opt
         self.trainer.optimizers[1] = forward_opt
     
@@ -197,25 +207,21 @@ class DSB(BaseLightningModule):
             return self.forward_diffusion_model.sample(x_start, return_trajectory)
 
         # otherwise, we sample using the diffusion schrödinger bridge
-        trajectory = torch.zeros(self.hparams.num_steps + 1, *x_start.size()).to(self.device)
+        xk = x_start
+        trajectory = [xk]
         model = self._get_model(forward)
         model.eval()
+        range_ = range(self.hparams.num_steps)
+        if not forward:
+            range_ = reversed(range_)
         
-        if forward:
-            xk = x_start
-            trajectory[0] = xk
-            for k in range(self.hparams.num_steps): # 0, 1, 2, ..., num_steps - 1
-                xk_plus_one = self.go_forward(xk, k)
-                trajectory[k + 1] = xk_plus_one
-                xk = xk_plus_one
-
-        else:
-            xk_plus_one = x_start
-            trajectory[-1] = xk_plus_one
-            for k in reversed(range(self.hparams.num_steps)): # num_steps - 1, num_steps - 2, ..., 1, 0
-                xk = self.go_backward(xk_plus_one, k + 1)
-                trajectory[k] = xk
-                xk_plus_one = xk
+        for k in range_:
+            xk_next = self.go_forward(xk, k) if forward else self.go_backward(xk, k + 1)
+            trajectory.append(xk_next)
+            xk = xk_next
+        
+        trajectory = trajectory[::-1] if not forward else trajectory
+        trajectory = torch.stack(trajectory, dim = 0)
 
         return trajectory if return_trajectory else xk
     
@@ -232,8 +238,9 @@ class DSB(BaseLightningModule):
         training = "train" if is_training else "val"
         return f"iteration_{iteration}/{direction}_loss/{training}"
     
-    def get_batch(self, backward : bool) -> Tensor:
-        trajectory = self.cache.sample()
+    def get_batch(self, backward : bool, trajectory : Tensor | None = None) -> Tensor:
+        if trajectory is None:
+            trajectory = self.cache.sample()
         batch_size = trajectory.size(1)
         random_samples = torch.randint(0, batch_size, (batch_size,)).to(self.device)
         random_ks = torch.randint(0, self.hparams.num_steps, (batch_size,)).to(self.device)
@@ -253,8 +260,8 @@ class DSB(BaseLightningModule):
         model = self._get_model(training_backward)
         optimizer = self._get_optimizer(training_backward)
                 
-        for _ in range(self.hparams.cache_num_iters):
-            sampled_batch, random_ks, x0, xN = self.get_batch(training_backward)
+        for i in range(self.hparams.cache_num_iters):
+            sampled_batch, random_ks, x0, xN = self.get_batch(training_backward, trajectory if i == 0 else None)
 
             # calculate loss and do backward pass
             optimizer.zero_grad()
@@ -268,6 +275,9 @@ class DSB(BaseLightningModule):
             optimizer.step()
             
             self.curr_num_iters += 1
+            
+            if not self.cache.is_full():
+                break
                 
         model_name = "backward_model" if training_backward else "forward_model"
         
@@ -275,6 +285,7 @@ class DSB(BaseLightningModule):
             self._get_loss_name(backward = training_backward, is_training = True): loss,
             f"{model_name}_grad": norm,
             "curr_num_iters": self.curr_num_iters,
+            "DSB_iteration": self.DSB_iteration,
         }, on_step=True)
 
     @torch.no_grad()

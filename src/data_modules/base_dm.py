@@ -79,7 +79,7 @@ class BaseDSBDM(pl.LightningDataModule):
             "num_workers" : num_workers,
             "persistent_workers" : True,
             "drop_last" : True,
-            "pin_memory" : True
+            "pin_memory" : False
         }
         
         self.training_backward = None
