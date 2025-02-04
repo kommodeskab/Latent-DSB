@@ -14,7 +14,7 @@ optimizer:
 max_gamma: 1
 min_gamma: 1
 num_steps: 100
-max_iterations: 1000
+max_iterations: 2000
 cache_max_size: 100
 cache_num_iters: 5
-T: 0.05
+T: 1.0

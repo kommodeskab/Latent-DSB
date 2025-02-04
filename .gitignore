@@ -8,6 +8,7 @@ inception-2015-12-05.pt
 playground.py
 /stable-diffusion-vae
 /playgrounds
+/latent_means
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

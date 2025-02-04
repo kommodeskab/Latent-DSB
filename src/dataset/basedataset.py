@@ -2,6 +2,7 @@ from torch.utils.data import Dataset
 import hashlib
 from torchvision import transforms
 from .utils import get_data_path
+from torch import Tensor
 
 class BaseDataset(Dataset):
     def __init__(self):
@@ -46,7 +47,7 @@ class ImageDataset(BaseDataset):
     def __len__(self):
         return len(self.dataset)
     
-    def __getitem__(self, idx):
+    def __getitem__(self, idx) -> Tensor:
         img = self.dataset[idx]
         img = self.transform(img).clamp(-1, 1)
         return img

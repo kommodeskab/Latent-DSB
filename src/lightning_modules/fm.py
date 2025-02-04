@@ -95,8 +95,7 @@ class FM(BaseLightningModule):
         xt = noise
         trajectory = [xt]
         for t in self.scheduler.timesteps:
-            timesteps = self.t_to_timesteps(t, batch_size)
-            model_output = self(xt, timesteps)
+            model_output = self(xt, t)
             xt = self.scheduler.step(model_output, t, xt, eta=1.0).prev_sample
             trajectory.append(xt)
             

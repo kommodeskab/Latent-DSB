@@ -33,7 +33,7 @@ class DSB(BaseLightningModule):
         target : Literal["terminal", "flow"] = "terminal",
         max_dsb_iterations : int | None = 20,
         max_norm : float = float("inf"),
-        lr_multiplier : float = 0.9,
+        lr_multiplier : float = 1.0,
         **kwargs
     ):
         super().__init__()
@@ -197,14 +197,22 @@ class DSB(BaseLightningModule):
     
     @torch.no_grad()
     def sample(self, x_start : Tensor, forward : bool = True, return_trajectory : bool = False) -> Tensor:
-        # first check if we are using a pretrained diffusion model
-        # in that case, we would like to use the pretrained model for sampling in the very first iteration
         if (
-            self.DSB_iteration == 1 and 
-            forward and
-            self.hparams.pretrained_forward_model_id is not None
+            self.DSB_iteration == 1 and forward
         ):
-            return self.forward_diffusion_model.sample(x_start, return_trajectory)
+            if self.hparams.pretrained_forward_model_id is not None:
+                return self.forward_diffusion_model.sample(x_start, return_trajectory)
+            else:
+                rand_noise = torch.randn_like(x_start).to(self.device)
+                gammas_bar = self.gamma_scheduler.gammas_bar
+                trajectory = [x_start]
+                for k in range(self.hparams.num_steps):
+                    t = gammas_bar[k + 1] / gammas_bar[-1]
+                    x = t * rand_noise + (1 - t) * x_start
+                    trajectory.append(x)
+                    
+                trajectory = torch.stack(trajectory, dim = 0)
+                return trajectory if return_trajectory else x
 
         # otherwise, we sample using the diffusion schrödinger bridge
         xk = x_start
@@ -268,7 +276,7 @@ class DSB(BaseLightningModule):
             # if training backward, then sampled_batch = xk + 1 else sampled_batch = xk
             loss = self._backward_loss(sampled_batch, random_ks, x0) if training_backward else self._forward_loss(sampled_batch, random_ks, xN)
             self.manual_backward(loss)
-  
+            
             # clip the gradients. first, save the norm for later logging
             norm = grad_norm(model, norm_type=2).get('grad_2.0_norm_total', 0)
             self.clip_gradients(optimizer, self.hparams.max_norm, "norm")

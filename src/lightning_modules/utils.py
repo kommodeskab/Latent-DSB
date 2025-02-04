@@ -2,12 +2,11 @@ import torch
 from torch import Tensor
 import random
 import math
-from typing import Callable
-from diffusers import AutoencoderKL
-from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
-from src.lightning_modules.vae import VAE
-from src.utils import get_ckpt_path
-from src.networks import VQ
+import os
+from torch.utils.data import DataLoader, Dataset
+import hashlib
+from src.networks.encoders import BaseEncoderDecoder
+from tqdm import tqdm
 
 def get_symmetric_schedule(min_value : float, max_value : float, num_steps : int) -> Tensor:
     gammas = torch.zeros(num_steps)
@@ -86,3 +85,58 @@ class Cache:
         
     def __len__(self) -> int:
         return len(self.cache)
+    
+    
+def hash_obj(obj):
+    return hashlib.md5(str(obj).encode()).hexdigest()
+
+def calculate_latent_mean_std(
+    encoder_decoder : BaseEncoderDecoder,
+    datasets: list[Dataset],
+    max_n_batches: int = 50,
+    ):
+    """
+    Given an encoder/decoder and a list of datasets, calculate the mean and standard deviation of the latent space. 
+    If multiple datatets are provided, the mean and standard deviation are calculated across all datasets and weighted by the number of samples in each dataset.
+    """
+    root_dir = 'latent_means'
+    os.makedirs(root_dir, exist_ok=True)
+    device = next(encoder_decoder.parameters()).device
+    
+    dataset_sizes_sum = sum([len(dataset) for dataset in datasets])
+    
+    latent_mean = []
+    latent_std = []
+    
+    for dataset in datasets:
+        dataset_hash = hash_obj(encoder_decoder) + hash_obj(dataset)
+        file_name = f'{root_dir}/latent_mean_std_{dataset_hash}.pt'
+        if os.path.exists(file_name):
+            file = torch.load(file_name)
+            print(f'Loaded latent mean and std from {file_name}')
+            dataset_latent_mean = file['latent_mean']
+            dataset_latent_std = file['latent_std']
+        else:
+            dataset_latent_mean = []
+            dataset_latent_std = []
+            dataloader = DataLoader(dataset, batch_size = 128)
+            for i, batch in tqdm(enumerate(dataloader), total=max_n_batches, desc=f'Calculating latent mean and std for dataset {dataset_hash}'):
+                if i > max_n_batches:
+                    break
+                with torch.no_grad():
+                    latent = encoder_decoder.encode(batch.to(device))
+                dataset_latent_mean.append(latent.mean(dim=0))
+                dataset_latent_std.append(latent.std(dim=0))
+                
+            dataset_latent_mean = torch.stack(dataset_latent_mean).mean(dim=0)
+            dataset_latent_std = torch.stack(dataset_latent_std).mean(dim=0)
+            torch.save({'latent_mean': dataset_latent_mean, 'latent_std': dataset_latent_std}, file_name)
+            print(f'Saved latent mean and std to {file_name}')
+            
+        latent_mean.append(len(dataset) / dataset_sizes_sum * dataset_latent_mean)
+        latent_std.append(len(dataset) / dataset_sizes_sum * dataset_latent_std)
+        
+    latent_mean = torch.stack(latent_mean).sum(dim=0)
+    latent_std = torch.stack(latent_std).sum(dim=0)
+    
+    return latent_mean, latent_std

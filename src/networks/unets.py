@@ -15,20 +15,19 @@ class UNet2D(UNet2DModel):
         
 class PretrainedUNet2D:
     def __new__(
+        cls,
         model_id : str,
         **kwargs,
     ):
         subfolder = kwargs.pop("subfolder", "")
-        print("Loading pretrained model...")
-        dummy_model : UNet2D = UNet2D.from_pretrained(model_id, subfolder=subfolder, **kwargs)
-        print("Done loading pretrained model.")
+        dummy_model : UNet2DModel = UNet2DModel.from_pretrained(model_id, subfolder=subfolder, **kwargs)
+        dummy_model.__class__ = UNet2D
         return dummy_model
     
-
-class CelebAUNet2D(PretrainedUNet2D):
-    def __init__(self):
-        super().__init__(model_id='CompVis/ldm-celebahq-256', subfolder='unet')
-        
+class CelebAUNet2D:
+    def __new__(cls):
+        return PretrainedUNet2D("CompVis/ldm-celebahq-256", subfolder="unet")
+            
 class EMNISTUNet2D(UNet2D):
     def __init__(self):
         super().__init__(

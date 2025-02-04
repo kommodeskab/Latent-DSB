@@ -2,6 +2,7 @@ from torchvision import datasets, transforms
 from torch.utils.data import Dataset
 import matplotlib.pyplot as plt
 from .basedataset import BaseDataset
+from torch import Tensor
 
 class EMNIST(BaseDataset):
     def __init__(self, split : str, img_size : int = 32):
@@ -34,7 +35,7 @@ class EMNISTNoLabel(EMNIST):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
     
-    def __getitem__(self, idx):
+    def __getitem__(self, idx) -> Tensor:
         image, _ = super().__getitem__(idx)
         return image
     
