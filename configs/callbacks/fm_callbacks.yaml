@@ -2,8 +2,8 @@ defaults:
   - learningratemonitor
   - richprogressbar
   - richmodelsummary
-  - flowmatching
   - swa
   - timer
   - modelcheckpoint
   - early_stopping
+  - flowmatching

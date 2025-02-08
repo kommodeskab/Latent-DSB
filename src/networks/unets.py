@@ -35,7 +35,7 @@ class EMNISTUNet2D(UNet2D):
             out_channels=1,
             down_block_types=["DownBlock2D", "DownBlock2D", "DownBlock2D"],
             up_block_types=["UpBlock2D", "UpBlock2D", "UpBlock2D"],
-            block_out_channels=[32, 32, 32],
+            block_out_channels=[32, 32, 64],
             norm_num_groups=32,
             sample_size=4,
         )

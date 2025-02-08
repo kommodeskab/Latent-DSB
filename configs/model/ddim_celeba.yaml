@@ -3,16 +3,15 @@ _target_: src.lightning_modules.FM
 model:
   _target_: src.networks.CelebAUNet2D
 
-encoder_decoder:
-  _target_: src.networks.CelebAVQ
-
-scheduler: 
-  _target_: diffusers.schedulers.DDIMScheduler
+scheduler:
+  _target_: diffusers.DDIMScheduler
   num_train_timesteps: 1000
   beta_start: 0.0015
-  beta_end: 0.0195
-  clip_sample: False,
-  beta_schedule: 'scaled_linear'
+  beta_end: 0.0015
+  rescale_betas_zero_snr: True
+
+encoder_decoder:
+  _target_: src.networks.CelebAVQ
 
 optimizer:
   _target_: torch.optim.AdamW

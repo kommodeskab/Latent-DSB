@@ -13,6 +13,8 @@ from torch.nn.functional import mse_loss
 from torch.nn import Module
 from src.data_modules.base_dm import BaseDSBDM
 from src.utils import get_ckpt_path
+from src.utils import filter_dict_by_prefix
+import time
 
 class DSB(BaseLightningModule):
     def __init__(
@@ -31,9 +33,10 @@ class DSB(BaseLightningModule):
         backward_model : Module | None = None,
         T : int | None = None,
         target : Literal["terminal", "flow"] = "terminal",
-        max_dsb_iterations : int | None = 20,
+        max_dsb_iterations : int | None = 10,
         max_norm : float = float("inf"),
         lr_multiplier : float = 1.0,
+        added_noise : float = 0.1,
         **kwargs
     ):
         super().__init__()
@@ -43,6 +46,7 @@ class DSB(BaseLightningModule):
         self.training_backward = True
         self.curr_num_iters = 0
         self.DSB_iteration = 1
+        self.added_noise = added_noise
         
         assert max_gamma >= min_gamma, f"{max_gamma = } must be greater than {min_gamma = }"
         
@@ -196,14 +200,12 @@ class DSB(BaseLightningModule):
         return loss
     
     @torch.no_grad()
-    def sample(self, x_start : Tensor, forward : bool = True, return_trajectory : bool = False) -> Tensor:
-        if (
-            self.DSB_iteration == 1 and forward
-        ):
+    def sample(self, x_start : Tensor, forward : bool = True, return_trajectory : bool = False, use_initial_forward_sampling : bool = False) -> Tensor:
+        if use_initial_forward_sampling:
             if self.hparams.pretrained_forward_model_id is not None:
                 return self.forward_diffusion_model.sample(x_start, return_trajectory)
             else:
-                rand_noise = torch.randn_like(x_start).to(self.device)
+                rand_noise = torch.randn_like(x_start)
                 gammas_bar = self.gamma_scheduler.gammas_bar
                 trajectory = [x_start]
                 for k in range(self.hparams.num_steps):
@@ -261,20 +263,28 @@ class DSB(BaseLightningModule):
     def training_step(self, batch : Tensor, batch_idx : int) -> Tensor:
         training_backward = self.training_backward
         
+        # if we are in the very first iteration, we use the initial sampling
+        use_initial_forward_sampling = training_backward and self.DSB_iteration == 1
+        
         batch = self.encode(batch)
-        trajectory = self.sample(batch, forward = training_backward, return_trajectory = True)
+        # adding a bit of noise to the latent augments new data but (usually) still decodes to the same image
+        noise = torch.randn_like(batch) * self.added_noise
+        batch = batch + noise
+        t1 = time.time()
+        trajectory = self.sample(batch, forward = training_backward, return_trajectory = True, use_initial_forward_sampling = use_initial_forward_sampling)
+        time_to_sample = time.time() - t1
         self.cache.add(trajectory)
         
         model = self._get_model(training_backward)
         optimizer = self._get_optimizer(training_backward)
                 
         for i in range(self.hparams.cache_num_iters):
-            sampled_batch, random_ks, x0, xN = self.get_batch(training_backward, trajectory if i == 0 else None)
+            sampled_batch, ks, x0, xN = self.get_batch(training_backward, trajectory if i == 0 else None)
 
             # calculate loss and do backward pass
             optimizer.zero_grad()
             # if training backward, then sampled_batch = xk + 1 else sampled_batch = xk
-            loss = self._backward_loss(sampled_batch, random_ks, x0) if training_backward else self._forward_loss(sampled_batch, random_ks, xN)
+            loss = self._backward_loss(sampled_batch, ks, x0) if training_backward else self._forward_loss(sampled_batch, ks, xN)
             self.manual_backward(loss)
             
             # clip the gradients. first, save the norm for later logging
@@ -294,6 +304,8 @@ class DSB(BaseLightningModule):
             f"{model_name}_grad": norm,
             "curr_num_iters": self.curr_num_iters,
             "DSB_iteration": self.DSB_iteration,
+            "time_to_sample": time_to_sample,
+            "training_backward": training_backward,
         }, on_step=True)
 
     @torch.no_grad()
@@ -302,9 +314,10 @@ class DSB(BaseLightningModule):
         is_backward = self.training_backward
         loss_sum = 0.0
         batch = self.encode(batch)
+        use_initial_forward_sampling = is_backward and self.DSB_iteration == 1
         
         if (is_backward and dataloader_idx == 0) or (not is_backward and dataloader_idx == 1):
-            trajectory = self.sample(batch, forward = is_backward, return_trajectory = True)
+            trajectory = self.sample(batch, forward = is_backward, return_trajectory = True, use_initial_forward_sampling=use_initial_forward_sampling)
             batch_size = trajectory.size(1)
             x0, xN = trajectory[0], trajectory[-1]
             for k in range(0, self.hparams.num_steps):

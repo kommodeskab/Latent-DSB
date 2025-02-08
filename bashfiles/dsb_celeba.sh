@@ -1,10 +1,10 @@
 #!/bin/sh
 
 # SET JOB NAME
-#BSUB -J diffusion
+#BSUB -J dsb
 
 # select gpu, choose gpuv100 or gpua100 (best)
-#BSUB -q gpuv100
+#BSUB -q gpua100
 
 # number of GPUs to use
 #BSUB -gpu "num=1:mode=exclusive_process"
@@ -24,4 +24,4 @@
 
 module load python3/3.12
 source .venv/bin/activate
-python3 train.py +experiment=fm_finetune
+python3 train.py +experiment=dsb_celeba

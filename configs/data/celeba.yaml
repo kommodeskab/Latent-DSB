@@ -1,5 +1,6 @@
 _target_: src.data_modules.BaseDM
 dataset:
   _target_: src.dataset.CelebADataset
-  img_size: 128
+  img_size: 256
   augment: True
+batch_size: 32

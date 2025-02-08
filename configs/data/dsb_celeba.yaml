@@ -4,12 +4,12 @@ start_dataset:
   _target_: src.dataset.CelebADataset
   attr: 20
   on_or_off: 1
-  img_size: 64
+  img_size: 256
 end_dataset:
   _target_: src.dataset.CelebADataset
   attr: 20
   on_or_off: 0
-  img_size: 64
+  img_size: 256
   
 batch_size: 32
 num_workers: 4

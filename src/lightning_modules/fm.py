@@ -1,36 +1,82 @@
-from diffusers.schedulers import DDIMScheduler, DDPMScheduler
 from src.lightning_modules.baselightningmodule import BaseLightningModule
 import torch
-from torch import Tensor
+from torch import Tensor, IntTensor
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 from src.networks import BaseEncoderDecoder
 from typing import Any
 from pytorch_lightning.utilities import grad_norm
 from torch.nn.functional import mse_loss
+from src.lightning_modules.utils import GammaScheduler
+from typing import Tuple
+
+class FMScheduler:
+    def __init__(self, num_timesteps : int = 1000, min_max_frac: float = 1.0):
+        self.num_train_timesteps = num_timesteps
+        self.eps_min = 1e-4
+        self.set_timesteps(num_timesteps, min_max_frac)
+    
+    def set_timesteps(self, num_timesteps : int, min_max_frac: float = 1.0) -> None:
+        scheduler = GammaScheduler(min_max_frac, 1, num_timesteps, 1)
+        sigmas = scheduler.gammas_bar
+        timesteps = (sigmas * self.num_train_timesteps).int()
+        timesteps = timesteps[1:]
+        timesteps = torch.clamp(timesteps, min=1)
+        sigmas[-1] = 1 - self.eps_min
+        self.timesteps = timesteps
+        self.sigmas = sigmas
+        
+    def sample_timesteps(self, batch_size : int) -> Tensor:
+        random_indices = torch.randint(0, len(self.timesteps), (batch_size,))
+        return self.timesteps[random_indices]
+    
+    def sample_batch(self, batch : Tensor) -> Tuple[Tensor, IntTensor, Tensor]:
+        batch_size = batch.size(0)
+        device = batch.device
+        sigmas = self.sigmas.to(device)
+        sigmas = self.to_dim(sigmas, batch.dim())
+        timesteps = self.sample_timesteps(batch_size).to(device)
+        sigmas = sigmas[timesteps]
+        noise = torch.randn_like(batch)
+        target = noise - batch
+        xt = (1 - sigmas) * batch + sigmas * noise
+        return xt, timesteps, target
+    
+    def step(self, xt_plus_1 : Tensor, t_plus_1 : int, model_output : Tensor) -> Tensor:
+        """
+        Predict x_t | x_{t + 1}
+        """
+        assert t_plus_1 > 0, "Timestep must be greater than 0"
+        sigmas = self.sigmas.to(xt_plus_1.device)
+        delta_t = sigmas[t_plus_1 - 1] - sigmas[t_plus_1]
+        return xt_plus_1 + delta_t * model_output
+            
+    def to_dim(self, x : torch.Tensor, dim : int) -> torch.Tensor:
+        while x.dim() < dim:
+            x = x.unsqueeze(-1)
+        return x
 
 class FM(BaseLightningModule):
     def __init__(
         self,
         model : torch.nn.Module,
-        scheduler : DDIMScheduler | DDPMScheduler,
         encoder_decoder : BaseEncoderDecoder | None = None,
         optimizer : Optimizer | None = None,
-        lr_scheduler : dict[str, LRScheduler | str] | None = None
+        lr_scheduler : dict[str, LRScheduler | str] | None = None,
+        added_noise : float = 0.1,
+        **kwargs : Any
     ):
         super().__init__()
         self.save_hyperparameters(ignore=['model', 'encoder_decoder'])
         
         self.model = model
+        self.added_noise = added_noise
+        self.scheduler = FMScheduler(**kwargs)
+        self.encoder_decoder = encoder_decoder
         self.partial_optimizer = optimizer
         self.partial_lr_scheduler = lr_scheduler
-        self.scheduler = scheduler
-        
-        self.num_train_timesteps = self.scheduler.config.num_train_timesteps
-        self.scheduler.set_timesteps(self.num_train_timesteps)
-        self.encoder_decoder = encoder_decoder
-    
-    def forward(self, x : Tensor, timesteps : Tensor) -> Tensor:
+            
+    def forward(self, x : Tensor, timesteps : IntTensor) -> Tensor:
         return self.model(x, timesteps)
     
     def on_before_optimizer_step(self, optimizer):
@@ -44,63 +90,38 @@ class FM(BaseLightningModule):
     @torch.no_grad()
     def decode(self, x : Tensor):
         return self.encoder_decoder.decode(x)
-        
-    def forward(self, x : Tensor, timesteps : Tensor) -> Tensor:
-        return self.model(x, timesteps)
     
-    def sample_timesteps(self, batch_size : int) -> Tensor:
-        timesteps = self.scheduler.timesteps
-        random_indices = torch.randint(0, len(timesteps), (batch_size,))
-        return timesteps[random_indices].to(self.device)
-    
-    def t_to_timesteps(self, t : float, batch_size : int) -> Tensor:
-        return torch.full((batch_size,), t).to(self.device)
-    
-    @property
-    def prediction_type(self) -> str:
-        return self.scheduler.config.prediction_type
-    
-    def common_step(self, batch : Tensor) -> Tensor:
-        batch_size = batch.size(0)
-        x0 = self.encode(batch)
-        timesteps = self.sample_timesteps(batch_size)
-        noise = torch.randn_like(x0).to(self.device)
-        xt = self.scheduler.add_noise(x0, noise, timesteps)
-        
+    def common_step(self, x_encoded : Tensor) -> Tensor:
+        xt, timesteps, target = self.scheduler.sample_batch(x_encoded)
         model_output = self(xt, timesteps)
-        
-        if self.prediction_type == "epsilon":
-            target = noise
-        elif self.prediction_type == "sample":
-            target = x0
-            
-        loss = mse_loss(target, model_output)
+        loss = mse_loss(model_output, target)
         return loss
     
     def training_step(self, batch : Tensor, batch_idx : int) -> Tensor:
-        loss = self.common_step(batch)
+        x_encoded = self.encode(batch)
+        x_encoded += self.added_noise * torch.randn_like(x_encoded)
+        loss = self.common_step(x_encoded)
         self.log('train_loss', loss)
         return loss
     
     def validation_step(self, batch : Tensor, batch_idx : int) -> Tensor:
         torch.manual_seed(0)
-        loss = self.common_step(batch)
+        x_encoded = self.encode(batch)
+        loss = self.common_step(x_encoded)
         self.log('val_loss', loss)
         return loss
-    
+
     @torch.no_grad()
     def sample(self, noise : Tensor, return_trajectory : bool = False) -> Tensor:
         self.eval()
-        batch_size = noise.size(0)
         xt = noise
         trajectory = [xt]
-        for t in self.scheduler.timesteps:
+        for t in reversed(self.scheduler.timesteps):
             model_output = self(xt, t)
-            xt = self.scheduler.step(model_output, t, xt, eta=1.0).prev_sample
+            xt = self.scheduler.step(xt, t, model_output)
             trajectory.append(xt)
             
         trajectory = torch.stack(trajectory, dim=0)
-        self.train()
         return trajectory if return_trajectory else trajectory[-1]
         
     def configure_optimizers(self):

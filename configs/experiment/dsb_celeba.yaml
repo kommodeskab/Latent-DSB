@@ -1,12 +1,12 @@
 # @package _global_
 defaults:
   - override /trainer: gpu
-  - override /data: dsb_emnist
+  - override /data: dsb_celeba
   - override /callbacks: dsb_callbacks
-  - override /model: dsb_emnist
+  - override /model: dsb_celeba
   - override /logger: default
 
-project_name: 'emnist'
+project_name: 'celeba'
 task_name: 'test'
 
 trainer:

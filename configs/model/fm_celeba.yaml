@@ -1,20 +1,10 @@
 _target_: src.lightning_modules.FM
 
 model:
-  _target_: src.networks.PretrainedModel
-  project_name: 'flow matching'
-  experiment_id: '270125150447'
-  model_keyword: 'model'
+  _target_: src.networks.CelebAUNet2D
 
 encoder_decoder:
   _target_: src.networks.CelebAVQ
-
-scheduler: 
-  _target_: diffusers.schedulers.DDIMScheduler
-  beta_start: 0.0015
-  beta_end: 0.0195
-  beta_schedule: 'scaled_linear'
-  clip_sample: False
 
 optimizer:
   _target_: torch.optim.AdamW
@@ -31,4 +21,6 @@ lr_scheduler:
     cooldown: 5
   monitor: 'val_loss'
   interval: 'epoch'
-  frequency: 5
+  frequency: 1
+
+num_timesteps: 1000

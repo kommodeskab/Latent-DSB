@@ -183,13 +183,10 @@ class DSBCB(Callback):
         original_size = x0.flatten(1).size(1)
         encoded_size = x0_encoded.flatten(1).size(1)
         
-        t1 = time.time()
-        initial_forward_process = pl_module.sample(x0_encoded, forward=True, return_trajectory=True)
-        time_to_sample = time.time() - t1
+        initial_forward_process = pl_module.sample(x0_encoded, forward=True, return_trajectory=True, use_initial_forward_sampling=True)
         logger.log_metrics({
             "original_size": original_size,
             "encoded_size": encoded_size,
-            "time_to_sample": time_to_sample,
         })
         
         selected_indices = torch.linspace(0, len(initial_forward_process) - 1, 5).round().long().to(device)
