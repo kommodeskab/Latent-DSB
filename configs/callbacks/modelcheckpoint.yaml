@@ -3,3 +3,5 @@ modelcheckpoint:
   monitor: 'val_loss'
   save_top_k: 1
   mode: 'min'
+  filename: 'best'
+  save_last: True

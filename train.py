@@ -21,7 +21,7 @@ def my_app(cfg : DictConfig) -> None:
     
     if id := cfg.continue_from_id:
         print(f"Continuing from id: {id}")
-        ckpt_path = get_ckpt_path(project_name, id)
+        ckpt_path = get_ckpt_path(id, last=True)
     else:
         ckpt_path = None
     

@@ -26,7 +26,7 @@ class ImageDataset(BaseDataset):
     ):
         """
         The base image dataset class.
-        Enables data augmentation and resizing for extended dataset size.
+        Enables data augmentation and resizing.
         """
         super().__init__()
         self.dataset = dataset

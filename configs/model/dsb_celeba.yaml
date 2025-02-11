@@ -11,10 +11,9 @@ optimizer:
   _partial_: True
   lr: 1e-4
 
-max_gamma: 1
-min_gamma: 0.1
 num_steps: 100
 max_iterations: 5000
 cache_max_size: 200
 cache_num_iters: 10
-T: 1.0
+use_pretrained_flow: False
+gamma_frac: 0.1

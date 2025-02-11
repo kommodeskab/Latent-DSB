@@ -6,21 +6,25 @@ from pytorch_lightning import Callback, Trainer
 from torch import Tensor
 import torch
 from matplotlib.figure import Figure
-import time
+from torch.utils.data import Dataset
 
-def plot_samples(samples : Tensor) -> Figure:
+def plot_samples(samples : Tensor, height : int | None = None, width : int | None = None) -> Figure:
     # assume samples have shape (k, c, h, w)
     # and have values between -1 and 1
-    k = int(samples.size(0) ** 0.5)
+    if height is None and width is None:
+        k = int(samples.size(0) ** 0.5)
+        height = width = k
+
     samples = (samples + 1) / 2
     samples = samples.clamp(0, 1)
     cmap = 'gray' if samples.shape[1] == 1 else None
     samples = samples.permute(0, 2, 3, 1)
-    fig, axs = plt.subplots(k, k, figsize = (10, 10))
-    for i in range(k * k):
-        ax = axs[i // k, i % k]
-        ax.imshow(samples[i], cmap = cmap)
-        ax.axis('off')
+    fig, axs = plt.subplots(height, width, figsize=(width*5, height*5))
+    for i in range(height):
+        for j in range(width):
+            ax = axs[i, j] if height > 1 else axs[j]
+            ax.imshow(samples[i * height + j], cmap=cmap)
+            ax.axis('off')
     return fig
 
 def plot_graph(y, x = None, title = None, xlabel = None, ylabel = None):
@@ -64,7 +68,6 @@ class VAECB(Callback):
         
     def on_validation_end(self, trainer : Trainer, pl_module : VAE):
         logger = pl_module.logger
-        device = pl_module.device
         
         x0 = self.x0
         reconstructed = pl_module.encode_decode(x0)
@@ -79,10 +82,8 @@ class VAECB(Callback):
 class FlowMatchingCB(Callback):
     def __init__(
         self,
-        test_initial_samples : bool = False,
         ):
         super().__init__()
-        self.test_initial_samples = test_initial_samples
         
     def on_train_start(self, trainer : Trainer, pl_module : FM):
         logger = pl_module.logger
@@ -98,13 +99,13 @@ class FlowMatchingCB(Callback):
         )
         plt.close(fig)
         
-        encoded = pl_module.encode(x0.to(device))
-        self.noise = torch.randn(*encoded.shape)
-        decoded = pl_module.decode(encoded)
+        encoded = pl_module.encode(x0.to(device), add_noise=True)
+        decoded = pl_module.decode(encoded).cpu()
+        self.noise = torch.randn_like(encoded)
         
-        fig = plot_samples(decoded.cpu())
+        fig = plot_samples(decoded)
         logger.log_image(
-            key = "Initial decoded",
+            key = "Initial decoded (with noise)",
             images = [wandb.Image(fig)],
         )
         plt.close(fig)
@@ -115,9 +116,6 @@ class FlowMatchingCB(Callback):
             "original_size": original_size,
             "latent_size": latent_size,
         })
-        
-        if self.test_initial_samples:
-            self.on_validation_end(trainer, pl_module)
         
     def on_validation_end(self, trainer : Trainer, pl_module : FM):
         logger = pl_module.logger
@@ -134,7 +132,40 @@ class FlowMatchingCB(Callback):
         )
         plt.close(fig)
 
-
+class TestFMOnDatasetCB(Callback):
+    def __init__(self, dataset : Dataset):
+        super().__init__()
+        self.dataset = dataset
+    
+    def on_train_start(self, trainer : Trainer, pl_module : FM):
+        device = pl_module.device
+        logger = pl_module.logger
+        
+        dataset = self.dataset
+        x0 = get_batch_from_dataset(dataset, batch_size=16).to(device)
+        self.x0_encoded = pl_module.encode(x0, add_noise=True)
+        x0_decoded = pl_module.decode(self.x0_encoded)
+        fig = plot_samples(x0_decoded.cpu())
+        logger.log_image(
+            key = "Initial decoded for test dataset",
+            images = [wandb.Image(fig)],
+        )
+        plt.close(fig)
+        
+    def on_validation_end(self, trainer : Trainer, pl_module : FM):
+        logger = pl_module.logger
+        
+        x0_encoded = self.x0_encoded
+        samples = pl_module.sample(x0_encoded)
+        samples = pl_module.decode(samples).cpu()
+        fig = plot_samples(samples)
+        logger.log_image(
+            key = "Samples for test dataset",
+            images = [wandb.Image(fig)],
+            step = pl_module.global_step,
+        )
+        plt.close(fig)
+        
 class DSBCB(Callback):
     def __init__(self):
         super().__init__()
@@ -189,7 +220,7 @@ class DSBCB(Callback):
             "encoded_size": encoded_size,
         })
         
-        selected_indices = torch.linspace(0, len(initial_forward_process) - 1, 5).round().long().to(device)
+        selected_indices = torch.linspace(0, len(initial_forward_process) - 1, 5).round().long().type_as(initial_forward_process)
         selected_forward_process = initial_forward_process[selected_indices, :5] # shape (5, 5, c, h, w)
         selected_forward_process = selected_forward_process.flatten(0, 1) # shape (25, c, h, w)
         selected_forward_process = pl_module.decode(selected_forward_process)

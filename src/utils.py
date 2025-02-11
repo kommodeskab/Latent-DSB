@@ -22,15 +22,33 @@ def instantiate_callbacks(callback_cfg : DictConfig | None) -> list:
         
     return callbacks
 
-def get_ckpt_path(project_name : str, experiment_id : str):
+def get_project_from_id(experiment_id : str) -> str:
+    project_names = wandb.Api().projects()
+    project_names = [project.name for project in project_names]
+    # go through the projects and find the one that has the experiment_id
+    for project_name in project_names:
+        runs = wandb.Api().runs(project_name)
+        run_ids = [run.id for run in runs]
+        if experiment_id in run_ids:
+            return project_name
+    raise ValueError("No project found with the given experiment_id")
+
+def get_ckpt_path(experiment_id : str, last : bool = True, filename : str | None = None) -> str:
+    assert not (last and filename is not None), "last cannot be True when filename is not None"
+    project_name = get_project_from_id(experiment_id)
     folder_to_ckpt_path = f"logs/{project_name}/{experiment_id}/checkpoints"
     ckpt_paths = glob.glob(f"{folder_to_ckpt_path}/*.ckpt")
     
     if len(ckpt_paths) == 0:
         raise FileNotFoundError("No checkpoint found")
     
-    # return the latest checkpoint
-    return max(ckpt_paths, key=os.path.getctime)
+    if last:
+        return max(ckpt_paths, key=os.path.getctime)
+    
+    filename = filename if filename is not None else "best.ckpt"
+    path = os.path.join(folder_to_ckpt_path, filename)
+    assert os.path.exists(path), f"Checkpoint not found at {path}"
+    return path
 
 def filter_dict_by_prefix(d : dict[str, Any], prefixs : list[str], remove_prefix : bool = False) -> dict:
     """

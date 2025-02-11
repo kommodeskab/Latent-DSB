@@ -9,15 +9,16 @@ from pytorch_lightning.utilities import grad_norm
 from torch.nn.functional import mse_loss
 from src.lightning_modules.utils import GammaScheduler
 from typing import Tuple
+from tqdm import tqdm
 
 class FMScheduler:
-    def __init__(self, num_timesteps : int = 1000, min_max_frac: float = 1.0):
+    def __init__(self, num_timesteps : int = 1000, gamma_frac: float = 1.0):
         self.num_train_timesteps = num_timesteps
         self.eps_min = 1e-4
-        self.set_timesteps(num_timesteps, min_max_frac)
+        self.set_timesteps(num_timesteps, gamma_frac)
     
-    def set_timesteps(self, num_timesteps : int, min_max_frac: float = 1.0) -> None:
-        scheduler = GammaScheduler(min_max_frac, 1, num_timesteps, 1)
+    def set_timesteps(self, num_timesteps : int, gamma_frac: float = 1.0) -> None:
+        scheduler = GammaScheduler(gamma_frac, 1, num_timesteps, 1)
         sigmas = scheduler.gammas_bar
         timesteps = (sigmas * self.num_train_timesteps).int()
         timesteps = timesteps[1:]
@@ -33,9 +34,9 @@ class FMScheduler:
     def sample_batch(self, batch : Tensor) -> Tuple[Tensor, IntTensor, Tensor]:
         batch_size = batch.size(0)
         device = batch.device
-        sigmas = self.sigmas.to(device)
+        sigmas = self.sigmas.type_as(batch)
         sigmas = self.to_dim(sigmas, batch.dim())
-        timesteps = self.sample_timesteps(batch_size).to(device)
+        timesteps = self.sample_timesteps(batch_size).type_as(batch)
         sigmas = sigmas[timesteps]
         noise = torch.randn_like(batch)
         target = noise - batch
@@ -47,7 +48,7 @@ class FMScheduler:
         Predict x_t | x_{t + 1}
         """
         assert t_plus_1 > 0, "Timestep must be greater than 0"
-        sigmas = self.sigmas.to(xt_plus_1.device)
+        sigmas = self.sigmas.type_as(xt_plus_1)
         delta_t = sigmas[t_plus_1 - 1] - sigmas[t_plus_1]
         return xt_plus_1 + delta_t * model_output
             
@@ -64,14 +65,13 @@ class FM(BaseLightningModule):
         optimizer : Optimizer | None = None,
         lr_scheduler : dict[str, LRScheduler | str] | None = None,
         added_noise : float = 0.1,
-        **kwargs : Any
     ):
         super().__init__()
         self.save_hyperparameters(ignore=['model', 'encoder_decoder'])
         
         self.model = model
         self.added_noise = added_noise
-        self.scheduler = FMScheduler(**kwargs)
+        self.scheduler = FMScheduler()
         self.encoder_decoder = encoder_decoder
         self.partial_optimizer = optimizer
         self.partial_lr_scheduler = lr_scheduler
@@ -84,8 +84,11 @@ class FM(BaseLightningModule):
         self.log_dict(grad_norms)
 
     @torch.no_grad()
-    def encode(self, x : Tensor):
-        return self.encoder_decoder.encode(x)
+    def encode(self, x : Tensor, add_noise : bool = False) -> Tensor:
+        encoded = self.encoder_decoder.encode(x)
+        if add_noise:
+            encoded += self.added_noise * torch.randn_like(encoded)
+        return encoded
     
     @torch.no_grad()
     def decode(self, x : Tensor):
@@ -98,8 +101,7 @@ class FM(BaseLightningModule):
         return loss
     
     def training_step(self, batch : Tensor, batch_idx : int) -> Tensor:
-        x_encoded = self.encode(batch)
-        x_encoded += self.added_noise * torch.randn_like(x_encoded)
+        x_encoded = self.encode(batch, add_noise=True)
         loss = self.common_step(x_encoded)
         self.log('train_loss', loss)
         return loss

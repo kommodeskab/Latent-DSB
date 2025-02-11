@@ -1,1 +1,1 @@
-from .images import FlowMatchingCB, VAECB, DSBCB
+from .images import FlowMatchingCB, VAECB, DSBCB, TestFMOnDatasetCB

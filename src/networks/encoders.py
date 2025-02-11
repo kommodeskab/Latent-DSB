@@ -4,21 +4,14 @@ from torch.nn import Module
 from src.networks import PretrainedModel
 
 class BaseEncoderDecoder(Module):
-    def encode(self, x : Tensor) -> Tensor:
-        pass
-    
-    def decode(self, h : Tensor) -> Tensor:
-        pass
+    def encode(self, x : Tensor) -> Tensor: ...    
+    def decode(self, h : Tensor) -> Tensor: ...
     
 class IdentityEncoderDecoder(Module):
     def __init__(self):
         super().__init__()
-
-    def encode(self, x : Tensor) -> Tensor:
-        return x
-    
-    def decode(self, h : Tensor) -> Tensor:
-        return h
+    def encode(self, x : Tensor) -> Tensor: return x
+    def decode(self, h : Tensor) -> Tensor: return h
     
 class VQ(VQModel):
     def __init__(self, **kwargs):

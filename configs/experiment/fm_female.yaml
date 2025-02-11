@@ -1,13 +1,23 @@
 # @package _global_
 defaults:
   - override /trainer: gpu
-  - override /data: celeba
+  - override /data: female
   - override /callbacks: fm_callbacks
-  - override /model: fm_celeba
+  - override /model: fm_celeba_pretrained
   - override /logger: default
 
 project_name: 'flow matching'
 task_name: 'test'
+
+callbacks:
+  test_on_dataset:
+    _target_: src.callbacks.TestFMOnDatasetCB
+    dataset:
+      _target_: src.dataset.CelebADataset
+      attr: 20
+      on_or_off: 1
+      img_size: 256
+      augment: True
 
 trainer:
   fast_dev_run: False

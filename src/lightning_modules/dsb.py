@@ -12,8 +12,6 @@ from src.lightning_modules.fm import FM
 from torch.nn.functional import mse_loss
 from torch.nn import Module
 from src.data_modules.base_dm import BaseDSBDM
-from src.utils import get_ckpt_path
-from src.utils import filter_dict_by_prefix
 import time
 
 class DSB(BaseLightningModule):
@@ -21,23 +19,19 @@ class DSB(BaseLightningModule):
         self,
         model : Module,
         encoder_decoder : BaseEncoderDecoder,
-        max_gamma : float,
-        min_gamma : float,
         num_steps : int,
         max_iterations : int,
         cache_max_size : int,
         cache_num_iters : int,
+        use_pretrained_flow : bool = False,
+        gamma_frac : float = 1.0,
         optimizer : Optimizer | None = None,
-        pretrained_forward_model_id : str | None = None,
-        pretrained_backward_model_id : str | None = None,
         backward_model : Module | None = None,
-        T : int | None = None,
         target : Literal["terminal", "flow"] = "terminal",
         max_dsb_iterations : int | None = 10,
         max_norm : float = float("inf"),
         lr_multiplier : float = 1.0,
         added_noise : float = 0.1,
-        **kwargs
     ):
         super().__init__()
         self.automatic_optimization = False
@@ -48,27 +42,21 @@ class DSB(BaseLightningModule):
         self.DSB_iteration = 1
         self.added_noise = added_noise
         
-        assert max_gamma >= min_gamma, f"{max_gamma = } must be greater than {min_gamma = }"
-        
-        self.gamma_scheduler = GammaScheduler(min_gamma, max_gamma, num_steps, T)
+        assert 0 < gamma_frac <= 1, "Gamma fraction must be in the range (0, 1]"
+        self.gamma_scheduler = GammaScheduler(gamma_frac, 1, num_steps, 1)
         
         # if the backward model is not provided, make it a copy of the forward model 
         self.forward_model = model
         self.backward_model = backward_model if backward_model is not None else copy.deepcopy(model)
         
         # most often, we want to utilize a pretrained diffusion model for the first iterations
-        if pretrained_forward_model_id is not None:
-            ckpt_path = get_ckpt_path('flow matching', pretrained_forward_model_id)
-            self.forward_diffusion_model = FM.load_from_checkpoint(ckpt_path, model = self.forward_model, encoder_decoder=encoder_decoder)
-            self.forward_diffusion_model.scheduler.set_timesteps(num_steps)
-            
-        if pretrained_backward_model_id is not None:
-            ckpt_path = get_ckpt_path('flow matching', pretrained_backward_model_id)
-            self.backward_diffusion_model = FM.load_from_checkpoint(ckpt_path, model = self.backward_model, encoder_decoder=encoder_decoder)
+        if use_pretrained_flow:
+            self.fmmodel = FM(model)
+            self.fmmodel.scheduler.set_timesteps(num_steps, gamma_frac)
         
         self.encoder_decoder = encoder_decoder
         self.partial_optimizer = optimizer
-        self.cache = Cache(max_size = self.hparams.cache_max_size)
+        self.cache = Cache(max_size = cache_max_size)
         
     @property
     def datamodule(self) -> BaseDSBDM:
@@ -134,8 +122,11 @@ class DSB(BaseLightningModule):
         return self.backward_model(x, k)
     
     @torch.no_grad()
-    def encode(self, x : Tensor) -> Tensor:
-        return self.encoder_decoder.encode(x)
+    def encode(self, x : Tensor, add_noise : bool = False) -> Tensor:
+        encoded = self.encoder_decoder.encode(x)
+        if add_noise:
+            encoded += self.added_noise * torch.randn_like(encoded)
+        return encoded
     
     @torch.no_grad()
     def decode(self, x : Tensor) -> Tensor:
@@ -202,8 +193,8 @@ class DSB(BaseLightningModule):
     @torch.no_grad()
     def sample(self, x_start : Tensor, forward : bool = True, return_trajectory : bool = False, use_initial_forward_sampling : bool = False) -> Tensor:
         if use_initial_forward_sampling:
-            if self.hparams.pretrained_forward_model_id is not None:
-                return self.forward_diffusion_model.sample(x_start, return_trajectory)
+            if hasattr(self, "fmmodel"):
+                return self.fmmodel.sample(x_start, return_trajectory)
             else:
                 rand_noise = torch.randn_like(x_start)
                 gammas_bar = self.gamma_scheduler.gammas_bar
@@ -252,8 +243,8 @@ class DSB(BaseLightningModule):
         if trajectory is None:
             trajectory = self.cache.sample()
         batch_size = trajectory.size(1)
-        random_samples = torch.randint(0, batch_size, (batch_size,)).to(self.device)
-        random_ks = torch.randint(0, self.hparams.num_steps, (batch_size,)).to(self.device)
+        random_samples = torch.randint(0, batch_size, (batch_size,)).type_as(trajectory)
+        random_ks = torch.randint(0, self.hparams.num_steps, (batch_size,)).type_as(trajectory)
         if backward:
             random_ks += 1
         sampled_batch = trajectory[random_ks, random_samples]
@@ -266,10 +257,8 @@ class DSB(BaseLightningModule):
         # if we are in the very first iteration, we use the initial sampling
         use_initial_forward_sampling = training_backward and self.DSB_iteration == 1
         
-        batch = self.encode(batch)
         # adding a bit of noise to the latent augments new data but (usually) still decodes to the same image
-        noise = torch.randn_like(batch) * self.added_noise
-        batch = batch + noise
+        batch = self.encode(batch, add_noise = True)
         t1 = time.time()
         trajectory = self.sample(batch, forward = training_backward, return_trajectory = True, use_initial_forward_sampling = use_initial_forward_sampling)
         time_to_sample = time.time() - t1
