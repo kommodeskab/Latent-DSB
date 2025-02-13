@@ -27,6 +27,26 @@ def plot_samples(samples : Tensor, height : int | None = None, width : int | Non
             ax.axis('off')
     return fig
 
+def visualize_encodings(encodings : Tensor) -> tuple[Figure, Figure]:
+    assert encodings.dim() == 3, "Encodings must have shape (c, h, w)"
+    n_channels = encodings.size(0)
+    v_min, v_max = encodings.min().item(), encodings.max().item()
+    fig, axs = plt.subplots(1, n_channels, figsize=(n_channels*5, 5))
+    norm = plt.Normalize(vmin=v_min, vmax=v_max)
+    cmap = 'viridis'
+    for i in range(n_channels):
+        im = axs[i].imshow(encodings[i], cmap=cmap, norm=norm)
+        axs[i].axis('off')
+    cbar = fig.colorbar(im, ax=axs, orientation='horizontal', fraction=0.046, pad=0.04)
+    cbar.set_label('Intensity')
+    
+    return fig
+
+def plot_histogram(data : Tensor) -> Figure:   
+    fig, ax = plt.subplots()
+    ax.hist(data.flatten(), bins=100, density=True)
+    return fig
+
 def plot_graph(y, x = None, title = None, xlabel = None, ylabel = None):
     fig, _ = plt.subplots()
     if x is None:
@@ -56,7 +76,6 @@ class VAECB(Callback):
             key = "Initial samples",
             images = [wandb.Image(fig)],
         )
-        plt.close(fig)
         
         encoded = pl_module.encode(self.x0)
         encoded_size = encoded.flatten(1).size(1)
@@ -65,6 +84,7 @@ class VAECB(Callback):
             "encoded_size": encoded_size,
             "original_size": original_size,
         })
+        plt.close('all')
         
     def on_validation_end(self, trainer : Trainer, pl_module : VAE):
         logger = pl_module.logger
@@ -77,7 +97,7 @@ class VAECB(Callback):
             images = [wandb.Image(fig)],
             step = pl_module.global_step,
         )
-        plt.close(fig)
+        plt.close('all')
 
 class FlowMatchingCB(Callback):
     def __init__(
@@ -97,25 +117,33 @@ class FlowMatchingCB(Callback):
             key = "Initial samples",
             images = [wandb.Image(fig)],
         )
-        plt.close(fig)
         
         encoded = pl_module.encode(x0.to(device), add_noise=True)
         decoded = pl_module.decode(encoded).cpu()
         self.noise = torch.randn_like(encoded)
-        
+
         fig = plot_samples(decoded)
         logger.log_image(
             key = "Initial decoded (with noise)",
             images = [wandb.Image(fig)],
         )
-        plt.close(fig)
-        
+
         original_size = x0.flatten(1).size(1)
         latent_size = encoded.flatten(1).size(1)
         logger.log_metrics({
             "original_size": original_size,
             "latent_size": latent_size,
         })
+                
+        logger.log_image(
+            key="Encodings",
+            images = [wandb.Image(visualize_encodings(e)) for e in encoded.cpu()],
+        )
+        logger.log_image(
+            key="Encodings histogram",
+            images = [wandb.Image(plot_histogram(e)) for e in encoded.cpu()],
+        )
+        plt.close('all')
         
     def on_validation_end(self, trainer : Trainer, pl_module : FM):
         logger = pl_module.logger
@@ -130,7 +158,7 @@ class FlowMatchingCB(Callback):
             images = [wandb.Image(fig)],
             step = pl_module.global_step,
         )
-        plt.close(fig)
+        plt.close('all')
 
 class TestFMOnDatasetCB(Callback):
     def __init__(self, dataset : Dataset):
@@ -150,7 +178,7 @@ class TestFMOnDatasetCB(Callback):
             key = "Initial decoded for test dataset",
             images = [wandb.Image(fig)],
         )
-        plt.close(fig)
+        plt.close('all')
         
     def on_validation_end(self, trainer : Trainer, pl_module : FM):
         logger = pl_module.logger
@@ -164,7 +192,7 @@ class TestFMOnDatasetCB(Callback):
             images = [wandb.Image(fig)],
             step = pl_module.global_step,
         )
-        plt.close(fig)
+        plt.close('all')
         
 class DSBCB(Callback):
     def __init__(self):
@@ -185,8 +213,6 @@ class DSBCB(Callback):
             images = [wandb.Image(x0_fig), wandb.Image(x1_fig)],
             caption = ["x0", "x1"],
         )
-        plt.close(x0_fig)
-        plt.close(x1_fig)
         
         # move to device
         x0 = x0.to(device)
@@ -208,8 +234,6 @@ class DSBCB(Callback):
             images = [wandb.Image(fig_1), wandb.Image(fig_2)],
             caption = ["x0", "x1"],
         )
-        plt.close(fig_1)
-        plt.close(fig_2)
         
         original_size = x0.flatten(1).size(1)
         encoded_size = x0_encoded.flatten(1).size(1)
@@ -220,7 +244,7 @@ class DSBCB(Callback):
             "encoded_size": encoded_size,
         })
         
-        selected_indices = torch.linspace(0, len(initial_forward_process) - 1, 5).round().long().type_as(initial_forward_process)
+        selected_indices = torch.linspace(0, len(initial_forward_process) - 1, 5).round().long().to(device)
         selected_forward_process = initial_forward_process[selected_indices, :5] # shape (5, 5, c, h, w)
         selected_forward_process = selected_forward_process.flatten(0, 1) # shape (25, c, h, w)
         selected_forward_process = pl_module.decode(selected_forward_process)
@@ -231,7 +255,6 @@ class DSBCB(Callback):
             images = [wandb.Image(selected_forward_process_fig)],
             step = pl_module.global_step,
         )
-        plt.close(selected_forward_process_fig)
         
         fig_1 = plot_graph(pl_module.gamma_scheduler.gammas, title="Gammas")
         fig_2 = plot_graph(pl_module.gamma_scheduler.gammas_bar, title="Gammas bar")
@@ -243,10 +266,7 @@ class DSBCB(Callback):
             images = [wandb.Image(fig_1), wandb.Image(fig_2), wandb.Image(fig_3), wandb.Image(fig_4)],
             caption = ["Gammas", "Gammas bar", "Sigma backward", "Sigma forward"],
         )
-        plt.close(fig_1)
-        plt.close(fig_2)
-        plt.close(fig_3)
-        plt.close(fig_4)
+        plt.close('all')
         
         
     def on_validation_end(self, trainer : Trainer, pl_module : DSB):
@@ -273,7 +293,6 @@ class DSBCB(Callback):
             images = [wandb.Image(samples_fig)],
             step = pl_module.global_step,
         )
-        plt.close(samples_fig)
         
         selected_indices = torch.linspace(0, len(samples) - 1, 5).round().long().to(device)
         selected_samples = samples[selected_indices, :5]
@@ -285,5 +304,5 @@ class DSBCB(Callback):
             images = [wandb.Image(selected_samples_fig)],
             step = pl_module.global_step,
         )
-        plt.close(selected_samples_fig)
+        plt.close('all')
         

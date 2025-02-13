@@ -14,5 +14,4 @@ trainer:
   enable_checkpointing: True
   log_every_n_steps: 20
   max_epochs: -1
-  precision: '16-mixed'
-  accumulate_grad_batches: 2
+  accumulate_grad_batches: 1

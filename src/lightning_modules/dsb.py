@@ -1,6 +1,6 @@
 import torch
 from typing import Tuple, Literal
-from torch import Tensor
+from torch import Tensor, IntTensor
 from src.lightning_modules.baselightningmodule import BaseLightningModule
 from src.networks.encoders import BaseEncoderDecoder
 from torch.optim import Optimizer
@@ -13,8 +13,9 @@ from torch.nn.functional import mse_loss
 from torch.nn import Module
 from src.data_modules.base_dm import BaseDSBDM
 import time
+from .mixins import EncoderDecoderMixin
 
-class DSB(BaseLightningModule):
+class DSB(BaseLightningModule, EncoderDecoderMixin):
     def __init__(
         self,
         model : Module,
@@ -31,7 +32,8 @@ class DSB(BaseLightningModule):
         max_dsb_iterations : int | None = 10,
         max_norm : float = float("inf"),
         lr_multiplier : float = 1.0,
-        added_noise : float = 0.1,
+        added_noise : float = 0.0,
+        latent_std : float = 1.0,
     ):
         super().__init__()
         self.automatic_optimization = False
@@ -41,6 +43,7 @@ class DSB(BaseLightningModule):
         self.curr_num_iters = 0
         self.DSB_iteration = 1
         self.added_noise = added_noise
+        self.latent_std = latent_std
         
         assert 0 < gamma_frac <= 1, "Gamma fraction must be in the range (0, 1]"
         self.gamma_scheduler = GammaScheduler(gamma_frac, 1, num_steps, 1)
@@ -122,17 +125,6 @@ class DSB(BaseLightningModule):
         return self.backward_model(x, k)
     
     @torch.no_grad()
-    def encode(self, x : Tensor, add_noise : bool = False) -> Tensor:
-        encoded = self.encoder_decoder.encode(x)
-        if add_noise:
-            encoded += self.added_noise * torch.randn_like(encoded)
-        return encoded
-    
-    @torch.no_grad()
-    def decode(self, x : Tensor) -> Tensor:
-        return self.encoder_decoder.decode(x)
-    
-    @torch.no_grad()
     def go_forward(self, xk : Tensor, k : int) -> Tensor:
         """        
         Get :math:`x_{k + 1} | x_{k}`
@@ -176,14 +168,14 @@ class DSB(BaseLightningModule):
         xk = mu + torch.sqrt(sigma) * torch.randn_like(xk_plus_one)
         return xk
     
-    def _forward_loss(self, xk : Tensor, ks : int, xN : Tensor) -> Tensor:
+    def _forward_loss(self, xk : Tensor, ks : IntTensor, xN : Tensor) -> Tensor:
         pred = self.forward_call(xk, ks)
         if self.hparams.target == "terminal":
             loss = mse_loss(pred, xN)
         
         return loss
     
-    def _backward_loss(self, xk_plus_one : Tensor, ks_plus_one : int, x0 : Tensor) -> Tensor:
+    def _backward_loss(self, xk_plus_one : Tensor, ks_plus_one : IntTensor, x0 : Tensor) -> Tensor:
         pred = self.backward_call(xk_plus_one, ks_plus_one)
         if self.hparams.target == "terminal":
             loss = mse_loss(pred, x0)
@@ -243,8 +235,8 @@ class DSB(BaseLightningModule):
         if trajectory is None:
             trajectory = self.cache.sample()
         batch_size = trajectory.size(1)
-        random_samples = torch.randint(0, batch_size, (batch_size,)).type_as(trajectory)
-        random_ks = torch.randint(0, self.hparams.num_steps, (batch_size,)).type_as(trajectory)
+        random_samples = torch.randint(0, batch_size, (batch_size,)).to(self.device)
+        random_ks = torch.randint(0, self.hparams.num_steps, (batch_size,)).to(self.device)
         if backward:
             random_ks += 1
         sampled_batch = trajectory[random_ks, random_samples]

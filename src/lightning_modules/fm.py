@@ -10,6 +10,7 @@ from torch.nn.functional import mse_loss
 from src.lightning_modules.utils import GammaScheduler
 from typing import Tuple
 from tqdm import tqdm
+from .mixins import EncoderDecoderMixin
 
 class FMScheduler:
     def __init__(self, num_timesteps : int = 1000, gamma_frac: float = 1.0):
@@ -34,9 +35,9 @@ class FMScheduler:
     def sample_batch(self, batch : Tensor) -> Tuple[Tensor, IntTensor, Tensor]:
         batch_size = batch.size(0)
         device = batch.device
-        sigmas = self.sigmas.type_as(batch)
+        sigmas = self.sigmas.to(device)
         sigmas = self.to_dim(sigmas, batch.dim())
-        timesteps = self.sample_timesteps(batch_size).type_as(batch)
+        timesteps = self.sample_timesteps(batch_size).to(device)
         sigmas = sigmas[timesteps]
         noise = torch.randn_like(batch)
         target = noise - batch
@@ -48,7 +49,7 @@ class FMScheduler:
         Predict x_t | x_{t + 1}
         """
         assert t_plus_1 > 0, "Timestep must be greater than 0"
-        sigmas = self.sigmas.type_as(xt_plus_1)
+        sigmas = self.sigmas.to(xt_plus_1.device)
         delta_t = sigmas[t_plus_1 - 1] - sigmas[t_plus_1]
         return xt_plus_1 + delta_t * model_output
             
@@ -57,42 +58,33 @@ class FMScheduler:
             x = x.unsqueeze(-1)
         return x
 
-class FM(BaseLightningModule):
+class FM(BaseLightningModule, EncoderDecoderMixin):
     def __init__(
         self,
         model : torch.nn.Module,
         encoder_decoder : BaseEncoderDecoder | None = None,
         optimizer : Optimizer | None = None,
         lr_scheduler : dict[str, LRScheduler | str] | None = None,
-        added_noise : float = 0.1,
+        added_noise : float = 0.0,
+        latent_std : float = 1.0,
     ):
         super().__init__()
         self.save_hyperparameters(ignore=['model', 'encoder_decoder'])
         
         self.model = model
         self.added_noise = added_noise
+        self.latent_std = latent_std
         self.scheduler = FMScheduler()
         self.encoder_decoder = encoder_decoder
         self.partial_optimizer = optimizer
         self.partial_lr_scheduler = lr_scheduler
-            
+        
     def forward(self, x : Tensor, timesteps : IntTensor) -> Tensor:
         return self.model(x, timesteps)
     
     def on_before_optimizer_step(self, optimizer):
         grad_norms = grad_norm(self.model, norm_type=2)
         self.log_dict(grad_norms)
-
-    @torch.no_grad()
-    def encode(self, x : Tensor, add_noise : bool = False) -> Tensor:
-        encoded = self.encoder_decoder.encode(x)
-        if add_noise:
-            encoded += self.added_noise * torch.randn_like(encoded)
-        return encoded
-    
-    @torch.no_grad()
-    def decode(self, x : Tensor):
-        return self.encoder_decoder.decode(x)
     
     def common_step(self, x_encoded : Tensor) -> Tensor:
         xt, timesteps, target = self.scheduler.sample_batch(x_encoded)

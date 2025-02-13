@@ -13,7 +13,6 @@ class DDIM(BaseLightningModule):
     def __init__(
         self,
         model : torch.nn.Module,
-        scheduler : DDIMScheduler | DDPMScheduler,
         encoder_decoder : BaseEncoderDecoder | None = None,
         optimizer : Optimizer | None = None,
         lr_scheduler : dict[str, LRScheduler | str] | None = None
@@ -24,10 +23,9 @@ class DDIM(BaseLightningModule):
         self.model = model
         self.partial_optimizer = optimizer
         self.partial_lr_scheduler = lr_scheduler
-        self.scheduler = scheduler
-        
-        self.num_train_timesteps = self.scheduler.config.num_train_timesteps
+        self.scheduler = DDIMScheduler(beta_start=0.0015, beta_end=0.0195, clip_sample=False, beta_schedule="scaled_linear", rescale_betas_zero_snr=True)
         self.scheduler.set_timesteps(self.num_train_timesteps)
+        self.num_train_timesteps = self.scheduler.config.num_train_timesteps
         self.encoder_decoder = encoder_decoder
     
     def forward(self, x : Tensor, timesteps : Tensor) -> Tensor:

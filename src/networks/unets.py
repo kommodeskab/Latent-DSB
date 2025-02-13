@@ -4,28 +4,21 @@ from torch.nn import Module
 from torch import Tensor
 
 class UNet2D(UNet2DModel):
-    def __init__(
-        self,
-        **kwargs,
-    ):
+    def __init__(self, **kwargs,):
         super().__init__(**kwargs)
 
-    def forward(self, x : torch.Tensor, time_step : torch.Tensor):
+    def forward(self, x : torch.Tensor, time_step : torch.Tensor): 
         return super().forward(x, time_step).sample
         
 class PretrainedUNet2D:
-    def __new__(
-        cls,
-        model_id : str,
-        **kwargs,
-    ):
+    def __new__(cls, model_id : str, **kwargs,):
         subfolder = kwargs.pop("subfolder", "")
         dummy_model : UNet2DModel = UNet2DModel.from_pretrained(model_id, subfolder=subfolder, **kwargs)
         dummy_model.__class__ = UNet2D
         return dummy_model
     
 class CelebAUNet2D:
-    def __new__(cls):
+    def __new__(cls): 
         return PretrainedUNet2D("CompVis/ldm-celebahq-256", subfolder="unet")
             
 class EMNISTUNet2D(UNet2D):
@@ -40,14 +33,25 @@ class EMNISTUNet2D(UNet2D):
             sample_size=4,
         )
 
+class MediumUNet(UNet2D):
+    def __init__(self, **kwargs):
+        args = {
+            "in_channels": 4,
+            "out_channels": 4,
+            "sample_size": 32,
+            "down_block_types": ["DownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D"],
+            "up_block_types": ["AttnUpBlock2D", "AttnUpBlock2D", "AttnUpBlock2D", "UpBlock2D"],
+            "block_out_channels": [256, 384, 512, 640],
+            "dropout": 0.1,
+        }
+        args.update(kwargs)
+        super().__init__(**args)
+
 class UNet1D(UNet1DModel):
-    def __init__(
-        self,
-        **kwargs,
-    ):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def forward(self, x : torch.Tensor, time_step : torch.Tensor):
+    def forward(self, x : torch.Tensor, time_step : torch.Tensor): 
         return super().forward(x, time_step).sample
 
 if __name__ == "__main__":

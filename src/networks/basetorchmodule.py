@@ -11,7 +11,7 @@ class PretrainedModel:
         experiment_id : str,
         model_keyword : str,
         ckpt_filename : str | None = None,
-    ):
+    ) -> Module:
         project_name = get_project_from_id(experiment_id)
         api = wandb.Api()
         run = api.run(f"kommodeskab-danmarks-tekniske-universitet-dtu/{project_name}/{experiment_id}")
