@@ -178,6 +178,29 @@ class TestFMOnDatasetCB(Callback):
             key = "Initial decoded for test dataset",
             images = [wandb.Image(fig)],
         )
+        
+        gammas = pl_module.scheduler.gammas.tolist()
+        gammas_bar = pl_module.scheduler.gammas_bar.tolist()
+        var = pl_module.scheduler.var.tolist()
+        xs = torch.linspace(0, 1, len(gammas)).tolist()
+        
+        logger.log_metrics({
+            "gammas": wandb.plot.line_series(
+                xs = xs,
+                ys = [gammas],
+                keys = ["gamma"],
+            ),
+            "gammas_bar": wandb.plot.line_series(
+                xs = xs,
+                ys = [gammas_bar],
+                keys = ["gamma_bar"],
+            ),
+            "var": wandb.plot.line_series(
+                xs = xs,
+                ys = [var],
+                keys = ["var"],
+            ),
+        })
         plt.close('all')
         
     def on_validation_end(self, trainer : Trainer, pl_module : FM):

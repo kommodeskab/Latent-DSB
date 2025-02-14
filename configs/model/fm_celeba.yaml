@@ -13,6 +13,7 @@ optimizer:
 
 added_noise: 0.01
 latent_std: 8.0
+gamma_frac: 0.001
 
 lr_scheduler:
   scheduler:

@@ -7,56 +7,9 @@ from src.networks import BaseEncoderDecoder
 from typing import Any
 from pytorch_lightning.utilities import grad_norm
 from torch.nn.functional import mse_loss
-from src.lightning_modules.utils import GammaScheduler
-from typing import Tuple
 from tqdm import tqdm
 from .mixins import EncoderDecoderMixin
-
-class FMScheduler:
-    def __init__(self, num_timesteps : int = 1000, gamma_frac: float = 1.0):
-        self.num_train_timesteps = num_timesteps
-        self.eps_min = 1e-4
-        self.set_timesteps(num_timesteps, gamma_frac)
-    
-    def set_timesteps(self, num_timesteps : int, gamma_frac: float = 1.0) -> None:
-        scheduler = GammaScheduler(gamma_frac, 1, num_timesteps, 1)
-        sigmas = scheduler.gammas_bar
-        timesteps = (sigmas * self.num_train_timesteps).int()
-        timesteps = timesteps[1:]
-        timesteps = torch.clamp(timesteps, min=1)
-        sigmas[-1] = 1 - self.eps_min
-        self.timesteps = timesteps
-        self.sigmas = sigmas
-        
-    def sample_timesteps(self, batch_size : int) -> Tensor:
-        random_indices = torch.randint(0, len(self.timesteps), (batch_size,))
-        return self.timesteps[random_indices]
-    
-    def sample_batch(self, batch : Tensor) -> Tuple[Tensor, IntTensor, Tensor]:
-        batch_size = batch.size(0)
-        device = batch.device
-        sigmas = self.sigmas.to(device)
-        sigmas = self.to_dim(sigmas, batch.dim())
-        timesteps = self.sample_timesteps(batch_size).to(device)
-        sigmas = sigmas[timesteps]
-        noise = torch.randn_like(batch)
-        target = noise - batch
-        xt = (1 - sigmas) * batch + sigmas * noise
-        return xt, timesteps, target
-    
-    def step(self, xt_plus_1 : Tensor, t_plus_1 : int, model_output : Tensor) -> Tensor:
-        """
-        Predict x_t | x_{t + 1}
-        """
-        assert t_plus_1 > 0, "Timestep must be greater than 0"
-        sigmas = self.sigmas.to(xt_plus_1.device)
-        delta_t = sigmas[t_plus_1 - 1] - sigmas[t_plus_1]
-        return xt_plus_1 + delta_t * model_output
-            
-    def to_dim(self, x : torch.Tensor, dim : int) -> torch.Tensor:
-        while x.dim() < dim:
-            x = x.unsqueeze(-1)
-        return x
+from src.lightning_modules.schedulers import FMScheduler
 
 class FM(BaseLightningModule, EncoderDecoderMixin):
     def __init__(
@@ -67,6 +20,8 @@ class FM(BaseLightningModule, EncoderDecoderMixin):
         lr_scheduler : dict[str, LRScheduler | str] | None = None,
         added_noise : float = 0.0,
         latent_std : float = 1.0,
+        num_timesteps : int = 1000,
+        gamma_frac : float = 1.0,
     ):
         super().__init__()
         self.save_hyperparameters(ignore=['model', 'encoder_decoder'])
@@ -74,7 +29,7 @@ class FM(BaseLightningModule, EncoderDecoderMixin):
         self.model = model
         self.added_noise = added_noise
         self.latent_std = latent_std
-        self.scheduler = FMScheduler()
+        self.scheduler = FMScheduler(num_timesteps, gamma_frac)
         self.encoder_decoder = encoder_decoder
         self.partial_optimizer = optimizer
         self.partial_lr_scheduler = lr_scheduler
@@ -106,13 +61,13 @@ class FM(BaseLightningModule, EncoderDecoderMixin):
         return loss
 
     @torch.no_grad()
-    def sample(self, noise : Tensor, return_trajectory : bool = False) -> Tensor:
+    def sample(self, noise : Tensor, return_trajectory : bool = False, show_progress : bool = False, ode : bool = False) -> Tensor:
         self.eval()
         xt = noise
         trajectory = [xt]
-        for t in reversed(self.scheduler.timesteps):
+        for t in tqdm(reversed(self.scheduler.timesteps), desc='Sampling', disable=not show_progress):
             model_output = self(xt, t)
-            xt = self.scheduler.step(xt, t, model_output)
+            xt = self.scheduler.step(xt, t, model_output, ode)
             trajectory.append(xt)
             
         trajectory = torch.stack(trajectory, dim=0)

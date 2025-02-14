@@ -9,9 +9,21 @@ defaults:
 project_name: 'flow matching'
 task_name: 'test'
 
+callbacks:
+  test_on_dataset:
+    _target_: src.callbacks.TestFMOnDatasetCB
+    dataset:
+      _target_: src.dataset.CelebADataset
+      attr: 20
+      on_or_off: 0
+      img_size: 128
+      augment: True
+
 trainer:
   fast_dev_run: False
   enable_checkpointing: True
-  log_every_n_steps: 20
+  log_every_n_steps: 50
+  check_val_every_n_epoch: 3
   max_epochs: -1
+  gradient_clip_val: 1.0
   accumulate_grad_batches: 1
