@@ -7,6 +7,7 @@ from torch import Tensor
 import torch
 from matplotlib.figure import Figure
 from torch.utils.data import Dataset
+import numpy as np
 
 def plot_samples(samples : Tensor, height : int | None = None, width : int | None = None) -> Figure:
     # assume samples have shape (k, c, h, w)
@@ -32,8 +33,9 @@ def visualize_encodings(encodings : Tensor) -> tuple[Figure, Figure]:
     n_channels = encodings.size(0)
     v_min, v_max = encodings.min().item(), encodings.max().item()
     fig, axs = plt.subplots(1, n_channels, figsize=(n_channels*5, 5))
+    axs = np.atleast_1d(axs)
     norm = plt.Normalize(vmin=v_min, vmax=v_max)
-    cmap = 'viridis'
+    cmap = 'gray' if n_channels == 1 else 'viridis'
     for i in range(n_channels):
         im = axs[i].imshow(encodings[i], cmap=cmap, norm=norm)
         axs[i].axis('off')
@@ -143,6 +145,36 @@ class FlowMatchingCB(Callback):
             key="Encodings histogram",
             images = [wandb.Image(plot_histogram(e)) for e in encoded.cpu()],
         )
+        
+        gammas = pl_module.scheduler.gammas.tolist()
+        gammas_bar = pl_module.scheduler.gammas_bar.tolist()
+        var = pl_module.scheduler.var.tolist()
+        std = pl_module.scheduler.var.sqrt().tolist()
+        xs = torch.linspace(0, 1, len(gammas)).tolist()
+        
+        logger.log_metrics({
+            "gammas": wandb.plot.line_series(
+                xs = torch.linspace(0, 1, len(gammas)).tolist(),
+                ys = [gammas],
+                keys = ["gamma"],
+            ),
+            "gammas_bar": wandb.plot.line_series(
+                xs = torch.linspace(0, 1, len(gammas_bar)).tolist(),
+                ys = [gammas_bar],
+                keys = ["gamma_bar"],
+            ),
+            "var": wandb.plot.line_series(
+                xs = torch.linspace(0, 1, len(var)).tolist(),
+                ys = [var],
+                keys = ["var"],
+            ),
+            "std": wandb.plot.line_series(
+                xs = torch.linspace(0, 1, len(std)).tolist(),
+                ys = [std],
+                keys = ["std"],
+            ),
+        })
+        
         plt.close('all')
         
     def on_validation_end(self, trainer : Trainer, pl_module : FM):
@@ -158,6 +190,7 @@ class FlowMatchingCB(Callback):
             images = [wandb.Image(fig)],
             step = pl_module.global_step,
         )
+        
         plt.close('all')
 
 class TestFMOnDatasetCB(Callback):
@@ -178,29 +211,6 @@ class TestFMOnDatasetCB(Callback):
             key = "Initial decoded for test dataset",
             images = [wandb.Image(fig)],
         )
-        
-        gammas = pl_module.scheduler.gammas.tolist()
-        gammas_bar = pl_module.scheduler.gammas_bar.tolist()
-        var = pl_module.scheduler.var.tolist()
-        xs = torch.linspace(0, 1, len(gammas)).tolist()
-        
-        logger.log_metrics({
-            "gammas": wandb.plot.line_series(
-                xs = xs,
-                ys = [gammas],
-                keys = ["gamma"],
-            ),
-            "gammas_bar": wandb.plot.line_series(
-                xs = xs,
-                ys = [gammas_bar],
-                keys = ["gamma_bar"],
-            ),
-            "var": wandb.plot.line_series(
-                xs = xs,
-                ys = [var],
-                keys = ["var"],
-            ),
-        })
         plt.close('all')
         
     def on_validation_end(self, trainer : Trainer, pl_module : FM):
@@ -220,6 +230,15 @@ class TestFMOnDatasetCB(Callback):
 class DSBCB(Callback):
     def __init__(self):
         super().__init__()
+        
+    def sample_from_trajectory(self, trajectory : Tensor, n_timesteps: int, n_samples : int) -> Tensor:
+        # trajectory shape: (num_steps, batch_size, ...)
+        # get sample of shape (num_samples * batch_size, ...)
+        num_steps = trajectory.size(0)
+        indices = torch.linspace(0, num_steps - 1, n_timesteps).round().to(torch.int64)
+        samples = trajectory[indices, :n_samples]
+        samples = samples.flatten(0, 1)
+        return samples
         
     def on_train_start(self, trainer : Trainer, pl_module : DSB):
         device = pl_module.device
@@ -267,28 +286,45 @@ class DSBCB(Callback):
             "encoded_size": encoded_size,
         })
         
-        selected_indices = torch.linspace(0, len(initial_forward_process) - 1, 5).round().long().to(device)
-        selected_forward_process = initial_forward_process[selected_indices, :5] # shape (5, 5, c, h, w)
-        selected_forward_process = selected_forward_process.flatten(0, 1) # shape (25, c, h, w)
-        selected_forward_process = pl_module.decode(selected_forward_process)
-        selected_forward_process_fig = plot_samples(selected_forward_process.cpu())
+        sampled_trajectory = self.sample_from_trajectory(initial_forward_process, 5, 5)
+        sampled_trajectory = pl_module.decode(sampled_trajectory)
+        sampled_trajectory_fig = plot_samples(sampled_trajectory.cpu())
         
         logger.log_image(
             key = "Initial forward process",
-            images = [wandb.Image(selected_forward_process_fig)],
+            images = [wandb.Image(sampled_trajectory_fig)],
             step = pl_module.global_step,
         )
         
-        fig_1 = plot_graph(pl_module.gamma_scheduler.gammas, title="Gammas")
-        fig_2 = plot_graph(pl_module.gamma_scheduler.gammas_bar, title="Gammas bar")
-        fig_3 = plot_graph(pl_module.gamma_scheduler.sigma_backward, title="Sigma backward")
-        fig_4 = plot_graph(pl_module.gamma_scheduler.sigma_forward, title="Sigma forward")
+        gammas = pl_module.scheduler.gammas.tolist()
+        gammas_bar = pl_module.scheduler.gammas_bar.tolist()
+        var = pl_module.scheduler.var.tolist()
+        std = pl_module.scheduler.var.sqrt().tolist()
+        xs = torch.linspace(0, 1, len(gammas)).tolist()
         
-        logger.log_image(
-            key = "Gammas",
-            images = [wandb.Image(fig_1), wandb.Image(fig_2), wandb.Image(fig_3), wandb.Image(fig_4)],
-            caption = ["Gammas", "Gammas bar", "Sigma backward", "Sigma forward"],
-        )
+        logger.log_metrics({
+            "gammas": wandb.plot.line_series(
+                xs = xs,
+                ys = [gammas],
+                keys = ["gamma"],
+            ),
+            "gammas_bar": wandb.plot.line_series(
+                xs = xs,
+                ys = [gammas_bar],
+                keys = ["gamma_bar"],
+            ),
+            "var": wandb.plot.line_series(
+                xs = xs,
+                ys = [var],
+                keys = ["var"],
+            ),
+            "std": wandb.plot.line_series(
+                xs = xs,
+                ys = [std],
+                keys = ["std"],
+            ),
+        })
+        
         plt.close('all')
         
         
@@ -306,7 +342,7 @@ class DSBCB(Callback):
             forward = not is_backward,
             return_trajectory = True,
         )
-        final_samples = samples[0] if is_backward else samples[-1]
+        final_samples = samples[-1]
         final_samples = pl_module.decode(final_samples) # shape: (16, c, h, w)
         samples_fig = plot_samples(final_samples.cpu())
 
@@ -317,14 +353,12 @@ class DSBCB(Callback):
             step = pl_module.global_step,
         )
         
-        selected_indices = torch.linspace(0, len(samples) - 1, 5).round().long().to(device)
-        selected_samples = samples[selected_indices, :5]
-        selected_samples = selected_samples.flatten(0, 1)
-        selected_samples = pl_module.decode(selected_samples)
-        selected_samples_fig = plot_samples(selected_samples.cpu())
+        sampled_trajectory = self.sample_from_trajectory(samples, 5, 5)
+        sampled_trajectory = pl_module.decode(sampled_trajectory)
+        sampled_trajectory_fig = plot_samples(sampled_trajectory.cpu())
         logger.log_image(
             key = f"iteration_{iteration}/{caption}_trajectory",
-            images = [wandb.Image(selected_samples_fig)],
+            images = [wandb.Image(sampled_trajectory_fig)],
             step = pl_module.global_step,
         )
         plt.close('all')

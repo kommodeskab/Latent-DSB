@@ -17,15 +17,8 @@ def my_app(cfg : DictConfig) -> None:
     torch.set_float32_matmul_precision("high")
     pl.seed_everything(cfg.seed)
 
-    project_name, task_name = cfg.project_name, cfg.task_name
+    project_name, task_name, id = cfg.project_name, cfg.task_name, cfg.continue_from_id
     
-    if id := cfg.continue_from_id:
-        print(f"Continuing from id: {id}")
-        ckpt_path = get_ckpt_path(id, last=True)
-    else:
-        ckpt_path = None
-    
-    print("Setting up logger..")
     logger = WandbLogger(
         **cfg.logger,
         project = project_name, 
@@ -34,13 +27,11 @@ def my_app(cfg : DictConfig) -> None:
         config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
         )
     
-    print("Instantiating model and datamodule..")
-    datamodule : LightningDataModule = hydra.utils.instantiate(cfg.data)
-    model : LightningModule = hydra.utils.instantiate(cfg.model)
-
-    if cfg.compile:
-        print("Compiling model..")
-        torch.compile(model)
+    if id:
+        print(f"Continuing from id: {id}")
+        ckpt_path = get_ckpt_path(id, last=True)
+    else:
+        ckpt_path = None
     
     print("Instantiating callbacks..")
     callbacks : list[Callback] = instantiate_callbacks(cfg.get("callbacks", None))
@@ -51,6 +42,14 @@ def my_app(cfg : DictConfig) -> None:
         logger = logger, 
         callbacks = callbacks
         )
+    
+    print("Instantiating model and datamodule..")
+    datamodule : LightningDataModule = hydra.utils.instantiate(cfg.data)
+    model : LightningModule = hydra.utils.instantiate(cfg.model)
+
+    if cfg.compile:
+        print("Compiling model..")
+        torch.compile(model)
         
     print("Beginning training..")
     trainer.fit(model, datamodule, ckpt_path=ckpt_path)

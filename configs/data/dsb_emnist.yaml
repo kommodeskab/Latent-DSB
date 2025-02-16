@@ -3,12 +3,12 @@ _target_: src.data_modules.base_dm.BaseDSBDM
 start_dataset:
   _target_: src.dataset.EMNISTNoLabel
   split: 'digits'
-  img_size: 32
+  img_size: 16
 
 end_dataset:
   _target_: src.dataset.EMNISTNoLabel
   split: 'letters'
-  img_size: 32
+  img_size: 16
   
 batch_size: 128
 num_workers: 4

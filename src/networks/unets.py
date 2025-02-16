@@ -21,17 +21,33 @@ class CelebAUNet2D:
     def __new__(cls): 
         return PretrainedUNet2D("CompVis/ldm-celebahq-256", subfolder="unet")
             
-class EMNISTUNet2D(UNet2D):
-    def __init__(self):
-        super().__init__(
-            in_channels=1,
-            out_channels=1,
-            down_block_types=["DownBlock2D", "DownBlock2D", "DownBlock2D"],
-            up_block_types=["UpBlock2D", "UpBlock2D", "UpBlock2D"],
-            block_out_channels=[32, 32, 64],
-            norm_num_groups=32,
-            sample_size=4,
-        )
+class EMNISTUNet(UNet2D):
+    def __init__(self, **kwargs):
+        args = {
+            "in_channels": 1,
+            "out_channels": 1,
+            "sample_size": 4,
+            "down_block_types": ["DownBlock2D", "DownBlock2D", "DownBlock2D"],
+            "up_block_types": ["UpBlock2D", "UpBlock2D", "UpBlock2D"],
+            "block_out_channels": [32, 32, 64],
+            "dropout": 0.1,
+        }
+        args.update(kwargs)
+        super().__init__(**args)
+
+class SmallUNet(UNet2D):
+    def __init__(self, **kwargs):
+        args = {
+            "in_channels": 1,
+            "out_channels": 1,
+            "sample_size": 32,
+            "down_block_types": ["DownBlock2D", "DownBlock2D", "DownBlock2D"],
+            "up_block_types": ["UpBlock2D", "UpBlock2D", "UpBlock2D"],
+            "block_out_channels": [64, 64, 128],
+            "dropout": 0.1,
+        }
+        args.update(kwargs)
+        super().__init__(**args)
 
 class MediumUNet(UNet2D):
     def __init__(self, **kwargs):

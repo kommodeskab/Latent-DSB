@@ -20,8 +20,7 @@ class FM(BaseLightningModule, EncoderDecoderMixin):
         lr_scheduler : dict[str, LRScheduler | str] | None = None,
         added_noise : float = 0.0,
         latent_std : float = 1.0,
-        num_timesteps : int = 1000,
-        gamma_frac : float = 1.0,
+        **kwargs : dict[str, Any],
     ):
         super().__init__()
         self.save_hyperparameters(ignore=['model', 'encoder_decoder'])
@@ -29,7 +28,7 @@ class FM(BaseLightningModule, EncoderDecoderMixin):
         self.model = model
         self.added_noise = added_noise
         self.latent_std = latent_std
-        self.scheduler = FMScheduler(num_timesteps, gamma_frac)
+        self.scheduler = FMScheduler(**kwargs)
         self.encoder_decoder = encoder_decoder
         self.partial_optimizer = optimizer
         self.partial_lr_scheduler = lr_scheduler
@@ -61,13 +60,13 @@ class FM(BaseLightningModule, EncoderDecoderMixin):
         return loss
 
     @torch.no_grad()
-    def sample(self, noise : Tensor, return_trajectory : bool = False, show_progress : bool = False, ode : bool = False) -> Tensor:
+    def sample(self, noise : Tensor, return_trajectory : bool = False, show_progress : bool = False) -> Tensor:
         self.eval()
         xt = noise
         trajectory = [xt]
         for t in tqdm(reversed(self.scheduler.timesteps), desc='Sampling', disable=not show_progress):
             model_output = self(xt, t)
-            xt = self.scheduler.step(xt, t, model_output, ode)
+            xt = self.scheduler.step(xt, t, model_output)
             trajectory.append(xt)
             
         trajectory = torch.stack(trajectory, dim=0)

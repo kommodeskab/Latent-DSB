@@ -7,13 +7,15 @@ from torch.optim import Optimizer
 from torch.nn import Module
 from pytorch_lightning.utilities import grad_norm
 import copy
-from src.lightning_modules.utils import Cache, GammaScheduler
+from src.lightning_modules.utils import Cache
 from src.lightning_modules.fm import FM
 from torch.nn.functional import mse_loss
 from torch.nn import Module
 from src.data_modules.base_dm import BaseDSBDM
 import time
 from .mixins import EncoderDecoderMixin
+from .schedulers import DSBScheduler
+from tqdm import tqdm
 
 class DSB(BaseLightningModule, EncoderDecoderMixin):
     def __init__(
@@ -25,7 +27,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         cache_max_size : int,
         cache_num_iters : int,
         use_pretrained_flow : bool = False,
-        gamma_frac : float = 1.0,
+        gamma_frac : float = 0.001,
         optimizer : Optimizer | None = None,
         backward_model : Module | None = None,
         target : Literal["terminal", "flow"] = "terminal",
@@ -46,7 +48,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         self.latent_std = latent_std
         
         assert 0 < gamma_frac <= 1, "Gamma fraction must be in the range (0, 1]"
-        self.gamma_scheduler = GammaScheduler(gamma_frac, 1, num_steps, 1)
+        self.scheduler = DSBScheduler(num_steps, gamma_frac, target)
         
         # if the backward model is not provided, make it a copy of the forward model 
         self.forward_model = model
@@ -114,114 +116,45 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
             param_group['lr'] = new_lr
         self.trainer.optimizers[0] = backward_opt
         self.trainer.optimizers[1] = forward_opt
-    
-    def k_to_tensor(self, k : int, size : Tuple[int]) -> Tensor:
-        return torch.full((size, ), k, dtype = torch.int64, device = self.device)
-    
-    def forward_call(self, x : Tensor, k: Tensor) -> Tensor:
+
+    def forward_call(self, x : Tensor, k: IntTensor | int) -> Tensor:
         return self.forward_model(x, k)
     
-    def backward_call(self, x : Tensor, k : Tensor) -> Tensor:
+    def backward_call(self, x : Tensor, k : IntTensor | int) -> Tensor:
         return self.backward_model(x, k)
     
     @torch.no_grad()
-    def go_forward(self, xk : Tensor, k : int) -> Tensor:
-        """        
-        Get :math:`x_{k + 1} | x_{k}`
-        
-        :param Tensor xk: the current point
-        :param int k: the current step
-        
-        :return xk_plus_one: the next point
-        """
-        batch_size = xk.size(0)
-        ks = self.k_to_tensor(k, batch_size)
-        pred = self.forward_call(xk, ks)
-        sch = self.gamma_scheduler
-        
-        if self.hparams.target == "terminal":
-            mu = xk + sch.gammas[k + 1] / (sch.gammas_bar[-1] - sch.gammas_bar[k]) * (pred - xk)
-            sigma = torch.sqrt(sch.sigma_forward[k + 1])
-        
-        xk_plus_one = mu + torch.sqrt(sigma) * torch.randn_like(xk)
-        return xk_plus_one
-    
-    @torch.no_grad()
-    def go_backward(self, xk_plus_one : Tensor, k_plus_one : int) -> Tensor:
-        """
-        Get :math:`x_{k} | x_{k + 1}`
-        
-        :param Tensor xk_plus_one: the current point
-        :param int k_plus_one: the current step
-        
-        :return xk: the previous point
-        """
-        batch_size = xk_plus_one.size(0)
-        ks_plus_one = self.k_to_tensor(k_plus_one, batch_size)
-        pred = self.backward_call(xk_plus_one, ks_plus_one)
-        sch = self.gamma_scheduler
-        
-        if self.hparams.target == "terminal":
-            mu = xk_plus_one + sch.gammas[k_plus_one] / sch.gammas_bar[k_plus_one] * (pred - xk_plus_one)
-            sigma = torch.sqrt(sch.sigma_backward[k_plus_one])
-            
-        xk = mu + torch.sqrt(sigma) * torch.randn_like(xk_plus_one)
-        return xk
-    
-    def _forward_loss(self, xk : Tensor, ks : IntTensor, xN : Tensor) -> Tensor:
-        pred = self.forward_call(xk, ks)
-        if self.hparams.target == "terminal":
-            loss = mse_loss(pred, xN)
-        
-        return loss
-    
-    def _backward_loss(self, xk_plus_one : Tensor, ks_plus_one : IntTensor, x0 : Tensor) -> Tensor:
-        pred = self.backward_call(xk_plus_one, ks_plus_one)
-        if self.hparams.target == "terminal":
-            loss = mse_loss(pred, x0)
-            
-        return loss
-    
-    @torch.no_grad()
-    def sample(self, x_start : Tensor, forward : bool = True, return_trajectory : bool = False, use_initial_forward_sampling : bool = False) -> Tensor:
+    def sample(self, x_start : Tensor, forward : bool = True, return_trajectory : bool = False, use_initial_forward_sampling : bool = False, show_progress : bool = False) -> Tensor:
         if use_initial_forward_sampling:
             if hasattr(self, "fmmodel"):
                 return self.fmmodel.sample(x_start, return_trajectory)
             else:
                 rand_noise = torch.randn_like(x_start)
-                gammas_bar = self.gamma_scheduler.gammas_bar
+                gammas_bar = self.scheduler.gammas_bar
                 trajectory = [x_start]
                 for k in range(self.hparams.num_steps):
-                    t = gammas_bar[k + 1] / gammas_bar[-1]
-                    x = t * rand_noise + (1 - t) * x_start
+                    x = gammas_bar[k + 1] * rand_noise + (1 - gammas_bar[k + 1]) * x_start
                     trajectory.append(x)
                     
                 trajectory = torch.stack(trajectory, dim = 0)
                 return trajectory if return_trajectory else x
 
         # otherwise, we sample using the diffusion schrödinger bridge
+        self.eval()
         xk = x_start
         trajectory = [xk]
-        model = self._get_model(forward)
-        model.eval()
-        range_ = range(self.hparams.num_steps)
-        if not forward:
-            range_ = reversed(range_)
-        
-        for k in range_:
-            xk_next = self.go_forward(xk, k) if forward else self.go_backward(xk, k + 1)
-            trajectory.append(xk_next)
-            xk = xk_next
-        
-        trajectory = trajectory[::-1] if not forward else trajectory
-        trajectory = torch.stack(trajectory, dim = 0)
-
-        return trajectory if return_trajectory else xk
+        for k in tqdm(reversed(self.scheduler.timesteps), desc='Sampling', disable=not show_progress):
+            model_output = self.forward_call(xk, k) if forward else self.backward_call(xk, k)
+            xk = self.scheduler.step(xk, k, model_output)
+            trajectory.append(xk)
+            
+        trajectory = torch.stack(trajectory, dim=0)
+        return trajectory if return_trajectory else trajectory[-1]
     
-    def _get_model(self, backward : bool) -> Module:
+    def get_model(self, backward : bool) -> Module:
         return self.backward_model if backward else self.forward_model
     
-    def _get_optimizer(self, backward : bool) -> Optimizer:
+    def get_optimizer(self, backward : bool) -> Optimizer:
         backward_opt, forward_opt = self.optimizers()
         return backward_opt if backward else forward_opt
 
@@ -230,18 +163,6 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         direction = "backward" if backward else "forward"
         training = "train" if is_training else "val"
         return f"iteration_{iteration}/{direction}_loss/{training}"
-    
-    def get_batch(self, backward : bool, trajectory : Tensor | None = None) -> Tensor:
-        if trajectory is None:
-            trajectory = self.cache.sample()
-        batch_size = trajectory.size(1)
-        random_samples = torch.randint(0, batch_size, (batch_size,)).to(self.device)
-        random_ks = torch.randint(0, self.hparams.num_steps, (batch_size,)).to(self.device)
-        if backward:
-            random_ks += 1
-        sampled_batch = trajectory[random_ks, random_samples]
-        x0, xN = trajectory[0][random_samples], trajectory[-1][random_samples]
-        return sampled_batch, random_ks, x0, xN
     
     def training_step(self, batch : Tensor, batch_idx : int) -> Tensor:
         training_backward = self.training_backward
@@ -256,16 +177,18 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         time_to_sample = time.time() - t1
         self.cache.add(trajectory)
         
-        model = self._get_model(training_backward)
-        optimizer = self._get_optimizer(training_backward)
+        model = self.get_model(backward = training_backward)
+        optimizer = self.get_optimizer(backward = training_backward)
                 
         for i in range(self.hparams.cache_num_iters):
-            sampled_batch, ks, x0, xN = self.get_batch(training_backward, trajectory if i == 0 else None)
+            trajectory = self.cache.sample()
+            xt, timesteps, target = self.scheduler.sample_batch(trajectory)
+            model_output = model(xt, timesteps)
 
             # calculate loss and do backward pass
             optimizer.zero_grad()
             # if training backward, then sampled_batch = xk + 1 else sampled_batch = xk
-            loss = self._backward_loss(sampled_batch, ks, x0) if training_backward else self._forward_loss(sampled_batch, ks, xN)
+            loss = mse_loss(model_output, target)
             self.manual_backward(loss)
             
             # clip the gradients. first, save the norm for later logging
@@ -274,10 +197,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
             optimizer.step()
             
             self.curr_num_iters += 1
-            
-            if not self.cache.is_full():
-                break
-                
+
         model_name = "backward_model" if training_backward else "forward_model"
         
         self.log_dict({
@@ -293,27 +213,19 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
     def validation_step(self, batch : Tensor, batch_idx : int, dataloader_idx : int) -> None:
         torch.manual_seed(0)
         is_backward = self.training_backward
-        loss_sum = 0.0
         batch = self.encode(batch)
         use_initial_forward_sampling = is_backward and self.DSB_iteration == 1
+        model = self.get_model(is_backward)
         
         if (is_backward and dataloader_idx == 0) or (not is_backward and dataloader_idx == 1):
             trajectory = self.sample(batch, forward = is_backward, return_trajectory = True, use_initial_forward_sampling=use_initial_forward_sampling)
-            batch_size = trajectory.size(1)
-            x0, xN = trajectory[0], trajectory[-1]
-            for k in range(0, self.hparams.num_steps):
-                k += 1 if is_backward else 0
-                ks = self.k_to_tensor(k, batch_size)
-                loss = self._backward_loss(trajectory[k], ks, x0) if is_backward else self._forward_loss(trajectory[k], ks, xN)
-                loss_sum += loss
-            
-            loss_avg = loss_sum / self.hparams.num_steps
-            self.log(
-                self._get_loss_name(backward = is_backward, is_training = False), 
-                loss_avg, 
-                add_dataloader_idx=False,
-                on_step=False,
-                )
+            for _ in range(self.hparams.cache_num_iters):
+                xk, timesteps, target = self.scheduler.sample_batch(trajectory)
+                model_output = model(xk, timesteps)
+                loss = mse_loss(model_output, target)
+                self.log_dict({
+                    self._get_loss_name(backward = is_backward, is_training = False): loss,
+                }, on_step=False, on_epoch=True)
     
     def configure_optimizers(self) -> Tuple[Optimizer, Optimizer]:
         # make the optimizers

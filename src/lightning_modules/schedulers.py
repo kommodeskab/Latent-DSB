@@ -12,7 +12,7 @@ def get_symmetric_schedule(min_value : float, max_value : float, num_steps : int
     return gammas
 
 class BaseScheduler:
-    def __init__(self, num_timesteps : int, gamma_frac : float = 1.0):
+    def __init__(self, num_timesteps : int, gamma_frac : float = 0.001):
         self.num_train_timesteps = num_timesteps
         self.set_timesteps(num_timesteps, gamma_frac)
         self.original_gammas_bar = self.gammas_bar.clone()
@@ -22,6 +22,7 @@ class BaseScheduler:
         gammas = gammas / gammas.sum()
         gammas_bar = torch.cumsum(gammas, 0)
         var = 2 * gammas[1:] * gammas_bar[:-1] / gammas_bar[1:]
+        var = torch.cat([torch.tensor([0]), var, torch.tensor([0])], 0)
         if not hasattr(self, 'original_gammas_bar'):
             timesteps = torch.arange(1, num_timesteps + 1)
         else:
@@ -45,8 +46,9 @@ class BaseScheduler:
         return x
 
 class FMScheduler(BaseScheduler):
-    def __init__(self, num_timesteps : int = 1000, gamma_frac : float = 1.0):
+    def __init__(self, num_timesteps : int = 1000, gamma_frac : float = 0.001, ode : bool = True):
         super().__init__(num_timesteps, gamma_frac)
+        self.ode = ode
     
     def sample_batch(self, batch : Tensor) -> Tuple[Tensor, IntTensor, Tensor]:
         batch_size = batch.size(0)
@@ -58,18 +60,22 @@ class FMScheduler(BaseScheduler):
         noise = torch.randn_like(batch)
         target = noise - batch
         xt = (1 - gammas_bar) * batch + gammas_bar * noise
+        var = self.to_dim(self.var, batch.dim()).to(device)
+        # var = [0, var[0 | 1], var[1 | 2], ...]
+        std = 0 if self.ode else var[timesteps + 1] ** 0.5
+        xt = xt + std * torch.randn_like(xt)
         return xt, timesteps, target
     
-    def step(self, xt_plus_1 : Tensor, t_plus_1 : int, model_output : Tensor, ode : bool = True) -> Tensor:
+    def step(self, xt_plus_1 : Tensor, t_plus_1 : int, model_output : Tensor) -> Tensor:
         """
         Predict x_t | x_{t + 1}
         """
-        index_for_sigma = torch.where(self.timesteps == t_plus_1)[0].min()
+        t_plus_1 = torch.where(self.timesteps == t_plus_1)[0].min() + 1
         gammas_bar = self.gammas_bar.to(xt_plus_1.device)
-        delta_t = gammas_bar[index_for_sigma] - gammas_bar[index_for_sigma + 1]
+        delta_t = gammas_bar[t_plus_1 - 1] - gammas_bar[t_plus_1]
         mu = xt_plus_1 + delta_t * model_output
-        
-        std = 0 if ode else self.var[index_for_sigma] ** 0.5
+        # var = [0, var[0 | 1], var[1 | 2], ...]
+        std = 0 if self.ode else self.var[t_plus_1] ** 0.5
         return mu + std * torch.randn_like(mu)
     
 class DSBScheduler(BaseScheduler):
@@ -79,8 +85,8 @@ class DSBScheduler(BaseScheduler):
         gamma_frac : float = 1.0,
         target : Literal['terminal', 'flow'] = 'terminal',
     ):
-        self.target = target
         super().__init__(num_steps, gamma_frac)
+        self.target = target
     
     def sample_batch(self, batch : Tensor) -> tuple[Tensor, Tensor, Tensor]:
         # batch.shape = (num_steps, batch_size, ...)
@@ -94,8 +100,7 @@ class DSBScheduler(BaseScheduler):
         if self.target == "terminal":
             target = terminal_points
         else:
-            dim = xt.dim()
-            gammas_bar = self.to_dim(self.gammas_bar, dim).to(device)
+            gammas_bar = self.to_dim(self.gammas_bar, xt.dim()).to(device)
             target = (terminal_points - xt) / gammas_bar[timesteps]
             
         return xt, timesteps, target
@@ -106,7 +111,7 @@ class DSBScheduler(BaseScheduler):
         gammas = self.to_dim(self.gammas, dim).to(device)
         gammas_bar = self.to_dim(self.gammas_bar, dim).to(device)
         
-        std = self.var[k_plus_one - 1] ** 0.5
+        std = self.var[k_plus_one] ** 0.5
         step_size = gammas[k_plus_one]
         
         if self.target == "terminal":
@@ -121,5 +126,4 @@ class DSBScheduler(BaseScheduler):
 if __name__ == "__main__":
     scheduler = FMScheduler(num_timesteps=20)
     print(scheduler.var)
-    print(scheduler.sigmas)
     print(scheduler.timesteps)

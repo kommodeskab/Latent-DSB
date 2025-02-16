@@ -1,20 +1,18 @@
 _target_: src.lightning_modules.DSB
 
 model:
-  _target_: src.networks.EMNISTUNet2D
+  _target_: src.networks.SmallUNet
+  sample_size: 16
 
 encoder_decoder:
-  _target_: src.networks.EMNISTVAE
+  _target_: src.networks.IdentityEncoderDecoder
 
 optimizer:
   _target_: torch.optim.AdamW
   _partial_: True
   lr: 1e-4
 
-max_gamma: 1
-min_gamma: 0.1
 num_steps: 100
 max_iterations: 3000
-cache_max_size: 100
-cache_num_iters: 5
-T: 0.1
+cache_max_size: 5000
+cache_num_iters: 10

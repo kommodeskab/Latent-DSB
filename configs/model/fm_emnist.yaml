@@ -4,7 +4,7 @@ model:
   _target_: src.networks.EMNISTUNet2D
 
 encoder_decoder:
-  _target_: src.networks.EMNISTVAE
+  _target_: src.networks.IdentityEncoderDecoder
 
 optimizer:
   _target_: torch.optim.AdamW
@@ -21,4 +21,7 @@ lr_scheduler:
     cooldown: 5
   monitor: 'val_loss'
   interval: 'epoch'
-  frequency: 5
+  frequency: 3
+
+ode: False
+gamma_frac: 0.001
