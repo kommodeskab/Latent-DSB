@@ -225,7 +225,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
                 loss = mse_loss(model_output, target)
                 self.log_dict({
                     self._get_loss_name(backward = is_backward, is_training = False): loss,
-                }, on_step=False, on_epoch=True)
+                }, on_step=False, on_epoch=True, add_dataloader_idx=False)
     
     def configure_optimizers(self) -> Tuple[Optimizer, Optimizer]:
         # make the optimizers

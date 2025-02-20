@@ -1,15 +1,15 @@
 _target_: src.data_modules.BaseDM
-  dataset:
-    _target_: src.dataset.AFHQDataset
-    split: 'cat'
-    img_size: 32
-    train: True
-    augment: True
-    size_multiplier: 5
-  val_dataset:
-    _target_: src.dataset.AFHQDataset
-    split: 'cat'
-    img_size: 32
-    train: False
-  batch_size: 64
-  num_workers: 4
+dataset:
+  _target_: src.dataset.AFHQDataset
+  split: 'cat'
+  img_size: 32
+  train: True
+  augment: True
+  size_multiplier: 5
+val_dataset:
+  _target_: src.dataset.AFHQDataset
+  split: 'cat'
+  img_size: 32
+  train: False
+batch_size: 64
+num_workers: 4

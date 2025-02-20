@@ -1,7 +1,5 @@
 from diffusers import UNet2DModel, UNet1DModel
 import torch
-from torch.nn import Module
-from torch import Tensor
 
 class UNet2D(UNet2DModel):
     def __init__(self, **kwargs,):
@@ -19,7 +17,7 @@ class PretrainedUNet2D:
     
 class CelebAUNet2D:
     def __new__(cls): 
-        return PretrainedUNet2D("CompVis/ldm-celebahq-256", subfolder="unet")
+        return PretrainedUNet2D("CompVis/ldm-celebahq-256", subfolder="unet", revision=None, variant=None)
             
 class EMNISTUNet(UNet2D):
     def __init__(self, **kwargs):
@@ -43,7 +41,7 @@ class SmallUNet(UNet2D):
             "sample_size": 32,
             "down_block_types": ["DownBlock2D", "DownBlock2D", "DownBlock2D"],
             "up_block_types": ["UpBlock2D", "UpBlock2D", "UpBlock2D"],
-            "block_out_channels": [64, 64, 128],
+            "block_out_channels": [64, 128, 256],
             "dropout": 0.1,
         }
         args.update(kwargs)
@@ -54,10 +52,38 @@ class MediumUNet(UNet2D):
         args = {
             "in_channels": 4,
             "out_channels": 4,
-            "sample_size": 32,
+            "sample_size": 16,
             "down_block_types": ["DownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D"],
             "up_block_types": ["AttnUpBlock2D", "AttnUpBlock2D", "AttnUpBlock2D", "UpBlock2D"],
             "block_out_channels": [256, 384, 512, 640],
+            "dropout": 0.1,
+        }
+        args.update(kwargs)
+        super().__init__(**args)
+
+class LargeUNet(UNet2D):
+    def __init__(self, **kwargs):
+        args = {
+            "in_channels": 4,
+            "out_channels": 4,
+            "sample_size": 16,
+            "down_block_types": ["DownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D"],
+            "up_block_types": ["AttnUpBlock2D", "AttnUpBlock2D", "AttnUpBlock2D", "UpBlock2D"],
+            "block_out_channels": [384, 512, 640, 768],
+            "dropout": 0.1,
+        }
+        args.update(kwargs)
+        super().__init__(**args)
+
+class UNet50(UNet2D):
+    def __init__(self, **kwargs):
+        args = {
+            "in_channels": 4,
+            "out_channels": 4,
+            "sample_size": 8,
+            "down_block_types": ["DownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D"],
+            "up_block_types": ["AttnUpBlock2D", "AttnUpBlock2D", "AttnUpBlock2D", "UpBlock2D"],
+            "block_out_channels": [128, 192, 256, 384],
             "dropout": 0.1,
         }
         args.update(kwargs)
@@ -69,6 +95,8 @@ class UNet1D(UNet1DModel):
 
     def forward(self, x : torch.Tensor, time_step : torch.Tensor): 
         return super().forward(x, time_step).sample
-
+    
 if __name__ == "__main__":
-    model = PretrainedUNet2D("CompVis/ldm-celebahq-256", keep_structure=True, subfolder="unet")
+    unet = UNet50()
+    num_params = sum(p.numel() for p in unet.parameters() if p.requires_grad)
+    print(f"Number of parameters: {num_params}")

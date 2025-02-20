@@ -2,6 +2,7 @@ from diffusers import VQModel, AutoencoderKL
 from torch import Tensor
 from torch.nn import Module
 from src.networks import PretrainedModel
+from transformers import MimiModel, AutoFeatureExtractor
 
 class BaseEncoderDecoder(Module):
     def encode(self, x : Tensor) -> Tensor: ...    
@@ -52,10 +53,28 @@ class EMNISTVAE:
         model = PretrainedModel("300125161951", "vae")
         model.__class__ = Autoencoder
         return model
-
-class StableDiffusionVAE:
-    def __new__(cls, version : str = "3.5"):
-        model = AutoencoderKL.from_pretrained(f"stable-diffusion-vae/{version}")
-        print(f"Loaded stable-diffusion-vae/{version}")
-        model.__class__ = Autoencoder
+    
+class Mimi(MimiModel):
+    feature_extractor : AutoFeatureExtractor
+    sample_rate : int
+    
+    def encode(self, x : Tensor) -> Tensor:
+        # x is audio with shape (batch_size, 1, seq_len)
+        # we have to make it into a list of lists
+        raw_audio = x.squeeze(1).tolist()
+        inputs = self.feature_extractor(
+            raw_audio=raw_audio,
+            sampling_rate=self.sample_rate,
+            return_tensors="pt"
+        )
+        return super().encode(inputs["input_values"]).audio_codes
+    def decode(self, h : Tensor) -> Tensor: return super().decode(h).audio_values
+    
+class PretrainedMimi:
+    def __new__(cls):
+        model = MimiModel.from_pretrained("kyutai/mimi")
+        model.feature_extractor = AutoFeatureExtractor.from_pretrained("kyutai/mimi")
+        model.sample_rate = model.feature_extractor.sampling_rate
+        print("Loaded Mimi model")
+        model.__class__ = Mimi
         return model

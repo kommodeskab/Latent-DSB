@@ -21,6 +21,7 @@ class BaseScheduler:
         gammas = get_symmetric_schedule(gamma_frac, 1, num_timesteps)
         gammas = gammas / gammas.sum()
         gammas_bar = torch.cumsum(gammas, 0)
+        gammas_bar[-1] = 1 - 1e-4
         var = 2 * gammas[1:] * gammas_bar[:-1] / gammas_bar[1:]
         var = torch.cat([torch.tensor([0]), var, torch.tensor([0])], 0)
         if not hasattr(self, 'original_gammas_bar'):
@@ -46,24 +47,20 @@ class BaseScheduler:
         return x
 
 class FMScheduler(BaseScheduler):
-    def __init__(self, num_timesteps : int = 1000, gamma_frac : float = 0.001, ode : bool = True):
+    def __init__(self, num_timesteps : int = 1000, gamma_frac : float = 1.0):
         super().__init__(num_timesteps, gamma_frac)
-        self.ode = ode
     
-    def sample_batch(self, batch : Tensor) -> Tuple[Tensor, IntTensor, Tensor]:
-        batch_size = batch.size(0)
-        device = batch.device
+    def sample_batch(self, x0 : Tensor, x1 : Tensor) -> Tuple[Tensor, IntTensor, Tensor]:
+        batch_size = x0.size(0)
+        device = x0.device
+        dim = x0.dim()
+        
         timesteps = self.sample_timesteps(batch_size).to(device)
         gammas_bar = self.gammas_bar.to(device)
-        gammas_bar = self.to_dim(gammas_bar, batch.dim())
+        gammas_bar = self.to_dim(gammas_bar, dim)
         gammas_bar = gammas_bar[timesteps]
-        noise = torch.randn_like(batch)
-        target = noise - batch
-        xt = (1 - gammas_bar) * batch + gammas_bar * noise
-        var = self.to_dim(self.var, batch.dim()).to(device)
-        # var = [0, var[0 | 1], var[1 | 2], ...]
-        std = 0 if self.ode else var[timesteps + 1] ** 0.5
-        xt = xt + std * torch.randn_like(xt)
+        target = x1 - x0
+        xt = (1 - gammas_bar) * x0 + gammas_bar * x1
         return xt, timesteps, target
     
     def step(self, xt_plus_1 : Tensor, t_plus_1 : int, model_output : Tensor) -> Tensor:
@@ -72,20 +69,18 @@ class FMScheduler(BaseScheduler):
         """
         t_plus_1 = torch.where(self.timesteps == t_plus_1)[0].min() + 1
         gammas_bar = self.gammas_bar.to(xt_plus_1.device)
-        delta_t = gammas_bar[t_plus_1 - 1] - gammas_bar[t_plus_1]
-        mu = xt_plus_1 + delta_t * model_output
-        # var = [0, var[0 | 1], var[1 | 2], ...]
-        std = 0 if self.ode else self.var[t_plus_1] ** 0.5
-        return mu + std * torch.randn_like(mu)
+        delta_t = gammas_bar[t_plus_1] - gammas_bar[t_plus_1 - 1]
+        mu = xt_plus_1 - delta_t * model_output
+        return mu
     
 class DSBScheduler(BaseScheduler):
     def __init__(
         self,
-        num_steps : int,
+        num_timesteps : int,
         gamma_frac : float = 1.0,
         target : Literal['terminal', 'flow'] = 'terminal',
     ):
-        super().__init__(num_steps, gamma_frac)
+        super().__init__(num_timesteps, gamma_frac)
         self.target = target
     
     def sample_batch(self, batch : Tensor) -> tuple[Tensor, Tensor, Tensor]:
@@ -122,6 +117,53 @@ class DSBScheduler(BaseScheduler):
         mu = xk_plus_1 + step_size * direction
         noise = torch.randn_like(xk_plus_1) * std
         return mu + noise
+    
+class I2Scheduler(BaseScheduler):
+    def __init__(self, num_timesteps : int, gamma_frac : float = 1.0, target : Literal['terminal', 'flow'] = 'terminal'):
+        super().__init__(num_timesteps, gamma_frac)
+        self.target = target
+        
+    def sample_batch(self, x0 : Tensor, x1 : Tensor) -> tuple[Tensor, Tensor, Tensor]:
+        batch_size = x0.size(0)
+        device = x0.device
+        dim = x0.dim()
+        
+        timesteps = self.sample_timesteps(batch_size).to(device)
+        gammas_bar = self.gammas_bar.to(device)
+        gammas_bar = self.to_dim(gammas_bar, dim)
+        sigmas = gammas_bar[timesteps]
+        sigmas_bar = 1 - sigmas
+        mu = sigmas_bar * x0 + sigmas * x1
+        # std = (sigmas * sigmas_bar) ** 0.5
+        std = 0
+        xt = mu + std * torch.randn_like(mu)
+        
+        if self.target == 'terminal':
+            target = x0
+        else:
+            target = (xt - x0) / sigmas
+            
+        return xt, timesteps, target
+    
+    def step(self, xt_plus_1 : Tensor, t_plus_1 : int, model_output : Tensor) -> Tensor:
+        t_plus_1 = torch.where(self.timesteps == t_plus_1)[0].min() + 1
+        device = xt_plus_1.device
+        
+        sigmas = self.gammas_bar.to(device)
+        sigma = sigmas[t_plus_1 - 1]
+        alfas = self.gammas.to(device)
+        alfa = alfas[t_plus_1]
+        
+        if self.target == 'terminal':
+            x0_hat = model_output
+        else:
+            sigma_plus_1 = sigmas[t_plus_1]
+            x0_hat = xt_plus_1 - model_output * sigma_plus_1
+        
+        denom = alfa + sigma
+        mu = alfa / denom * x0_hat + sigma / denom * xt_plus_1
+        std = (sigma * alfa / denom) ** 0.5
+        return mu + std * torch.randn_like(mu)
     
 if __name__ == "__main__":
     scheduler = FMScheduler(num_timesteps=20)

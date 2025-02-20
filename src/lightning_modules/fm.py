@@ -10,6 +10,7 @@ from torch.nn.functional import mse_loss
 from tqdm import tqdm
 from .mixins import EncoderDecoderMixin
 from src.lightning_modules.schedulers import FMScheduler
+from torch_ema import ExponentialMovingAverage
 
 class FM(BaseLightningModule, EncoderDecoderMixin):
     def __init__(
@@ -20,7 +21,8 @@ class FM(BaseLightningModule, EncoderDecoderMixin):
         lr_scheduler : dict[str, LRScheduler | str] | None = None,
         added_noise : float = 0.0,
         latent_std : float = 1.0,
-        **kwargs : dict[str, Any],
+        num_timesteps : int = 1000,
+        **kwargs : Any,
     ):
         super().__init__()
         self.save_hyperparameters(ignore=['model', 'encoder_decoder'])
@@ -28,44 +30,70 @@ class FM(BaseLightningModule, EncoderDecoderMixin):
         self.model = model
         self.added_noise = added_noise
         self.latent_std = latent_std
-        self.scheduler = FMScheduler(**kwargs)
+        self.scheduler = FMScheduler(num_timesteps)
         self.encoder_decoder = encoder_decoder
         self.partial_optimizer = optimizer
         self.partial_lr_scheduler = lr_scheduler
+        self.ema = None
+        
+    def on_fit_start(self):
+        self.ema = ExponentialMovingAverage(self.model.parameters(), decay=0.995)
+        return super().on_fit_start()
         
     def forward(self, x : Tensor, timesteps : IntTensor) -> Tensor:
         return self.model(x, timesteps)
+    
+    def on_save_checkpoint(self, checkpoint):
+        self.ema.store()
+        self.ema.copy_to()
+        return super().on_save_checkpoint(checkpoint)
+    
+    def on_train_epoch_start(self):
+        if self.ema.collected_params is not None:
+            self.ema.restore()
+        return super().on_train_epoch_start()
     
     def on_before_optimizer_step(self, optimizer):
         grad_norms = grad_norm(self.model, norm_type=2)
         self.log_dict(grad_norms)
     
-    def common_step(self, x_encoded : Tensor) -> Tensor:
-        xt, timesteps, target = self.scheduler.sample_batch(x_encoded)
+    def common_step(self, x0 : Tensor, x1 : Tensor) -> Tensor:
+        xt, timesteps, target = self.scheduler.sample_batch(x0, x1)
         model_output = self(xt, timesteps)
         loss = mse_loss(model_output, target)
         return loss
     
     def training_step(self, batch : Tensor, batch_idx : int) -> Tensor:
-        x_encoded = self.encode(batch, add_noise=True)
-        loss = self.common_step(x_encoded)
+        x0, x1 = batch
+        x0, x1 = self.encode(x0, add_noise=True), self.encode(x1, add_noise=True)
+        loss = self.common_step(x0, x1)
         self.log('train_loss', loss)
         return loss
     
+    def on_before_zero_grad(self, optimizer):
+        self.ema.update()
+    
     def validation_step(self, batch : Tensor, batch_idx : int) -> Tensor:
         torch.manual_seed(0)
-        x_encoded = self.encode(batch)
-        loss = self.common_step(x_encoded)
+        x0, x1 = batch
+        x0, x1 = self.encode(x0, add_noise=True), self.encode(x1, add_noise=True)
+        with self.ema.average_parameters():
+            loss = self.common_step(x0, x1)
+        
         self.log('val_loss', loss)
         return loss
 
     @torch.no_grad()
-    def sample(self, noise : Tensor, return_trajectory : bool = False, show_progress : bool = False) -> Tensor:
+    def sample(self, x_start : Tensor, return_trajectory : bool = False, show_progress : bool = False) -> Tensor:
         self.eval()
-        xt = noise
+        xt = x_start
         trajectory = [xt]
         for t in tqdm(reversed(self.scheduler.timesteps), desc='Sampling', disable=not show_progress):
-            model_output = self(xt, t)
+            if self.ema is not None:
+                with self.ema.average_parameters():
+                    model_output = self(xt, t)
+            else:
+                model_output = self(xt, t)
             xt = self.scheduler.step(xt, t, model_output)
             trajectory.append(xt)
             

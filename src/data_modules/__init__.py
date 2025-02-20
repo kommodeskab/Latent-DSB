@@ -1,1 +1,1 @@
-from src.data_modules.base_dm import BaseDSBDM, BaseDM
+from src.data_modules.base_dm import BaseDSBDM, BaseDM, FlowMatchingDM

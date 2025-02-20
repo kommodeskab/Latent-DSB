@@ -20,7 +20,7 @@ class BaseDataset(Dataset):
 class ImageDataset(BaseDataset):
     def __init__(
         self,
-        dataset : Dataset,
+        dataset : Dataset[Tensor],
         img_size : int,
         augment : bool = False,
     ):
@@ -30,12 +30,20 @@ class ImageDataset(BaseDataset):
         """
         super().__init__()
         self.dataset = dataset
+        img_example = self.dataset[0]
+        _, h, w = img_example.shape
+        original_size = min(h, w)
+        
+        padding = int(0.2 * original_size)
                 
         if augment:
             self.transform = transforms.Compose([
-                transforms.RandomHorizontalFlip(),
-                transforms.RandomResizedCrop(img_size, scale=(0.8, 1.0), ratio=(0.9, 1.1)),
                 transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
+                transforms.RandomHorizontalFlip(),
+                transforms.Pad(padding, padding_mode='reflect'),
+                transforms.RandomRotation(10),
+                transforms.CenterCrop(original_size),
+                transforms.RandomResizedCrop(img_size, scale=(0.8, 1.0), ratio=(0.9, 1.1)),
                 transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
             ])
         else:

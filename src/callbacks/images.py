@@ -8,6 +8,7 @@ import torch
 from matplotlib.figure import Figure
 from torch.utils.data import Dataset
 import numpy as np
+from pytorch_lightning.loggers import WandbLogger
 
 def plot_samples(samples : Tensor, height : int | None = None, width : int | None = None) -> Figure:
     # assume samples have shape (k, c, h, w)
@@ -100,8 +101,37 @@ class VAECB(Callback):
             step = pl_module.global_step,
         )
         plt.close('all')
-
-class FlowMatchingCB(Callback):
+        
+class DiffusionCBMixin:
+    def log_line_series(self, trainer : Trainer, pl_module : FM | DSB):
+        logger = pl_module.logger
+        gammas = pl_module.scheduler.gammas.tolist()
+        gammas_bar = pl_module.scheduler.gammas_bar.tolist()
+        
+        logger.log_metrics({
+            "gammas": wandb.plot.line_series(
+                xs = torch.linspace(0, 1, len(gammas)).tolist(),
+                ys = [gammas],
+                keys = ["gamma"],
+            ),
+            "gammas_bar": wandb.plot.line_series(
+                xs = torch.linspace(0, 1, len(gammas_bar)).tolist(),
+                ys = [gammas_bar],
+                keys = ["gamma_bar"],
+            ),
+        })
+    
+    def visualize_latent_space(self, logger : WandbLogger, encodings : Tensor):
+        logger.log_image(
+            key="Encodings",
+            images = [wandb.Image(visualize_encodings(e)) for e in encodings.cpu()],
+        )
+        logger.log_image(
+            key="Encodings histogram",
+            images = [wandb.Image(plot_histogram(e)) for e in encodings.cpu()],
+        )
+    
+class FlowMatchingCB(Callback, DiffusionCBMixin):
     def __init__(
         self,
         ):
@@ -112,17 +142,20 @@ class FlowMatchingCB(Callback):
         device = pl_module.device
         
         dataset = trainer.datamodule.val_dataset
-        x0 = get_batch_from_dataset(dataset, batch_size=16) 
+        dataset_batch = get_batch_from_dataset(dataset, batch_size=16)
+        x0, x1 = dataset_batch
+        self.x1_encoded = pl_module.encode(x1.to(device))
         
-        fig = plot_samples(x0)
+        fig_x0 = plot_samples(x0)
+        fig_x1 = plot_samples(x1)
         logger.log_image(
             key = "Initial samples",
-            images = [wandb.Image(fig)],
+            images = [wandb.Image(fig_x0), wandb.Image(fig_x1)],
+            caption = ["x0", "x1"],
         )
         
         encoded = pl_module.encode(x0.to(device), add_noise=True)
         decoded = pl_module.decode(encoded).cpu()
-        self.noise = torch.randn_like(encoded)
 
         fig = plot_samples(decoded)
         logger.log_image(
@@ -137,52 +170,15 @@ class FlowMatchingCB(Callback):
             "latent_size": latent_size,
         })
                 
-        logger.log_image(
-            key="Encodings",
-            images = [wandb.Image(visualize_encodings(e)) for e in encoded.cpu()],
-        )
-        logger.log_image(
-            key="Encodings histogram",
-            images = [wandb.Image(plot_histogram(e)) for e in encoded.cpu()],
-        )
-        
-        gammas = pl_module.scheduler.gammas.tolist()
-        gammas_bar = pl_module.scheduler.gammas_bar.tolist()
-        var = pl_module.scheduler.var.tolist()
-        std = pl_module.scheduler.var.sqrt().tolist()
-        xs = torch.linspace(0, 1, len(gammas)).tolist()
-        
-        logger.log_metrics({
-            "gammas": wandb.plot.line_series(
-                xs = torch.linspace(0, 1, len(gammas)).tolist(),
-                ys = [gammas],
-                keys = ["gamma"],
-            ),
-            "gammas_bar": wandb.plot.line_series(
-                xs = torch.linspace(0, 1, len(gammas_bar)).tolist(),
-                ys = [gammas_bar],
-                keys = ["gamma_bar"],
-            ),
-            "var": wandb.plot.line_series(
-                xs = torch.linspace(0, 1, len(var)).tolist(),
-                ys = [var],
-                keys = ["var"],
-            ),
-            "std": wandb.plot.line_series(
-                xs = torch.linspace(0, 1, len(std)).tolist(),
-                ys = [std],
-                keys = ["std"],
-            ),
-        })
-        
+        self.visualize_latent_space(logger, encoded)
+        self.log_line_series(trainer, pl_module)
         plt.close('all')
         
     def on_validation_end(self, trainer : Trainer, pl_module : FM):
         logger = pl_module.logger
-        device = pl_module.device
+        x1_encoded = self.x1_encoded
         
-        noise = self.noise.to(device)
-        samples = pl_module.sample(noise)
+        samples = pl_module.sample(x1_encoded)
         samples = pl_module.decode(samples).cpu()
         fig = plot_samples(samples)
         logger.log_image(
@@ -227,7 +223,7 @@ class TestFMOnDatasetCB(Callback):
         )
         plt.close('all')
         
-class DSBCB(Callback):
+class DSBCB(Callback, DiffusionCBMixin):
     def __init__(self):
         super().__init__()
         
@@ -296,37 +292,9 @@ class DSBCB(Callback):
             step = pl_module.global_step,
         )
         
-        gammas = pl_module.scheduler.gammas.tolist()
-        gammas_bar = pl_module.scheduler.gammas_bar.tolist()
-        var = pl_module.scheduler.var.tolist()
-        std = pl_module.scheduler.var.sqrt().tolist()
-        xs = torch.linspace(0, 1, len(gammas)).tolist()
-        
-        logger.log_metrics({
-            "gammas": wandb.plot.line_series(
-                xs = xs,
-                ys = [gammas],
-                keys = ["gamma"],
-            ),
-            "gammas_bar": wandb.plot.line_series(
-                xs = xs,
-                ys = [gammas_bar],
-                keys = ["gamma_bar"],
-            ),
-            "var": wandb.plot.line_series(
-                xs = xs,
-                ys = [var],
-                keys = ["var"],
-            ),
-            "std": wandb.plot.line_series(
-                xs = xs,
-                ys = [std],
-                keys = ["std"],
-            ),
-        })
-        
+        self.visualize_latent_space(logger, x0_encoded)
+        self.log_line_series(trainer, pl_module)
         plt.close('all')
-        
         
     def on_validation_end(self, trainer : Trainer, pl_module : DSB):
         device      = pl_module.device

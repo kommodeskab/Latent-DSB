@@ -1,0 +1,6 @@
+_target_: src.data_modules.FlowMatchingDM
+x0_dataset:
+  _target_: src.dataset.CelebADataset
+  img_size: 128
+  augment: True
+batch_size: 128

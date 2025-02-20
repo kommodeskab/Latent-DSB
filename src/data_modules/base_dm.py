@@ -1,6 +1,7 @@
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader, random_split, Dataset
 import random
+import torch
 
 def split_dataset(train_dataset : Dataset, val_dataset : Dataset | None, train_val_split : float) -> tuple[Dataset, Dataset]:
     if val_dataset is None:
@@ -16,6 +17,7 @@ class BaseDM(pl.LightningDataModule):
         train_val_split : float = 0.95,
         batch_size : int = 32,
         num_workers: int = 4,
+        pin_memory: bool = True
         ):
         """
         A base data module for datasets. 
@@ -23,7 +25,6 @@ class BaseDM(pl.LightningDataModule):
         """
         super().__init__()
         self.save_hyperparameters(ignore=["dataset", "val_dataset"])
-        
         self.dataset = dataset
         self.train_dataset, self.val_dataset = split_dataset(dataset, val_dataset, train_val_split)
         
@@ -35,7 +36,7 @@ class BaseDM(pl.LightningDataModule):
             persistent_workers=True,
             batch_size = self.hparams.batch_size, 
             num_workers = self.hparams.num_workers,
-            pin_memory=True
+            pin_memory=self.hparams.pin_memory
             )
         
     def val_dataloader(self):
@@ -46,34 +47,37 @@ class BaseDM(pl.LightningDataModule):
             persistent_workers=True,
             batch_size = self.hparams.batch_size, 
             num_workers = self.hparams.num_workers,
-            pin_memory=True
+            pin_memory=self.hparams.pin_memory
             )
         
 class RandomPairDataset(Dataset):
-    def __init__(self, x0_dataset : Dataset, x1_dataset : Dataset):
+    def __init__(self, x0_dataset : Dataset, x1_dataset : Dataset | None = None):
         self.x0_dataset = x0_dataset
         self.x1_dataset = x1_dataset
+        # make a random list of the numbers 0, 1, .. len(x1_dataset) -1
+        if self.x1_dataset is not None:
+            x1_dataset_indices = list(range(len(self.x1_dataset)))
+            random.shuffle(x1_dataset_indices)
+            self.x1_dataset_indices = x1_dataset_indices
         
     def __len__(self):
-        return min(len(self.x0_dataset), len(self.x1_dataset))
+        return len(self.x0_dataset)
     
     def __getitem__(self, idx):
-        # randomly sample from both datasets
-        x0_rand_idx = random.randint(0, len(self.x0_dataset) - 1)
-        x1_rand_idx = random.randint(0, len(self.x1_dataset) - 1)
-        return self.x0_dataset[x0_rand_idx], self.x1_dataset[x1_rand_idx]
+        x0_sample = self.x0_dataset[idx]
+        if self.x1_dataset is not None:
+            rand_idx = self.x1_dataset_indices[idx % len(self.x1_dataset)]
+            x1_sample = self.x1_dataset[rand_idx]
+        else:
+            x1_sample = torch.randn_like(x0_sample)
+        return x0_sample, x1_sample
 
 class FlowMatchingDM(BaseDM):
     def __init__(self, x0_dataset : Dataset, x1_dataset : Dataset, x0_dataset_val : Dataset | None = None, x1_dataset_val : Dataset | None = None, **kwargs):
         assert (x0_dataset_val is None) == (x1_dataset_val is None), "Validation datasets must either both be None or both not be None."
         paired_dataset = RandomPairDataset(x0_dataset, x1_dataset)
-        
-        if x0_dataset_val is not None:
-            paired_dataset_val = RandomPairDataset(x0_dataset_val, x1_dataset_val)
-        else:
-            paired_dataset_val = None
-            
-        super().__init__(paired_dataset, paired_dataset_val, **kwargs)
+        paired_dataset_val = RandomPairDataset(x0_dataset_val, x1_dataset_val) if x0_dataset_val is not None else None         
+        super().__init__(paired_dataset, paired_dataset_val, pin_memory=False, **kwargs)
 
 class BaseDSBDM(pl.LightningDataModule):
     def __init__(
