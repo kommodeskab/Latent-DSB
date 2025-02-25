@@ -16,5 +16,6 @@ trainer:
   reload_dataloaders_every_n_epochs: 1
   check_val_every_n_epoch: 3
   max_epochs: -1
+  max_steps: 50000
   gradient_clip_val: 1.0
   accumulate_grad_batches: 1

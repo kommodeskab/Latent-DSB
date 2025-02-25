@@ -61,6 +61,7 @@ class Mimi(MimiModel):
     def encode(self, x : Tensor) -> Tensor:
         # x is audio with shape (batch_size, 1, seq_len)
         # we have to make it into a list of lists
+        assert x.size(1) == 1, "Audio should have shape (batch_size, 1, seq_len)"
         raw_audio = x.squeeze(1).tolist()
         inputs = self.feature_extractor(
             raw_audio=raw_audio,

@@ -1,7 +1,7 @@
-_target_: src.lightning_modules.FM
+_target_: src.lightning_modules.Classifier
 
 model:
-  _target_: src.networks.EMNISTUNet
+  _target_: src.networks.EMNISTClassifier
 
 encoder_decoder:
   _target_: src.networks.IdentityEncoderDecoder
@@ -11,14 +11,12 @@ optimizer:
   _partial_: True
   lr: 1.e-4
 
-num_timesteps: 100
-
 lr_scheduler:
   scheduler:
     _target_: torch.optim.lr_scheduler.OneCycleLR
     _partial_: True
     max_lr: 1.e-3
     total_steps: 50000
-  monitor: 'val_loss'
+  monitor: 'loss/val'
   interval: 'step'
   frequency: 1

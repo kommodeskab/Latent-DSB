@@ -69,7 +69,7 @@ def filter_dict_by_prefix(d : dict[str, Any], prefixs : list[str], remove_prefix
 def what_logs_to_delete():
     project_names = wandb.Api().projects()
     project_names = [project.name for project in project_names]
-    print("It is safe to delete the following logs:")
+    print("It is save to delete the following folders:")
     for project_name in project_names:
         if not os.path.exists(f"logs/{project_name}"):
             continue
@@ -81,7 +81,10 @@ def what_logs_to_delete():
         
         for local_run_id in local_run_ids:
             if local_run_id not in run_ids:
+                # delete the folder
                 print(f"logs/{project_name}/{local_run_id}")
+    print("Done")
+    
                 
 if __name__ == "__main__":
     what_logs_to_delete()

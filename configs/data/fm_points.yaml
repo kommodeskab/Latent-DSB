@@ -1,0 +1,5 @@
+_target_: src.data_modules.BaseDM
+dataset:
+  _target_: src.dataset.Points
+batch_size: 128
+pin_memory: False

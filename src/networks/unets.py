@@ -24,7 +24,7 @@ class EMNISTUNet(UNet2D):
         args = {
             "in_channels": 1,
             "out_channels": 1,
-            "sample_size": 4,
+            "sample_size": 16,
             "down_block_types": ["DownBlock2D", "DownBlock2D", "DownBlock2D"],
             "up_block_types": ["UpBlock2D", "UpBlock2D", "UpBlock2D"],
             "block_out_channels": [32, 32, 64],
@@ -38,7 +38,7 @@ class SmallUNet(UNet2D):
         args = {
             "in_channels": 1,
             "out_channels": 1,
-            "sample_size": 32,
+            "sample_size": 16,
             "down_block_types": ["DownBlock2D", "DownBlock2D", "DownBlock2D"],
             "up_block_types": ["UpBlock2D", "UpBlock2D", "UpBlock2D"],
             "block_out_channels": [64, 128, 256],
@@ -55,7 +55,7 @@ class MediumUNet(UNet2D):
             "sample_size": 16,
             "down_block_types": ["DownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D"],
             "up_block_types": ["AttnUpBlock2D", "AttnUpBlock2D", "AttnUpBlock2D", "UpBlock2D"],
-            "block_out_channels": [256, 384, 512, 640],
+            "block_out_channels": [320, 384, 512, 640],
             "dropout": 0.1,
         }
         args.update(kwargs)

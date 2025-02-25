@@ -16,6 +16,7 @@ import time
 from .mixins import EncoderDecoderMixin
 from .schedulers import DSBScheduler
 from tqdm import tqdm
+from torch_ema import ExponentialMovingAverage
 
 class DSB(BaseLightningModule, EncoderDecoderMixin):
     def __init__(
@@ -36,6 +37,8 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         lr_multiplier : float = 1.0,
         added_noise : float = 0.0,
         latent_std : float = 1.0,
+        ema_decay : float = 0.999,
+        **kwargs,
     ):
         super().__init__()
         self.automatic_optimization = False
@@ -63,11 +66,16 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         self.partial_optimizer = optimizer
         self.cache = Cache(max_size = cache_max_size)
         
+        self.forward_ema = ExponentialMovingAverage(self.forward_model.parameters(), decay=ema_decay)
+        self.backward_ema = ExponentialMovingAverage(self.backward_model.parameters(), decay=ema_decay)
+        
     @property
     def datamodule(self) -> BaseDSBDM:
         return self.trainer.datamodule
 
     def on_fit_start(self) -> None:
+        self.forward_ema.to(self.device)
+        self.backward_ema.to(self.device)
         self.datamodule.training_backward = self.training_backward
         assert self.trainer.reload_dataloaders_every_n_epochs == 1, "The trainer must reload dataloaders every epoch for the DSB algorithm to work."
 
@@ -100,11 +108,15 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         checkpoint['DSB_iteration'] = self.DSB_iteration
         checkpoint['curr_num_iters'] = self.curr_num_iters
         checkpoint['training_backward'] = self.training_backward
+        checkpoint['forward_ema'] = self.forward_ema.state_dict()
+        checkpoint['backward_ema'] = self.backward_ema.state_dict()
         
     def on_load_checkpoint(self, checkpoint):
         self.DSB_iteration = checkpoint['DSB_iteration']
         self.curr_num_iters = checkpoint['curr_num_iters']
         self.training_backward = checkpoint['training_backward']
+        self.forward_ema.load_state_dict(checkpoint['forward_ema'])
+        self.backward_ema.load_state_dict(checkpoint['backward_ema'])
         
     def _reset_optimizers(self) -> None:
         backward_opt, forward_opt = self.configure_optimizers()
@@ -117,12 +129,6 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         self.trainer.optimizers[0] = backward_opt
         self.trainer.optimizers[1] = forward_opt
 
-    def forward_call(self, x : Tensor, k: IntTensor | int) -> Tensor:
-        return self.forward_model(x, k)
-    
-    def backward_call(self, x : Tensor, k : IntTensor | int) -> Tensor:
-        return self.backward_model(x, k)
-    
     @torch.no_grad()
     def sample(self, x_start : Tensor, forward : bool = True, return_trajectory : bool = False, use_initial_forward_sampling : bool = False, show_progress : bool = False) -> Tensor:
         if use_initial_forward_sampling:
@@ -143,16 +149,21 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         self.eval()
         xk = x_start
         trajectory = [xk]
+        model, ema = self.get_model(backward = not forward)
         for k in tqdm(reversed(self.scheduler.timesteps), desc='Sampling', disable=not show_progress):
-            model_output = self.forward_call(xk, k) if forward else self.backward_call(xk, k)
+            ks = torch.full((xk.size(0),), k, dtype=torch.int64, device=xk.device)
+            with ema.average_parameters():
+                model_output = model(xk, ks)
             xk = self.scheduler.step(xk, k, model_output)
             trajectory.append(xk)
             
         trajectory = torch.stack(trajectory, dim=0)
         return trajectory if return_trajectory else trajectory[-1]
     
-    def get_model(self, backward : bool) -> Module:
-        return self.backward_model if backward else self.forward_model
+    def get_model(self, backward : bool) -> Tuple[Module, ExponentialMovingAverage]:
+        model = self.backward_model if backward else self.forward_model
+        ema = self.backward_ema if backward else self.forward_ema
+        return model, ema
     
     def get_optimizer(self, backward : bool) -> Optimizer:
         backward_opt, forward_opt = self.optimizers()
@@ -177,10 +188,10 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         time_to_sample = time.time() - t1
         self.cache.add(trajectory)
         
-        model = self.get_model(backward = training_backward)
+        model, _ = self.get_model(backward = training_backward)
         optimizer = self.get_optimizer(backward = training_backward)
                 
-        for i in range(self.hparams.cache_num_iters):
+        for _ in range(self.hparams.cache_num_iters):
             trajectory = self.cache.sample()
             xt, timesteps, target = self.scheduler.sample_batch(trajectory)
             model_output = model(xt, timesteps)
@@ -215,13 +226,14 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         is_backward = self.training_backward
         batch = self.encode(batch)
         use_initial_forward_sampling = is_backward and self.DSB_iteration == 1
-        model = self.get_model(is_backward)
+        model, ema = self.get_model(is_backward)
         
         if (is_backward and dataloader_idx == 0) or (not is_backward and dataloader_idx == 1):
             trajectory = self.sample(batch, forward = is_backward, return_trajectory = True, use_initial_forward_sampling=use_initial_forward_sampling)
             for _ in range(self.hparams.cache_num_iters):
                 xk, timesteps, target = self.scheduler.sample_batch(trajectory)
-                model_output = model(xk, timesteps)
+                with ema.average_parameters():
+                    model_output = model(xk, timesteps)
                 loss = mse_loss(model_output, target)
                 self.log_dict({
                     self._get_loss_name(backward = is_backward, is_training = False): loss,

@@ -11,4 +11,4 @@ x1_dataset:
   on_or_off: 0
   img_size: 128
   augment: True
-batch_size: 128
+batch_size: 64

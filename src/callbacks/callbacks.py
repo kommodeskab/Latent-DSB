@@ -1,16 +1,17 @@
 from .utils import get_batches, get_batch_from_dataset
-from src.lightning_modules import DSB, FM, VAE
+from src.lightning_modules import DSB, FM, VAE, Classifier
 import matplotlib.pyplot as plt
 import wandb
 from pytorch_lightning import Callback, Trainer
 from torch import Tensor
 import torch
 from matplotlib.figure import Figure
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, Subset
 import numpy as np
 from pytorch_lightning.loggers import WandbLogger
+from typing import Literal
 
-def plot_samples(samples : Tensor, height : int | None = None, width : int | None = None) -> Figure:
+def plot_images(samples : Tensor, height : int | None = None, width : int | None = None) -> Figure:
     # assume samples have shape (k, c, h, w)
     # and have values between -1 and 1
     if height is None and width is None:
@@ -27,6 +28,30 @@ def plot_samples(samples : Tensor, height : int | None = None, width : int | Non
             ax = axs[i, j] if height > 1 else axs[j]
             ax.imshow(samples[i * height + j], cmap=cmap)
             ax.axis('off')
+    return fig
+
+def plot_points(points : list[Tensor], keys : list[str], colors : list[str]) -> Figure:
+    fig, ax = plt.subplots()
+    for point, color, key in zip(points, colors, keys):
+        dim = point.dim()
+        if dim == 2:
+            # points have shape (n, 2)
+            ax.scatter(point[:, 0], point[:, 1], c=color, label=key, s=10)
+        elif dim == 3:
+            # points have shape (num_steps, n, 2)
+            # visualize the trajectory for each point
+            # only visualize some of the trajectory
+            n_points = 7
+            indices = torch.linspace(0, point.size(0) - 1, n_points).round().to(torch.int64)
+            point = point[indices]
+
+            batch_size = point.size(1)
+            for i in range(batch_size):
+                label = key if i == 0 else None
+                # only visualize some of the points
+                ax.scatter(point[:, i, 0], point[:, i, 1], c=color, label=label, s=1, alpha=0.3)
+                
+    ax.legend()
     return fig
 
 def visualize_encodings(encodings : Tensor) -> tuple[Figure, Figure]:
@@ -74,7 +99,7 @@ class VAECB(Callback):
         
         dataset = trainer.datamodule.val_dataset
         self.x0 = get_batch_from_dataset(dataset, batch_size=16).to(device)
-        fig = plot_samples(self.x0.cpu())
+        fig = plot_images(self.x0.cpu())
         logger.log_image(
             key = "Initial samples",
             images = [wandb.Image(fig)],
@@ -94,7 +119,7 @@ class VAECB(Callback):
         
         x0 = self.x0
         reconstructed = pl_module.encode_decode(x0)
-        fig = plot_samples(reconstructed.cpu())
+        fig = plot_images(reconstructed.cpu())
         logger.log_image(
             key = "Reconstructed samples",
             images = [wandb.Image(fig)],
@@ -103,7 +128,7 @@ class VAECB(Callback):
         plt.close('all')
         
 class DiffusionCBMixin:
-    def log_line_series(self, trainer : Trainer, pl_module : FM | DSB):
+    def log_line_series(self, pl_module : FM | DSB):
         logger = pl_module.logger
         gammas = pl_module.scheduler.gammas.tolist()
         gammas_bar = pl_module.scheduler.gammas_bar.tolist()
@@ -132,9 +157,7 @@ class DiffusionCBMixin:
         )
     
 class FlowMatchingCB(Callback, DiffusionCBMixin):
-    def __init__(
-        self,
-        ):
+    def __init__(self):
         super().__init__()
         
     def on_train_start(self, trainer : Trainer, pl_module : FM):
@@ -144,48 +167,105 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
         dataset = trainer.datamodule.val_dataset
         dataset_batch = get_batch_from_dataset(dataset, batch_size=16)
         x0, x1 = dataset_batch
+        dim = x0.dim()
+        if dim == 2:
+            self.data_type = "points"
+            # if we are working with points, we might aswell load some more
+            dataset_batch = get_batch_from_dataset(dataset, batch_size=256)
+            x0, x1 = dataset_batch
+        elif dim == 3:
+            self.data_type = "audio"
+            self.sample_rate = pl_module.encoder_decoder.sample_rate
+        elif dim == 4:
+            self.data_type = "image"
+            
         self.x1_encoded = pl_module.encode(x1.to(device))
-        
-        fig_x0 = plot_samples(x0)
-        fig_x1 = plot_samples(x1)
-        logger.log_image(
-            key = "Initial samples",
-            images = [wandb.Image(fig_x0), wandb.Image(fig_x1)],
-            caption = ["x0", "x1"],
-        )
-        
         encoded = pl_module.encode(x0.to(device), add_noise=True)
         decoded = pl_module.decode(encoded).cpu()
-
-        fig = plot_samples(decoded)
-        logger.log_image(
-            key = "Initial decoded (with noise)",
-            images = [wandb.Image(fig)],
-        )
-
+        
+        if self.data_type == "image":
+            fig_x0 = plot_images(x0)
+            fig_x1 = plot_images(x1)
+            logger.log_image(
+                key = "Initial samples",
+                images = [wandb.Image(fig_x0), wandb.Image(fig_x1)],
+                caption = ["x0", "x1"],
+            )
+            fig = plot_images(decoded)
+            logger.log_image(
+                key = "Initial decoded (with noise)",
+                images = [wandb.Image(fig)],
+            )
+            self.visualize_latent_space(logger, encoded)
+            
+        elif self.data_type == "points":
+            fig = plot_points([x0, x1], keys=["x0", "x1"], colors=['r', 'g'])
+            logger.log_image(
+                key = "Initial samples",
+                images = [wandb.Image(fig)],
+            )
+            
+        elif self.data_type == "audio":
+            logger.log_audio(
+                key = "Initial samples",
+                audios=x0.tolist() + x1.tolist(),
+                sample_rate = self.sample_rate,
+            )
+            self.visualize_latent_space(logger, encoded)
+            
         original_size = x0.flatten(1).size(1)
         latent_size = encoded.flatten(1).size(1)
         logger.log_metrics({
             "original_size": original_size,
             "latent_size": latent_size,
         })
-                
-        self.visualize_latent_space(logger, encoded)
-        self.log_line_series(trainer, pl_module)
+        
+        self.log_line_series(pl_module)
         plt.close('all')
         
     def on_validation_end(self, trainer : Trainer, pl_module : FM):
         logger = pl_module.logger
-        x1_encoded = self.x1_encoded
         
-        samples = pl_module.sample(x1_encoded)
-        samples = pl_module.decode(samples).cpu()
-        fig = plot_samples(samples)
-        logger.log_image(
-            key = "Samples",
-            images = [wandb.Image(fig)],
-            step = pl_module.global_step,
-        )
+        x1_encoded = self.x1_encoded        
+        trajectory = pl_module.sample(x1_encoded, return_trajectory=True)
+        
+        final_samples = trajectory[-1]
+        initial_samples = trajectory[0]
+        x0_hat = pl_module.decode(final_samples).cpu()
+        x1 = pl_module.decode(initial_samples).cpu()
+        
+        if self.data_type == 'image':
+            fig = plot_images(x0_hat)
+            logger.log_image(
+                key = "Samples",
+                images = [wandb.Image(fig)],
+                step = pl_module.global_step,
+            )
+            selected_idxs = torch.linspace(0, trajectory.size(0) - 1, 5).round().to(torch.int64)
+            trajectory = trajectory[selected_idxs, :5].flatten(0, 1)
+            trajectory = pl_module.decode(trajectory).cpu()
+            fig = plot_images(trajectory)
+            logger.log_image(
+                key = "Trajectory",
+                images = [wandb.Image(fig)],
+                step = pl_module.global_step,
+            )
+        
+        elif self.data_type == "points":
+            fig = plot_points([trajectory.cpu(), x0_hat, x1], keys=["trajectory", "x0_hat", "x1"], colors=['b', 'r', 'g'])
+            logger.log_image(
+                key = "Samples",
+                images = [wandb.Image(fig)],
+                step = pl_module.global_step,
+            )
+            
+        elif self.data_type == "audio":
+            logger.log_audio(
+                key = "Samples",
+                audios=x0_hat.tolist(),
+                sample_rate = self.sample_rate,
+                step = pl_module.global_step,
+            )
         
         plt.close('all')
 
@@ -202,7 +282,7 @@ class TestFMOnDatasetCB(Callback):
         x0 = get_batch_from_dataset(dataset, batch_size=16).to(device)
         self.x0_encoded = pl_module.encode(x0, add_noise=True)
         x0_decoded = pl_module.decode(self.x0_encoded)
-        fig = plot_samples(x0_decoded.cpu())
+        fig = plot_images(x0_decoded.cpu())
         logger.log_image(
             key = "Initial decoded for test dataset",
             images = [wandb.Image(fig)],
@@ -215,7 +295,7 @@ class TestFMOnDatasetCB(Callback):
         x0_encoded = self.x0_encoded
         samples = pl_module.sample(x0_encoded)
         samples = pl_module.decode(samples).cpu()
-        fig = plot_samples(samples)
+        fig = plot_images(samples)
         logger.log_image(
             key = "Samples for test dataset",
             images = [wandb.Image(fig)],
@@ -243,8 +323,8 @@ class DSBCB(Callback, DiffusionCBMixin):
         x0, x1 = get_batches(trainer, batch_size=16, shuffle=False)
                 
         # plot the initial samples
-        x0_fig = plot_samples(x0.cpu())
-        x1_fig = plot_samples(x1.cpu())
+        x0_fig = plot_images(x0.cpu())
+        x1_fig = plot_images(x1.cpu())
         
         logger.log_image(
             key = "Initial samples",
@@ -264,8 +344,8 @@ class DSBCB(Callback, DiffusionCBMixin):
         x0_decoded = pl_module.decode(x0_encoded)
         x1_decoded = pl_module.decode(x1_encoded)
         
-        fig_1 = plot_samples(x0_decoded.cpu())
-        fig_2 = plot_samples(x1_decoded.cpu())
+        fig_1 = plot_images(x0_decoded.cpu())
+        fig_2 = plot_images(x1_decoded.cpu())
         
         logger.log_image(
             key = "Initial decoded",
@@ -284,7 +364,7 @@ class DSBCB(Callback, DiffusionCBMixin):
         
         sampled_trajectory = self.sample_from_trajectory(initial_forward_process, 5, 5)
         sampled_trajectory = pl_module.decode(sampled_trajectory)
-        sampled_trajectory_fig = plot_samples(sampled_trajectory.cpu())
+        sampled_trajectory_fig = plot_images(sampled_trajectory.cpu())
         
         logger.log_image(
             key = "Initial forward process",
@@ -293,7 +373,7 @@ class DSBCB(Callback, DiffusionCBMixin):
         )
         
         self.visualize_latent_space(logger, x0_encoded)
-        self.log_line_series(trainer, pl_module)
+        self.log_line_series(pl_module)
         plt.close('all')
         
     def on_validation_end(self, trainer : Trainer, pl_module : DSB):
@@ -312,7 +392,7 @@ class DSBCB(Callback, DiffusionCBMixin):
         )
         final_samples = samples[-1]
         final_samples = pl_module.decode(final_samples) # shape: (16, c, h, w)
-        samples_fig = plot_samples(final_samples.cpu())
+        samples_fig = plot_images(final_samples.cpu())
 
         caption = "forward" if not is_backward else "backward"
         logger.log_image(
@@ -323,7 +403,7 @@ class DSBCB(Callback, DiffusionCBMixin):
         
         sampled_trajectory = self.sample_from_trajectory(samples, 5, 5)
         sampled_trajectory = pl_module.decode(sampled_trajectory)
-        sampled_trajectory_fig = plot_samples(sampled_trajectory.cpu())
+        sampled_trajectory_fig = plot_images(sampled_trajectory.cpu())
         logger.log_image(
             key = f"iteration_{iteration}/{caption}_trajectory",
             images = [wandb.Image(sampled_trajectory_fig)],
@@ -331,3 +411,27 @@ class DSBCB(Callback, DiffusionCBMixin):
         )
         plt.close('all')
         
+        
+class ClassificationCB(Callback):
+    def __init__(self):
+        super().__init__()
+        
+    def on_train_start(self, trainer : Trainer, pl_module : Classifier):
+        dataset = trainer.datamodule.val_dataset
+        batch = get_batch_from_dataset(dataset, batch_size=32)
+        x0, x1 = batch
+        x0, x1 = x0.to(pl_module.device), x1.to(pl_module.device)
+        self.x0_encoded = pl_module.encoder_decoder.encode(x0)
+        self.x1_encoded = pl_module.encoder_decoder.encode(x1)
+        
+        x0_decoded = pl_module.encoder_decoder.decode(self.x0_encoded)
+        x1_decoded = pl_module.encoder_decoder.decode(self.x1_encoded)
+        
+        fig_x0 = plot_images(x0_decoded.cpu()[:16])
+        fig_x1 = plot_images(x1_decoded.cpu()[:16])
+        pl_module.logger.log_image(
+            key = "Initial samples",
+            images = [wandb.Image(fig_x0), wandb.Image(fig_x1)],
+            caption = ["x0", "x1"],
+        )
+        plt.close('all')

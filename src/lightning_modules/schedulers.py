@@ -24,13 +24,7 @@ class BaseScheduler:
         gammas_bar[-1] = 1 - 1e-4
         var = 2 * gammas[1:] * gammas_bar[:-1] / gammas_bar[1:]
         var = torch.cat([torch.tensor([0]), var, torch.tensor([0])], 0)
-        if not hasattr(self, 'original_gammas_bar'):
-            timesteps = torch.arange(1, num_timesteps + 1)
-        else:
-            # for each gamma, find the index of the original gamma that is closest to it
-            timesteps = torch.tensor([torch.argmin(torch.abs(self.original_gammas_bar[1:] - gamma_bar)) for gamma_bar in gammas_bar[1:]]) + 1
-            timesteps = timesteps.clamp(min = 1)
-        
+        timesteps = torch.arange(1, num_timesteps + 1)
         self.timesteps = timesteps
         self.gammas = gammas
         self.gammas_bar = gammas_bar
@@ -67,11 +61,10 @@ class FMScheduler(BaseScheduler):
         """
         Predict x_t | x_{t + 1}
         """
-        t_plus_1 = torch.where(self.timesteps == t_plus_1)[0].min() + 1
         gammas_bar = self.gammas_bar.to(xt_plus_1.device)
         delta_t = gammas_bar[t_plus_1] - gammas_bar[t_plus_1 - 1]
-        mu = xt_plus_1 - delta_t * model_output
-        return mu
+        xt = xt_plus_1 - delta_t * model_output
+        return xt
     
 class DSBScheduler(BaseScheduler):
     def __init__(
@@ -146,7 +139,6 @@ class I2Scheduler(BaseScheduler):
         return xt, timesteps, target
     
     def step(self, xt_plus_1 : Tensor, t_plus_1 : int, model_output : Tensor) -> Tensor:
-        t_plus_1 = torch.where(self.timesteps == t_plus_1)[0].min() + 1
         device = xt_plus_1.device
         
         sigmas = self.gammas_bar.to(device)

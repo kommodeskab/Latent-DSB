@@ -1,0 +1,2 @@
+classification:
+  _target_: src.callbacks.ClassificationCB

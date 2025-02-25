@@ -54,22 +54,18 @@ class RandomPairDataset(Dataset):
     def __init__(self, x0_dataset : Dataset, x1_dataset : Dataset | None = None):
         self.x0_dataset = x0_dataset
         self.x1_dataset = x1_dataset
-        # make a random list of the numbers 0, 1, .. len(x1_dataset) -1
-        if self.x1_dataset is not None:
-            x1_dataset_indices = list(range(len(self.x1_dataset)))
-            random.shuffle(x1_dataset_indices)
-            self.x1_dataset_indices = x1_dataset_indices
-        
+                
     def __len__(self):
         return len(self.x0_dataset)
     
     def __getitem__(self, idx):
         x0_sample = self.x0_dataset[idx]
         if self.x1_dataset is not None:
-            rand_idx = self.x1_dataset_indices[idx % len(self.x1_dataset)]
+            rand_idx = random.randint(0, len(self.x1_dataset) - 1)
             x1_sample = self.x1_dataset[rand_idx]
         else:
             x1_sample = torch.randn_like(x0_sample)
+            
         return x0_sample, x1_sample
 
 class FlowMatchingDM(BaseDM):

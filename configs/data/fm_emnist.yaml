@@ -7,4 +7,4 @@ x1_dataset:
   _target_: src.dataset.EMNISTNoLabel
   split: 'digits'
   img_size: 16
-batch_size: 128
+batch_size: 64
