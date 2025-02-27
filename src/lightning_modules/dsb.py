@@ -1,6 +1,6 @@
 import torch
 from typing import Tuple, Literal
-from torch import Tensor, IntTensor
+from torch import Tensor
 from src.lightning_modules.baselightningmodule import BaseLightningModule
 from src.networks.encoders import BaseEncoderDecoder
 from torch.optim import Optimizer
@@ -11,12 +11,13 @@ from src.lightning_modules.utils import Cache
 from src.lightning_modules.fm import FM
 from torch.nn.functional import mse_loss
 from torch.nn import Module
-from src.data_modules.base_dm import BaseDSBDM
 import time
 from .mixins import EncoderDecoderMixin
 from .schedulers import DSBScheduler
 from tqdm import tqdm
 from torch_ema import ExponentialMovingAverage
+from src.utils import get_ckpt_path
+from torch.optim.lr_scheduler import OneCycleLR
 
 class DSB(BaseLightningModule, EncoderDecoderMixin):
     def __init__(
@@ -34,9 +35,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         target : Literal["terminal", "flow"] = "terminal",
         max_dsb_iterations : int | None = 10,
         max_norm : float = float("inf"),
-        lr_multiplier : float = 1.0,
         added_noise : float = 0.0,
-        latent_std : float = 1.0,
         ema_decay : float = 0.999,
         **kwargs,
     ):
@@ -48,7 +47,6 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         self.curr_num_iters = 0
         self.DSB_iteration = 1
         self.added_noise = added_noise
-        self.latent_std = latent_std
         
         assert 0 < gamma_frac <= 1, "Gamma fraction must be in the range (0, 1]"
         self.scheduler = DSBScheduler(num_steps, gamma_frac, target)
@@ -60,7 +58,6 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         # most often, we want to utilize a pretrained diffusion model for the first iterations
         if use_pretrained_flow:
             self.fmmodel = FM(model)
-            self.fmmodel.scheduler.set_timesteps(num_steps, gamma_frac)
         
         self.encoder_decoder = encoder_decoder
         self.partial_optimizer = optimizer
@@ -69,16 +66,10 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         self.forward_ema = ExponentialMovingAverage(self.forward_model.parameters(), decay=ema_decay)
         self.backward_ema = ExponentialMovingAverage(self.backward_model.parameters(), decay=ema_decay)
         
-    @property
-    def datamodule(self) -> BaseDSBDM:
-        return self.trainer.datamodule
-
     def on_fit_start(self) -> None:
         self.forward_ema.to(self.device)
         self.backward_ema.to(self.device)
-        self.datamodule.training_backward = self.training_backward
-        assert self.trainer.reload_dataloaders_every_n_epochs == 1, "The trainer must reload dataloaders every epoch for the DSB algorithm to work."
-
+        
     def _has_converged(self) -> bool:
         dsb_iters = self.DSB_iteration
         curr_iters = self.curr_num_iters
@@ -90,7 +81,6 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         if self._has_converged():
             self.curr_num_iters = 0
             self.training_backward = not self.training_backward
-            self.datamodule.training_backward = self.training_backward
             self.cache.clear()
 
             if self.training_backward: 
@@ -99,7 +89,6 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
                 save_dir = f"logs/{self.logger.name}/{self.logger.version}/checkpoints/DSB_iteration_{self.DSB_iteration}.ckpt"
                 self.trainer.save_checkpoint(save_dir)
                 print(f"Saved checkpoint at {save_dir}")
-
                 self.DSB_iteration += 1
                 
             return -1
@@ -119,15 +108,13 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         self.backward_ema.load_state_dict(checkpoint['backward_ema'])
         
     def _reset_optimizers(self) -> None:
-        backward_opt, forward_opt = self.configure_optimizers()
-        lr = backward_opt.param_groups[0]['lr']
-        new_lr = lr * self.hparams.lr_multiplier ** (self.DSB_iteration - 1)
-        for param_group in backward_opt.param_groups:
-            param_group['lr'] = new_lr
-        for param_group in forward_opt.param_groups:
-            param_group['lr'] = new_lr
+        optims, schedulers = self.configure_optimizers()
+        backward_opt, forward_opt = optims
+        backward_scheduler, forward_scheduler = schedulers
         self.trainer.optimizers[0] = backward_opt
         self.trainer.optimizers[1] = forward_opt
+        self.trainer.lr_schedulers[0]['scheduler'] = backward_scheduler
+        self.trainer.lr_schedulers[1]['scheduler'] = forward_scheduler
 
     @torch.no_grad()
     def sample(self, x_start : Tensor, forward : bool = True, return_trajectory : bool = False, use_initial_forward_sampling : bool = False, show_progress : bool = False) -> Tensor:
@@ -146,10 +133,10 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
                 return trajectory if return_trajectory else x
 
         # otherwise, we sample using the diffusion schrödinger bridge
-        self.eval()
         xk = x_start
         trajectory = [xk]
         model, ema = self.get_model(backward = not forward)
+        model.eval()
         for k in tqdm(reversed(self.scheduler.timesteps), desc='Sampling', disable=not show_progress):
             ks = torch.full((xk.size(0),), k, dtype=torch.int64, device=xk.device)
             with ema.average_parameters():
@@ -165,9 +152,13 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         ema = self.backward_ema if backward else self.forward_ema
         return model, ema
     
-    def get_optimizer(self, backward : bool) -> Optimizer:
-        backward_opt, forward_opt = self.optimizers()
-        return backward_opt if backward else forward_opt
+    def get_optimizer(self, backward : bool) -> tuple[Optimizer, OneCycleLR]:
+        backward_optim, forward_optim = self.optimizers()
+        backward_scheduler, forward_scheduler = self.lr_schedulers()
+        if backward:
+            return backward_optim, backward_scheduler
+        else:
+            return forward_optim, forward_scheduler
 
     def _get_loss_name(self, backward : bool, is_training : bool):
         iteration = self.DSB_iteration
@@ -177,6 +168,9 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
     
     def training_step(self, batch : Tensor, batch_idx : int) -> Tensor:
         training_backward = self.training_backward
+        
+        x0, x1 = batch
+        batch = x0 if training_backward else x1
         
         # if we are in the very first iteration, we use the initial sampling
         use_initial_forward_sampling = training_backward and self.DSB_iteration == 1
@@ -189,7 +183,8 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         self.cache.add(trajectory)
         
         model, _ = self.get_model(backward = training_backward)
-        optimizer = self.get_optimizer(backward = training_backward)
+        model.train()
+        optimizer, lr_scheduler = self.get_optimizer(backward = training_backward)
                 
         for _ in range(self.hparams.cache_num_iters):
             trajectory = self.cache.sample()
@@ -206,6 +201,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
             norm = grad_norm(model, norm_type=2).get('grad_2.0_norm_total', 0)
             self.clip_gradients(optimizer, self.hparams.max_norm, "norm")
             optimizer.step()
+            lr_scheduler.step()
             
             self.curr_num_iters += 1
 
@@ -221,26 +217,45 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         }, on_step=True)
 
     @torch.no_grad()
-    def validation_step(self, batch : Tensor, batch_idx : int, dataloader_idx : int) -> None:
+    def validation_step(self, batch : Tensor, batch_idx : int) -> None:
         torch.manual_seed(0)
         is_backward = self.training_backward
+        x0, x1 = batch
+        batch = x0 if is_backward else x1
         batch = self.encode(batch)
         use_initial_forward_sampling = is_backward and self.DSB_iteration == 1
         model, ema = self.get_model(is_backward)
+        model.eval()
         
-        if (is_backward and dataloader_idx == 0) or (not is_backward and dataloader_idx == 1):
-            trajectory = self.sample(batch, forward = is_backward, return_trajectory = True, use_initial_forward_sampling=use_initial_forward_sampling)
-            for _ in range(self.hparams.cache_num_iters):
-                xk, timesteps, target = self.scheduler.sample_batch(trajectory)
-                with ema.average_parameters():
-                    model_output = model(xk, timesteps)
-                loss = mse_loss(model_output, target)
-                self.log_dict({
-                    self._get_loss_name(backward = is_backward, is_training = False): loss,
-                }, on_step=False, on_epoch=True, add_dataloader_idx=False)
+        trajectory = self.sample(batch, forward = is_backward, return_trajectory = True, use_initial_forward_sampling=use_initial_forward_sampling)
+        for _ in range(self.hparams.cache_num_iters):
+            xk, timesteps, target = self.scheduler.sample_batch(trajectory)
+            with ema.average_parameters():
+                model_output = model(xk, timesteps)
+            loss = mse_loss(model_output, target)
+            self.log_dict({
+                self._get_loss_name(backward = is_backward, is_training = False): loss,
+            }, on_step=False, on_epoch=True)
     
     def configure_optimizers(self) -> Tuple[Optimizer, Optimizer]:
         # make the optimizers
         backward_opt = self.partial_optimizer(self.backward_model.parameters())
         forward_opt = self.partial_optimizer(self.forward_model.parameters())
-        return backward_opt, forward_opt
+        lr = backward_opt.param_groups[0]['lr']
+        
+        backward_scheduler = {
+            'scheduler': OneCycleLR(
+                backward_opt, max_lr=10*lr, 
+                total_steps=self.hparams.max_iterations
+                ),
+            'name': 'backward_lr'
+        }
+        forward_scheduler = {
+            'scheduler': OneCycleLR(
+                forward_opt, max_lr=10*lr, 
+                total_steps=self.hparams.max_iterations
+                ),
+            'name': 'forward_lr'
+        }
+        
+        return [backward_opt, forward_opt], [backward_scheduler, forward_scheduler]

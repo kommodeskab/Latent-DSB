@@ -1,7 +1,7 @@
 _target_: src.lightning_modules.DSB
 
 model:
-  _target_: src.networks.SmallUNet
+  _target_: src.networks.EMNISTUNet
   sample_size: 16
 
 encoder_decoder:

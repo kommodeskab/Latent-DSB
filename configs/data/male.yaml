@@ -1,9 +1,0 @@
-_target_: src.data_modules.BaseDM
-dataset:
-  _target_: src.dataset.CelebADataset
-  attr: 20
-  on_or_off: 1
-  img_size: 128
-  augment: True
-batch_size: 64
-num_workers: 4

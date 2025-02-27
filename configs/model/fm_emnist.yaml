@@ -12,6 +12,7 @@ optimizer:
   lr: 1.e-4
 
 num_timesteps: 100
+target: 'terminal'
 
 lr_scheduler:
   scheduler:

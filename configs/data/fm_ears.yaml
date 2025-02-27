@@ -1,0 +1,10 @@
+_target_: src.data_modules.FlowMatchingDM
+x0_dataset:
+  _target_: src.dataset.EarsGender
+  gender: 'male'
+  length_seconds: 2.5
+x1_dataset:
+  _target_: src.dataset.EarsGender
+  gender: 'female'
+  length_seconds: 2.5
+batch_size: 64

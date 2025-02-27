@@ -11,6 +11,7 @@ from tqdm import tqdm
 from .mixins import EncoderDecoderMixin
 from src.lightning_modules.schedulers import FMScheduler
 from torch_ema import ExponentialMovingAverage
+from typing import Literal
 
 class FM(BaseLightningModule, EncoderDecoderMixin):
     def __init__(
@@ -66,7 +67,7 @@ class FM(BaseLightningModule, EncoderDecoderMixin):
         with self.ema.average_parameters():
             loss = self.common_step(x0, x1)
         
-        self.log('val_loss', loss)
+        self.log('val_loss', loss, prog_bar=True)
         return loss
     
     def on_before_zero_grad(self, optimizer):
@@ -77,6 +78,7 @@ class FM(BaseLightningModule, EncoderDecoderMixin):
         
     def on_load_checkpoint(self, checkpoint):
         self.ema.load_state_dict(checkpoint['ema'])
+        self.ema.copy_to(self.model.parameters())
     
     @torch.no_grad()
     def sample(self, x_start : Tensor, return_trajectory : bool = False, show_progress : bool = False) -> Tensor:

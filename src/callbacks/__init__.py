@@ -1,1 +1,1 @@
-from .callbacks import FlowMatchingCB, VAECB, DSBCB, TestFMOnDatasetCB, ClassificationCB
+from .callbacks import FlowMatchingCB, VAECB, DSBCB, ClassificationCB

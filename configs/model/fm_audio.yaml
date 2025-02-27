@@ -2,19 +2,18 @@ _target_: src.lightning_modules.FM
 
 model:
   _target_: src.networks.MediumUNet
-  dropout: 0.2
+  in_channels: 1
+  out_channels: 1
 
 encoder_decoder:
-  _target_: src.networks.StableDiffusionXL
+  _target_: src.networks.PretrainedMimi
 
 optimizer:
   _target_: torch.optim.AdamW
   _partial_: True
   lr: 1.e-4
-  weight_decay: 0.1
 
-added_noise: 0.001
-target: 'terminal'
+added_noise: 0.0
 
 lr_scheduler:
   scheduler:

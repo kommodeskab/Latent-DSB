@@ -38,7 +38,7 @@ class ImageDataset(BaseDataset):
                 
         if augment:
             self.transform = transforms.Compose([
-                transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
+                transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2),
                 transforms.RandomHorizontalFlip(),
                 transforms.Pad(padding, padding_mode='reflect'),
                 transforms.RandomRotation(10),

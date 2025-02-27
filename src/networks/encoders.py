@@ -32,10 +32,11 @@ class CelebAVQ:
     def __new__(cls): return PretrainedVQ("CompVis/ldm-celebahq-256", subfolder="vqvae", revision=None, variant=None)
     
 class Autoencoder(AutoencoderKL):
+    latent_std : float = 1.0
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-    def encode(self, x : Tensor) -> Tensor: return super().encode(x).latent_dist.mean
-    def decode(self, h : Tensor) -> Tensor: return super().decode(h).sample
+    def encode(self, x : Tensor) -> Tensor: return super().encode(x).latent_dist.mean / self.latent_std
+    def decode(self, h : Tensor) -> Tensor: return super().decode(self.latent_std * h).sample
     
 class PretrainedVAE:
     def __new__(cls, model_id : str, **kwargs) -> Autoencoder:
@@ -46,7 +47,9 @@ class PretrainedVAE:
     
 class StableDiffusionXL:
     def __new__(cls):
-        return PretrainedVAE("stabilityai/stable-diffusion-xl-base-1.0", subfolder="vae", revision=None, variant=None)
+        encoder = PretrainedVAE("stabilityai/stable-diffusion-xl-base-1.0", subfolder="vae", revision=None, variant=None)
+        encoder.latent_std = 8.0
+        return encoder
         
 class EMNISTVAE:
     def __new__(cls):
@@ -67,9 +70,15 @@ class Mimi(MimiModel):
             raw_audio=raw_audio,
             sampling_rate=self.sample_rate,
             return_tensors="pt"
-        )
-        return super().encode(inputs["input_values"]).audio_codes
-    def decode(self, h : Tensor) -> Tensor: return super().decode(h).audio_values
+        ).to(self.device)
+        encoded = super().encode(inputs["input_values"]).audio_codes
+        encoded = encoded.unsqueeze(1).float()
+        encoded = (encoded - 1000.) / 500.
+        return encoded
+    def decode(self, h : Tensor) -> Tensor:
+        h = (h * 500.) + 1000.
+        h = h.long().squeeze(1)
+        return super().decode(h).audio_values
     
 class PretrainedMimi:
     def __new__(cls):

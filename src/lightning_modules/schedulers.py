@@ -41,8 +41,10 @@ class BaseScheduler:
         return x
 
 class FMScheduler(BaseScheduler):
-    def __init__(self, num_timesteps : int = 1000, gamma_frac : float = 1.0):
+    def __init__(self, num_timesteps : int = 1000, gamma_frac : float = 1.0, target : Literal['terminal', 'flow'] = 'terminal'):
         super().__init__(num_timesteps, gamma_frac)
+        assert target in ['terminal', 'flow'], "Target should be either 'terminal' or 'flow'"
+        self.target = target
     
     def sample_batch(self, x0 : Tensor, x1 : Tensor) -> Tuple[Tensor, IntTensor, Tensor]:
         batch_size = x0.size(0)
@@ -53,8 +55,13 @@ class FMScheduler(BaseScheduler):
         gammas_bar = self.gammas_bar.to(device)
         gammas_bar = self.to_dim(gammas_bar, dim)
         gammas_bar = gammas_bar[timesteps]
-        target = x1 - x0
         xt = (1 - gammas_bar) * x0 + gammas_bar * x1
+        
+        if self.target == 'flow':
+            target = x1 - x0
+        else:
+            target = x0
+        
         return xt, timesteps, target
     
     def step(self, xt_plus_1 : Tensor, t_plus_1 : int, model_output : Tensor) -> Tensor:
@@ -63,7 +70,13 @@ class FMScheduler(BaseScheduler):
         """
         gammas_bar = self.gammas_bar.to(xt_plus_1.device)
         delta_t = gammas_bar[t_plus_1] - gammas_bar[t_plus_1 - 1]
-        xt = xt_plus_1 - delta_t * model_output
+        
+        if self.target == "flow":
+            direction = model_output
+        else:
+            direction = (xt_plus_1 - model_output) / gammas_bar[t_plus_1]
+        
+        xt = xt_plus_1 - delta_t * direction
         return xt
     
 class DSBScheduler(BaseScheduler):

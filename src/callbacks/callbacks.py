@@ -146,21 +146,7 @@ class DiffusionCBMixin:
             ),
         })
     
-    def visualize_latent_space(self, logger : WandbLogger, encodings : Tensor):
-        logger.log_image(
-            key="Encodings",
-            images = [wandb.Image(visualize_encodings(e)) for e in encodings.cpu()],
-        )
-        logger.log_image(
-            key="Encodings histogram",
-            images = [wandb.Image(plot_histogram(e)) for e in encodings.cpu()],
-        )
-    
-class FlowMatchingCB(Callback, DiffusionCBMixin):
-    def __init__(self):
-        super().__init__()
-        
-    def on_train_start(self, trainer : Trainer, pl_module : FM):
+    def visualize_data(self, trainer : Trainer, pl_module : FM | DSB):
         logger = pl_module.logger
         device = pl_module.device
         
@@ -179,6 +165,7 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
         elif dim == 4:
             self.data_type = "image"
             
+        self.x0_encoded = pl_module.encode(x0.to(device))
         self.x1_encoded = pl_module.encode(x1.to(device))
         encoded = pl_module.encode(x0.to(device), add_noise=True)
         decoded = pl_module.decode(encoded).cpu()
@@ -206,10 +193,15 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
             )
             
         elif self.data_type == "audio":
+            audios = torch.cat([x0, x1], dim=0)
+            audios = [audio.flatten().numpy() for audio in audios]
+            captions = ["x0"] * x0.shape[0] + ["x1"] * x1.shape[0]
+                        
             logger.log_audio(
                 key = "Initial samples",
-                audios=x0.tolist() + x1.tolist(),
-                sample_rate = self.sample_rate,
+                audios=audios,
+                sample_rate = [self.sample_rate] * len(audios),
+                caption=captions,
             )
             self.visualize_latent_space(logger, encoded)
             
@@ -222,6 +214,24 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
         
         self.log_line_series(pl_module)
         plt.close('all')
+        
+    
+    def visualize_latent_space(self, logger : WandbLogger, encodings : Tensor):
+        logger.log_image(
+            key="Encodings",
+            images = [wandb.Image(visualize_encodings(e)) for e in encodings.cpu()],
+        )
+        logger.log_image(
+            key="Encodings histogram",
+            images = [wandb.Image(plot_histogram(e)) for e in encodings.cpu()],
+        )
+    
+class FlowMatchingCB(Callback, DiffusionCBMixin):
+    def __init__(self):
+        super().__init__()
+        
+    def on_train_start(self, trainer : Trainer, pl_module : FM):
+        self.visualize_data(trainer, pl_module)
         
     def on_validation_end(self, trainer : Trainer, pl_module : FM):
         logger = pl_module.logger
@@ -260,49 +270,16 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
             )
             
         elif self.data_type == "audio":
+            audios = [audio.flatten().numpy() for audio in x0_hat]
             logger.log_audio(
                 key = "Samples",
-                audios=x0_hat.tolist(),
-                sample_rate = self.sample_rate,
+                audios=audios,
+                sample_rate = [self.sample_rate] * len(audios),
                 step = pl_module.global_step,
             )
         
         plt.close('all')
 
-class TestFMOnDatasetCB(Callback):
-    def __init__(self, dataset : Dataset):
-        super().__init__()
-        self.dataset = dataset
-    
-    def on_train_start(self, trainer : Trainer, pl_module : FM):
-        device = pl_module.device
-        logger = pl_module.logger
-        
-        dataset = self.dataset
-        x0 = get_batch_from_dataset(dataset, batch_size=16).to(device)
-        self.x0_encoded = pl_module.encode(x0, add_noise=True)
-        x0_decoded = pl_module.decode(self.x0_encoded)
-        fig = plot_images(x0_decoded.cpu())
-        logger.log_image(
-            key = "Initial decoded for test dataset",
-            images = [wandb.Image(fig)],
-        )
-        plt.close('all')
-        
-    def on_validation_end(self, trainer : Trainer, pl_module : FM):
-        logger = pl_module.logger
-        
-        x0_encoded = self.x0_encoded
-        samples = pl_module.sample(x0_encoded)
-        samples = pl_module.decode(samples).cpu()
-        fig = plot_images(samples)
-        logger.log_image(
-            key = "Samples for test dataset",
-            images = [wandb.Image(fig)],
-            step = pl_module.global_step,
-        )
-        plt.close('all')
-        
 class DSBCB(Callback, DiffusionCBMixin):
     def __init__(self):
         super().__init__()
@@ -317,64 +294,7 @@ class DSBCB(Callback, DiffusionCBMixin):
         return samples
         
     def on_train_start(self, trainer : Trainer, pl_module : DSB):
-        device = pl_module.device
-        logger = pl_module.logger
-        
-        x0, x1 = get_batches(trainer, batch_size=16, shuffle=False)
-                
-        # plot the initial samples
-        x0_fig = plot_images(x0.cpu())
-        x1_fig = plot_images(x1.cpu())
-        
-        logger.log_image(
-            key = "Initial samples",
-            images = [wandb.Image(x0_fig), wandb.Image(x1_fig)],
-            caption = ["x0", "x1"],
-        )
-        
-        # move to device
-        x0 = x0.to(device)
-        x1 = x1.to(device)
-        
-        # encode the samples
-        x0_encoded = pl_module.encode(x0)
-        x1_encoded = pl_module.encode(x1)
-        self.x0_encoded, self.x1_encoded = x0_encoded, x1_encoded
-        
-        x0_decoded = pl_module.decode(x0_encoded)
-        x1_decoded = pl_module.decode(x1_encoded)
-        
-        fig_1 = plot_images(x0_decoded.cpu())
-        fig_2 = plot_images(x1_decoded.cpu())
-        
-        logger.log_image(
-            key = "Initial decoded",
-            images = [wandb.Image(fig_1), wandb.Image(fig_2)],
-            caption = ["x0", "x1"],
-        )
-        
-        original_size = x0.flatten(1).size(1)
-        encoded_size = x0_encoded.flatten(1).size(1)
-        
-        initial_forward_process = pl_module.sample(x0_encoded, forward=True, return_trajectory=True, use_initial_forward_sampling=True)
-        logger.log_metrics({
-            "original_size": original_size,
-            "encoded_size": encoded_size,
-        })
-        
-        sampled_trajectory = self.sample_from_trajectory(initial_forward_process, 5, 5)
-        sampled_trajectory = pl_module.decode(sampled_trajectory)
-        sampled_trajectory_fig = plot_images(sampled_trajectory.cpu())
-        
-        logger.log_image(
-            key = "Initial forward process",
-            images = [wandb.Image(sampled_trajectory_fig)],
-            step = pl_module.global_step,
-        )
-        
-        self.visualize_latent_space(logger, x0_encoded)
-        self.log_line_series(pl_module)
-        plt.close('all')
+        self.visualize_data(trainer, pl_module)
         
     def on_validation_end(self, trainer : Trainer, pl_module : DSB):
         device      = pl_module.device

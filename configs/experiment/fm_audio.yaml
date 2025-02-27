@@ -1,30 +1,21 @@
 # @package _global_
 defaults:
   - override /trainer: gpu
-  - override /data: male
+  - override /data: fm_ears
   - override /callbacks: fm_callbacks
-  - override /model: fm_celeba
+  - override /model: fm_audio
   - override /logger: default
 
 project_name: 'flow matching'
-task_name: 'test'
-
-callbacks:
-  test_on_dataset:
-    _target_: src.callbacks.TestFMOnDatasetCB
-    dataset:
-      _target_: src.dataset.CelebADataset
-      attr: 20
-      on_or_off: 0
-      img_size: 128
-      augment: True
+task_name: 'ears'
 
 trainer:
   fast_dev_run: False
   enable_checkpointing: True
   log_every_n_steps: 50
-  check_val_every_n_epoch: 3
   reload_dataloaders_every_n_epochs: 1
+  check_val_every_n_epoch: 3
   max_epochs: -1
+  max_steps: 80000
   gradient_clip_val: 1.0
   accumulate_grad_batches: 1
