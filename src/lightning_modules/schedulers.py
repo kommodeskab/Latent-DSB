@@ -21,10 +21,10 @@ class BaseScheduler:
         gammas = get_symmetric_schedule(gamma_frac, 1, num_timesteps)
         gammas = gammas / gammas.sum()
         gammas_bar = torch.cumsum(gammas, 0)
-        gammas_bar[-1] = 1 - 1e-4
         var = 2 * gammas[1:] * gammas_bar[:-1] / gammas_bar[1:]
-        var = torch.cat([torch.tensor([0]), var, torch.tensor([0])], 0)
+        var = torch.cat([torch.tensor([0]), var], 0)
         timesteps = torch.arange(1, num_timesteps + 1)
+        
         self.timesteps = timesteps
         self.gammas = gammas
         self.gammas_bar = gammas_bar
@@ -45,6 +45,7 @@ class FMScheduler(BaseScheduler):
         super().__init__(num_timesteps, gamma_frac)
         assert target in ['terminal', 'flow'], "Target should be either 'terminal' or 'flow'"
         self.target = target
+        self.gammas_bar[-1] = 1 - 1e-4
     
     def sample_batch(self, x0 : Tensor, x1 : Tensor) -> Tuple[Tensor, IntTensor, Tensor]:
         batch_size = x0.size(0)
@@ -123,6 +124,48 @@ class DSBScheduler(BaseScheduler):
         mu = xk_plus_1 + step_size * direction
         noise = torch.randn_like(xk_plus_1) * std
         return mu + noise
+        
+class ReFlowScheduler(BaseScheduler):
+    def __init__(self, num_timesteps : int, gamma_frac : float = 1.0):
+        super().__init__(num_timesteps, gamma_frac)
+        
+    def sample_batch(self, x0 : Tensor, x1 : Tensor, training_backward : bool = True) -> tuple[Tensor, Tensor, Tensor]:
+        """
+        When training backward, the provided trajectory is sampled going from x0 --> x1. 
+        When training forward, the provided trajectory is sampled going from x1 --> x0.
+        """
+        batch_size = x0.size(0)
+        
+        timesteps = self.sample_timesteps(batch_size)
+        if not training_backward:
+            timesteps = timesteps - 1
+        
+        dim = x0.dim()
+        gammas_bar = self.gammas_bar.to(x0.device)
+        gammas_bar = self.to_dim(gammas_bar, dim)
+        gammas_bar = gammas_bar[timesteps]
+        xt = (1 - gammas_bar) * x0 + gammas_bar * x1
+        target = x1 - x0
+        return xt, timesteps, target
+    
+    def get_timesteps_for_sampling(self, sampling_backward : bool = True) -> Tensor:
+        """
+        If sampling backward, the timesteps goes from T, T - 1, ..., 1.
+        If sampling forward, the timesteps goes from 0, 1, ..., T - 1.
+        """
+        if sampling_backward:
+            return reversed(self.timesteps)
+        else:
+            return self.timesteps - 1
+        
+    def step(self, xk : Tensor, k : Tensor, model_output : Tensor, sampling_backward : bool = True) -> Tensor:
+        # model_out = x1 - x0
+        gammas_bar = self.gammas_bar.to(xk.device)
+        next_k = k - 1 if sampling_backward else k + 1
+        delta_t = gammas_bar[next_k] - gammas_bar[k]
+        x_next = xk + delta_t * model_output
+        
+        return x_next
     
 class I2Scheduler(BaseScheduler):
     def __init__(self, num_timesteps : int, gamma_frac : float = 1.0, target : Literal['terminal', 'flow'] = 'terminal'):
@@ -171,6 +214,4 @@ class I2Scheduler(BaseScheduler):
         return mu + std * torch.randn_like(mu)
     
 if __name__ == "__main__":
-    scheduler = FMScheduler(num_timesteps=20)
-    print(scheduler.var)
-    print(scheduler.timesteps)
+    pass

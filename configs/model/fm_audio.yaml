@@ -13,14 +13,13 @@ optimizer:
   _partial_: True
   lr: 1.e-4
 
-added_noise: 0.0
+added_noise: 0.001
 
 lr_scheduler:
   scheduler:
-    _target_: torch.optim.lr_scheduler.OneCycleLR
+    _target_: torch.optim.lr_scheduler.CosineAnnealingLR
     _partial_: True
-    max_lr: 5.e-4
-    total_steps: 80000
+    T_max: 80000
   monitor: 'val_loss'
   interval: 'step'
   frequency: 1

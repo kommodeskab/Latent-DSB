@@ -4,7 +4,7 @@
 #BSUB -J dsb
 
 # select gpu, choose gpuv100 or gpua100 (best)
-#BSUB -q gpua100
+#BSUB -q gpuv100
 
 # number of GPUs to use
 #BSUB -gpu "num=1:mode=exclusive_process"

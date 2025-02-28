@@ -295,6 +295,17 @@ class DSBCB(Callback, DiffusionCBMixin):
         
     def on_train_start(self, trainer : Trainer, pl_module : DSB):
         self.visualize_data(trainer, pl_module)
+        x0 = self.x0_encoded
+        trajectory = pl_module.sample(x0, forward=True, return_trajectory=True, use_initial_forward_sampling=True, show_progress=True)
+        sampled_trajectory = self.sample_from_trajectory(trajectory, 5, 5)
+        sampled_trajectory = pl_module.decode(sampled_trajectory)
+        sampled_trajectory_fig = plot_images(sampled_trajectory.cpu())
+        pl_module.logger.log_image(
+            key = "Initial trajectory",
+            images = [wandb.Image(sampled_trajectory_fig)],
+        )
+        plt.close('all')
+        
         
     def on_validation_end(self, trainer : Trainer, pl_module : DSB):
         device      = pl_module.device

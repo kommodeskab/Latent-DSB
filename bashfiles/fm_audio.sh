@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SET JOB NAME
-#BSUB -J cl_emnist
+#BSUB -J fm_audio
 
 # select gpu, choose gpuv100 or gpua100 (best)
 #BSUB -q gpuv100
@@ -13,15 +13,15 @@
 #BSUB -n 4
 
 # gb memory per core
-#BSUB -R "rusage[mem=1GB]"
+#BSUB -R "rusage[mem=4G]"
 # cores is on the same slot
 #BSUB -R "span[hosts=1]"
 
 # walltime
-#BSUB -W 2:00
+#BSUB -W 24:00
 #BSUB -o hpc/output_%J.out 
 #BSUB -e hpc/error_%J.err 
 
 module load python3/3.12
 source .venv/bin/activate
-python3 train.py +experiment=cl_emnist
+python3 train.py +experiment=fm_audio

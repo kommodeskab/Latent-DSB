@@ -6,8 +6,8 @@ defaults:
   - override /model: dsb_emnist
   - override /logger: default
 
-project_name: 'emnist'
-task_name: 'test'
+project_name: 'dsb'
+task_name: 'emnist'
 
 trainer:
   fast_dev_run: False

@@ -16,3 +16,4 @@ num_steps: 100
 max_iterations: 3000
 cache_max_size: 5000
 cache_num_iters: 10
+max_norm: 1.0

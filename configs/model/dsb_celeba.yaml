@@ -2,7 +2,7 @@ _target_: src.lightning_modules.DSB
 
 model:
   _target_: src.networks.PretrainedModel
-  experiment_id: '170225001004'
+  experiment_id: '250225230121'
   model_keyword: 'model'
 
 encoder_decoder:
@@ -17,7 +17,7 @@ num_steps: 100
 max_iterations: 15000
 cache_max_size: 10000
 cache_num_iters: 15
-use_pretrained_flow: False
+use_pretrained_flow: True
 gamma_frac: 0.01
-latent_std: 8.0
-added_noise: 0.05
+added_noise: 0.001
+max_norm: 1.0

@@ -77,7 +77,7 @@ class Mimi(MimiModel):
         return encoded
     def decode(self, h : Tensor) -> Tensor:
         h = (h * 500.) + 1000.
-        h = h.long().squeeze(1)
+        h = h.long().squeeze(1).clamp(0, 2000)
         return super().decode(h).audio_values
     
 class PretrainedMimi:

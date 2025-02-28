@@ -36,7 +36,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         max_dsb_iterations : int | None = 10,
         max_norm : float = float("inf"),
         added_noise : float = 0.0,
-        ema_decay : float = 0.999,
+        ema_decay : float = 0.995,
         **kwargs,
     ):
         super().__init__()
@@ -182,12 +182,12 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         time_to_sample = time.time() - t1
         self.cache.add(trajectory)
         
-        model, _ = self.get_model(backward = training_backward)
+        model, ema = self.get_model(backward = training_backward)
         model.train()
         optimizer, lr_scheduler = self.get_optimizer(backward = training_backward)
                 
-        for _ in range(self.hparams.cache_num_iters):
-            trajectory = self.cache.sample()
+        for i in range(self.hparams.cache_num_iters):
+            trajectory = trajectory if i == 0 else self.cache.sample()
             xt, timesteps, target = self.scheduler.sample_batch(trajectory)
             model_output = model(xt, timesteps)
 
@@ -202,6 +202,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
             self.clip_gradients(optimizer, self.hparams.max_norm, "norm")
             optimizer.step()
             lr_scheduler.step()
+            ema.update()
             
             self.curr_num_iters += 1
 
@@ -214,28 +215,28 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
             "DSB_iteration": self.DSB_iteration,
             "time_to_sample": time_to_sample,
             "training_backward": training_backward,
-        }, on_step=True)
+        }, on_step=True, prog_bar=True)
 
     @torch.no_grad()
     def validation_step(self, batch : Tensor, batch_idx : int) -> None:
         torch.manual_seed(0)
-        is_backward = self.training_backward
+        training_backward = self.training_backward
         x0, x1 = batch
-        batch = x0 if is_backward else x1
+        batch = x0 if training_backward else x1
         batch = self.encode(batch)
-        use_initial_forward_sampling = is_backward and self.DSB_iteration == 1
-        model, ema = self.get_model(is_backward)
+        use_initial_forward_sampling = training_backward and self.DSB_iteration == 1
+        model, ema = self.get_model(training_backward)
         model.eval()
         
-        trajectory = self.sample(batch, forward = is_backward, return_trajectory = True, use_initial_forward_sampling=use_initial_forward_sampling)
+        trajectory = self.sample(batch, forward = training_backward, return_trajectory = True, use_initial_forward_sampling=use_initial_forward_sampling)
         for _ in range(self.hparams.cache_num_iters):
             xk, timesteps, target = self.scheduler.sample_batch(trajectory)
             with ema.average_parameters():
                 model_output = model(xk, timesteps)
             loss = mse_loss(model_output, target)
             self.log_dict({
-                self._get_loss_name(backward = is_backward, is_training = False): loss,
-            }, on_step=False, on_epoch=True)
+                self._get_loss_name(backward = training_backward, is_training = False): loss,
+            }, on_step=False, on_epoch=True, prog_bar=True)
     
     def configure_optimizers(self) -> Tuple[Optimizer, Optimizer]:
         # make the optimizers
@@ -245,14 +246,14 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         
         backward_scheduler = {
             'scheduler': OneCycleLR(
-                backward_opt, max_lr=10*lr, 
+                backward_opt, max_lr=lr, 
                 total_steps=self.hparams.max_iterations
                 ),
             'name': 'backward_lr'
         }
         forward_scheduler = {
             'scheduler': OneCycleLR(
-                forward_opt, max_lr=10*lr, 
+                forward_opt, max_lr=lr, 
                 total_steps=self.hparams.max_iterations
                 ),
             'name': 'forward_lr'

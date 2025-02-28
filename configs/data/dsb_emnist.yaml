@@ -1,11 +1,10 @@
-_target_: src.data_modules.base_dm.BaseDSBDM
-
-start_dataset:
+_target_: src.data_modules.base_dm.FlowMatchingDM
+x0_dataset:
   _target_: src.dataset.EMNISTNoLabel
   split: 'digits'
   img_size: 16
 
-end_dataset:
+x1_dataset:
   _target_: src.dataset.EMNISTNoLabel
   split: 'letters'
   img_size: 16
