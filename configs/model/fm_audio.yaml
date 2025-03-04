@@ -12,8 +12,10 @@ optimizer:
   _target_: torch.optim.AdamW
   _partial_: True
   lr: 1.e-4
+  weight_decay: 0.01
 
-added_noise: 0.001
+scheduler: 'i2'
+target: 'flow'
 
 lr_scheduler:
   scheduler:

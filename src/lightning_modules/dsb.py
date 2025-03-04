@@ -8,7 +8,7 @@ from torch.nn import Module
 from pytorch_lightning.utilities import grad_norm
 import copy
 from src.lightning_modules.utils import Cache
-from src.lightning_modules.fm import FM
+from src.lightning_modules.schedulers import FMScheduler, I2Scheduler
 from torch.nn.functional import mse_loss
 from torch.nn import Module
 import time
@@ -16,18 +16,17 @@ from .mixins import EncoderDecoderMixin
 from .schedulers import DSBScheduler
 from tqdm import tqdm
 from torch_ema import ExponentialMovingAverage
-from src.utils import get_ckpt_path
-from torch.optim.lr_scheduler import OneCycleLR
+from torch.optim.lr_scheduler import OneCycleLR, CosineAnnealingLR, LRScheduler
 
 class DSB(BaseLightningModule, EncoderDecoderMixin):
     def __init__(
         self,
         model : Module,
         encoder_decoder : BaseEncoderDecoder,
-        num_steps : int,
-        max_iterations : int,
-        cache_max_size : int,
-        cache_num_iters : int,
+        num_steps : int = 100,
+        max_iterations : int = 20000,
+        cache_max_size : int = 10000,
+        cache_num_iters : int = 20,
         use_pretrained_flow : bool = False,
         gamma_frac : float = 0.001,
         optimizer : Optimizer | None = None,
@@ -36,10 +35,13 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         max_dsb_iterations : int | None = 10,
         max_norm : float = float("inf"),
         added_noise : float = 0.0,
-        ema_decay : float = 0.995,
+        ema_decay : float = 0.999,
         **kwargs,
     ):
         super().__init__()
+        assert 0 < gamma_frac <= 1, "Gamma fraction must be in the range (0, 1]"
+        assert target in ["terminal", "flow"], "Invalid target"
+        
         self.automatic_optimization = False
         self.save_hyperparameters(ignore = ["model", "encoder_decoder", "backward_model"])
         
@@ -48,7 +50,6 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         self.DSB_iteration = 1
         self.added_noise = added_noise
         
-        assert 0 < gamma_frac <= 1, "Gamma fraction must be in the range (0, 1]"
         self.scheduler = DSBScheduler(num_steps, gamma_frac, target)
         
         # if the backward model is not provided, make it a copy of the forward model 
@@ -57,7 +58,8 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         
         # most often, we want to utilize a pretrained diffusion model for the first iterations
         if use_pretrained_flow:
-            self.fmmodel = FM(model)
+            # self.fm_scheduler = FMScheduler(num_timesteps=num_steps)
+            self.fm_scheduler = I2Scheduler(num_timesteps=num_steps, target="flow")
         
         self.encoder_decoder = encoder_decoder
         self.partial_optimizer = optimizer
@@ -76,7 +78,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         max_iters = self.hparams.max_iterations
         max_dsb_iters = self.hparams.max_dsb_iterations
         return (curr_iters >= max_iters) or (dsb_iters >= max_dsb_iters)
-
+    
     def on_train_batch_start(self, batch : Tensor, batch_idx : int) -> None:
         if self._has_converged():
             self.curr_num_iters = 0
@@ -109,39 +111,46 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         
     def _reset_optimizers(self) -> None:
         optims, schedulers = self.configure_optimizers()
-        backward_opt, forward_opt = optims
-        backward_scheduler, forward_scheduler = schedulers
-        self.trainer.optimizers[0] = backward_opt
-        self.trainer.optimizers[1] = forward_opt
-        self.trainer.lr_schedulers[0]['scheduler'] = backward_scheduler
-        self.trainer.lr_schedulers[1]['scheduler'] = forward_scheduler
+        
+        self.trainer.optimizers[0] = optims[0]
+        self.trainer.optimizers[1] = optims[1]
+        
+        self.trainer.lr_scheduler_configs[0].scheduler = schedulers[0]['scheduler']
+        self.trainer.lr_scheduler_configs[1].scheduler = schedulers[1]['scheduler']
 
     @torch.no_grad()
     def sample(self, x_start : Tensor, forward : bool = True, return_trajectory : bool = False, use_initial_forward_sampling : bool = False, show_progress : bool = False) -> Tensor:
-        if use_initial_forward_sampling:
-            if hasattr(self, "fmmodel"):
-                return self.fmmodel.sample(x_start, return_trajectory)
-            else:
-                rand_noise = torch.randn_like(x_start)
-                gammas_bar = self.scheduler.gammas_bar
-                trajectory = [x_start]
-                for k in range(self.hparams.num_steps):
-                    x = gammas_bar[k + 1] * rand_noise + (1 - gammas_bar[k + 1]) * x_start
-                    trajectory.append(x)
-                    
-                trajectory = torch.stack(trajectory, dim = 0)
-                return trajectory if return_trajectory else x
+        fm_scheduler = getattr(self, "fm_scheduler", None)
+        
+        # if no fm_scheduler was provided, use random process towards noise
+        if use_initial_forward_sampling and fm_scheduler is None:
+            rand_noise = torch.randn_like(x_start)
+            gammas_bar = self.scheduler.gammas_bar
+            trajectory = [x_start]
+            for k in range(self.hparams.num_steps):
+                x = gammas_bar[k + 1] * rand_noise + (1 - gammas_bar[k + 1]) * x_start
+                trajectory.append(x)
+                
+            trajectory = torch.stack(trajectory, dim = 0)
+            return trajectory if return_trajectory else x
+        
+        if use_initial_forward_sampling and fm_scheduler is not None:
+            scheduler = fm_scheduler
+        
+        if not use_initial_forward_sampling:
+            # if the fm_scheduler is None, use the DSB scheduler
+            scheduler = self.scheduler
 
-        # otherwise, we sample using the diffusion schrödinger bridge
-        xk = x_start
-        trajectory = [xk]
         model, ema = self.get_model(backward = not forward)
         model.eval()
-        for k in tqdm(reversed(self.scheduler.timesteps), desc='Sampling', disable=not show_progress):
-            ks = torch.full((xk.size(0),), k, dtype=torch.int64, device=xk.device)
+        xk = x_start
+        trajectory = [xk]
+        batch_size = xk.size(0)
+        for k in tqdm(reversed(scheduler.timesteps), desc='Sampling', disable=not show_progress):
+            ks = torch.full((batch_size,), k, dtype=torch.int64, device=xk.device)
             with ema.average_parameters():
                 model_output = model(xk, ks)
-            xk = self.scheduler.step(xk, k, model_output)
+            xk = scheduler.step(xk, k, model_output)
             trajectory.append(xk)
             
         trajectory = torch.stack(trajectory, dim=0)
@@ -151,8 +160,8 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         model = self.backward_model if backward else self.forward_model
         ema = self.backward_ema if backward else self.forward_ema
         return model, ema
-    
-    def get_optimizer(self, backward : bool) -> tuple[Optimizer, OneCycleLR]:
+
+    def get_optimizer(self, backward : bool) -> tuple[Optimizer, LRScheduler]:
         backward_optim, forward_optim = self.optimizers()
         backward_scheduler, forward_scheduler = self.lr_schedulers()
         if backward:
@@ -170,31 +179,32 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         training_backward = self.training_backward
         
         x0, x1 = batch
-        batch = x0 if training_backward else x1
+        terminal_points = x0 if training_backward else x1
+        device = terminal_points.device
         
         # if we are in the very first iteration, we use the initial sampling
         use_initial_forward_sampling = training_backward and self.DSB_iteration == 1
         
         # adding a bit of noise to the latent augments new data but (usually) still decodes to the same image
-        batch = self.encode(batch, add_noise = True)
+        terminal_encoded = self.encode(terminal_points, add_noise = True)
         t1 = time.time()
-        trajectory = self.sample(batch, forward = training_backward, return_trajectory = True, use_initial_forward_sampling = use_initial_forward_sampling)
+        trajectory = self.sample(terminal_encoded, forward = training_backward, return_trajectory = True, use_initial_forward_sampling = use_initial_forward_sampling)
         time_to_sample = time.time() - t1
-        self.cache.add(trajectory)
+        self.cache.add(trajectory.cpu())
         
         model, ema = self.get_model(backward = training_backward)
         model.train()
         optimizer, lr_scheduler = self.get_optimizer(backward = training_backward)
-                
+        
         for i in range(self.hparams.cache_num_iters):
             trajectory = trajectory if i == 0 else self.cache.sample()
+            trajectory = trajectory.to(device)
             xt, timesteps, target = self.scheduler.sample_batch(trajectory)
             model_output = model(xt, timesteps)
 
             # calculate loss and do backward pass
-            optimizer.zero_grad()
-            # if training backward, then sampled_batch = xk + 1 else sampled_batch = xk
             loss = mse_loss(model_output, target)
+            optimizer.zero_grad()
             self.manual_backward(loss)
             
             # clip the gradients. first, save the norm for later logging
@@ -215,6 +225,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
             "DSB_iteration": self.DSB_iteration,
             "time_to_sample": time_to_sample,
             "training_backward": training_backward,
+            "cache_size": len(self.cache),
         }, on_step=True, prog_bar=True)
 
     @torch.no_grad()
@@ -235,26 +246,26 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
                 model_output = model(xk, timesteps)
             loss = mse_loss(model_output, target)
             self.log_dict({
+                "curr_num_iters": self.curr_num_iters,
                 self._get_loss_name(backward = training_backward, is_training = False): loss,
             }, on_step=False, on_epoch=True, prog_bar=True)
     
-    def configure_optimizers(self) -> Tuple[Optimizer, Optimizer]:
+    def configure_optimizers(self) -> Tuple[list[Optimizer], list[dict]]:
         # make the optimizers
         backward_opt = self.partial_optimizer(self.backward_model.parameters())
         forward_opt = self.partial_optimizer(self.forward_model.parameters())
-        lr = backward_opt.param_groups[0]['lr']
         
         backward_scheduler = {
-            'scheduler': OneCycleLR(
-                backward_opt, max_lr=lr, 
-                total_steps=self.hparams.max_iterations
+            'scheduler': CosineAnnealingLR(
+                backward_opt, 
+                T_max=self.hparams.max_iterations + self.hparams.cache_num_iters
                 ),
             'name': 'backward_lr'
         }
         forward_scheduler = {
-            'scheduler': OneCycleLR(
-                forward_opt, max_lr=lr, 
-                total_steps=self.hparams.max_iterations
+            'scheduler': CosineAnnealingLR(
+                forward_opt, 
+                T_max=self.hparams.max_iterations + self.hparams.cache_num_iters
                 ),
             'name': 'forward_lr'
         }

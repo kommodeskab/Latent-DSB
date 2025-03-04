@@ -13,7 +13,7 @@
 #BSUB -n 4
 
 # gb memory per core
-#BSUB -R "rusage[mem=4G]"
+#BSUB -R "rusage[mem=5G]"
 # cores is on the same slot
 #BSUB -R "span[hosts=1]"
 

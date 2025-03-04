@@ -72,13 +72,13 @@ class ReFlow(BaseLightningModule, EncoderDecoderMixin):
     def on_before_zero_grad(self, optimizer):
         self.ema.update()
         
-    def on_save_checkpoint(self, checkpoint):
-        checkpoint['ema'] = self.ema.state_dict()
-        
-    def on_load_checkpoint(self, checkpoint):
-        self.ema.load_state_dict(checkpoint['ema'])
-        self.ema.copy_to(self.model.parameters())
-        print("Loaded EMA weights")
+    def state_dict(self):
+        state_dict = super().state_dict()
+        shadow_params = self.ema.shadow_params
+        model_state_dict = [k for k in state_dict.keys() if k.startswith('model.')]
+        shadow_state_dict = {k: p for k, p in zip(model_state_dict, shadow_params)}
+        print("Saving EMA state dict")
+        return shadow_state_dict
         
     def sample(self, x_start : Tensor, return_trajectory : bool = True, show_progress : bool = False) -> Tensor:
         self.eval()

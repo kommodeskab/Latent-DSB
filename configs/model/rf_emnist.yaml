@@ -1,7 +1,9 @@
-_target_: src.lightning_modules.Classifier
+_target_: src.lightning_modules.ReFlow
 
 model:
-  _target_: src.networks.EMNISTClassifier
+  _target_: src.networks.EMNISTUNet
+
+training_backward: True
 
 encoder_decoder:
   _target_: src.networks.IdentityEncoderDecoder
@@ -11,12 +13,13 @@ optimizer:
   _partial_: True
   lr: 1.e-4
 
+num_timesteps: 100
+
 lr_scheduler:
   scheduler:
-    _target_: torch.optim.lr_scheduler.OneCycleLR
+    _target_: torch.optim.lr_scheduler.CosineAnnealingLR
     _partial_: True
-    max_lr: 1.e-3
-    total_steps: 50000
-  monitor: 'loss/val'
+    T_max: 20000
+  monitor: 'val_loss'
   interval: 'step'
   frequency: 1

@@ -13,6 +13,8 @@ optimizer:
   weight_decay: 0.01
 
 added_noise: 0.001
+scheduler: 'i2'
+target: 'flow'
 
 lr_scheduler:
   scheduler:

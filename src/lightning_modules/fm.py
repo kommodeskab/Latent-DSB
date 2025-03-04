@@ -9,9 +9,10 @@ from pytorch_lightning.utilities import grad_norm
 from torch.nn.functional import mse_loss
 from tqdm import tqdm
 from .mixins import EncoderDecoderMixin
-from src.lightning_modules.schedulers import FMScheduler
+from src.lightning_modules.schedulers import FMScheduler, I2Scheduler
 from torch_ema import ExponentialMovingAverage
 from typing import Literal
+from src.lightning_modules.utils import sort_dict_by_model
 
 class FM(BaseLightningModule, EncoderDecoderMixin):
     def __init__(
@@ -22,16 +23,22 @@ class FM(BaseLightningModule, EncoderDecoderMixin):
         lr_scheduler : dict[str, LRScheduler | str] | None = None,
         added_noise : float = 0.0,
         num_timesteps : int = 100,
-        ema_decay : float = 0.999,
+        ema_decay : float = 0.995,
         target : Literal['flow', 'terminal'] = 'flow',
+        scheduler : Literal['fm', 'i2'] = 'fm',
+        T : float = 1.0,
         **kwargs : Any,
     ):
         super().__init__()
         self.save_hyperparameters(ignore=['model', 'encoder_decoder'])
+        assert scheduler in ['fm', 'i2'], f"Invalid scheduler: {scheduler}"
         
         self.model = model
         self.added_noise = added_noise
-        self.scheduler = FMScheduler(num_timesteps, target=target)
+        if scheduler == 'fm':
+            self.scheduler = FMScheduler(num_timesteps, target=target, T=T)
+        else:
+            self.scheduler = I2Scheduler(num_timesteps, target=target, T=T)
         self.encoder_decoder = encoder_decoder
         self.partial_optimizer = optimizer
         self.partial_lr_scheduler = lr_scheduler
@@ -51,7 +58,6 @@ class FM(BaseLightningModule, EncoderDecoderMixin):
         xt, timesteps, target = self.scheduler.sample_batch(x0, x1)
         model_output = self(xt, timesteps)
         loss = mse_loss(model_output, target)
-            
         return loss
     
     def training_step(self, batch : Tensor, batch_idx : int) -> Tensor:
@@ -71,16 +77,17 @@ class FM(BaseLightningModule, EncoderDecoderMixin):
         self.log('val_loss', loss, prog_bar=True)
         return loss
     
+    def state_dict(self):
+        state_dict = super().state_dict()
+        shadow_params = self.ema.shadow_params
+        model_state_dict = sort_dict_by_model(state_dict, ['model.'])
+        model_state_dict_keys = model_state_dict.keys()
+        shadow_state_dict = {k: p for k, p in zip(model_state_dict_keys, shadow_params)}
+        print("Saving EMA state dict")
+        return shadow_state_dict
+    
     def on_before_zero_grad(self, optimizer):
         self.ema.update()
-        
-    def on_save_checkpoint(self, checkpoint):
-        checkpoint['ema'] = self.ema.state_dict()
-        
-    def on_load_checkpoint(self, checkpoint):
-        self.ema.load_state_dict(checkpoint['ema'])
-        self.ema.copy_to(self.model.parameters())
-        print("Loaded EMA weights")
     
     @torch.no_grad()
     def sample(self, x_start : Tensor, return_trajectory : bool = False, show_progress : bool = False) -> Tensor:

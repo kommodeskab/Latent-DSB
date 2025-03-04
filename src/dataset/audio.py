@@ -7,11 +7,10 @@ import torchaudio
 from typing import Literal
 import random
 from torch import Tensor
-from torchaudio.transforms import Resample, Vol, PitchShift
+from torchaudio.transforms import Resample, Vol
 from torch.nn.functional import pad
 import glob
-import torch
-import time
+import pandas as pd
 
 class BaseAudioDataset(Dataset):
     file_names : list[str]
@@ -54,14 +53,57 @@ class VoxCeleb(BaseAudioDataset):
         data_path = os.path.join(data_path, folder_name)
         self.file_names = glob.glob(os.path.join(data_path, '*.m4a'))
     
+class CREMAD(BaseAudioDataset):
+    def __init__(self, gender : Literal['male', 'female']):
+        super().__init__()
+        data_path = get_data_path()
+        data_path = os.path.join(data_path, 'CREMA-D')
+        demographics = pd.read_csv(os.path.join(data_path, 'VideoDemographics.csv'))
+        id, sex = demographics['ActorID'], demographics['Sex']
+        gender = gender.capitalize()
+        mask = sex == gender
+        id = id[mask].tolist()
+        all_files = glob.glob(os.path.join(data_path, '*.wav'))
+        
+        def is_ok(file_name : str) -> bool:
+            return int(file_name.split('/')[-1].split('_')[0]) in id
+        
+        self.file_names = [f for f in all_files if is_ok(f)]
+
+class SampleVoiceData(BaseAudioDataset):
+    def __init__(self, gender : Literal['male', 'female']):
+        super().__init__()
+        data_path = get_data_path()
+        gender = gender + 's'
+        data_path = os.path.join(data_path, f'sample_voice_data/{gender}')
+        self.file_names = glob.glob(os.path.join(data_path, '*.wav'))
+        
+class JLCorpus(BaseAudioDataset):
+    def __init__(self, gender : Literal['male', 'female']):
+        super().__init__()
+        data_path = get_data_path()
+        data_path = os.path.join(data_path, 'JL')
+        file_names = []
+        for dirpath, _, filenames in os.walk(data_path):
+            for filename in filenames:
+                if filename.endswith('.wav'):
+                    if ('female' in filename and gender == 'female') or (not 'female' in filename and gender == 'male'):
+                        file_names.append(os.path.join(dirpath, filename))
+                    
+        self.file_names = file_names
+        
 class GenderAudioDataset(ConcatDataset):
     def __init__(self, gender : Literal['male', 'female'], length_seconds : float = 5.1, sample_rate : int = 24_000):
         self.length_seconds = length_seconds
         self.sample_rate = sample_rate
-        
-        earsdataset = EarsGender(gender)
-        vox = VoxCeleb(gender)
-        super().__init__([earsdataset, vox])
+        datasets = [
+            EarsGender(gender),
+            VoxCeleb(gender),
+            CREMAD(gender),
+            SampleVoiceData(gender),
+            JLCorpus(gender),
+        ]
+        super().__init__(datasets)
         
     def __getitem__(self, idx) -> Tensor:
         file_name = super().__getitem__(idx)
@@ -82,5 +124,5 @@ class GenderAudioDataset(ConcatDataset):
         # randomly increase or decrease volume
         random_gain = random.uniform(0.5, 1.5)
         waveform = Vol(random_gain)(waveform)
-                
+        
         return waveform

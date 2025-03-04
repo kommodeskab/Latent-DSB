@@ -3,7 +3,7 @@ from torch import Tensor
 from torch.nn import Module
 from src.networks import PretrainedModel
 from transformers import MimiModel, AutoFeatureExtractor
-
+from torch import Tensor
 class BaseEncoderDecoder(Module):
     def encode(self, x : Tensor) -> Tensor: ...    
     def decode(self, h : Tensor) -> Tensor: ...
@@ -60,6 +60,14 @@ class EMNISTVAE:
 class Mimi(MimiModel):
     feature_extractor : AutoFeatureExtractor
     sample_rate : int
+    old_range = (0., 2047.)
+    new_range = (-5., 5.)
+    
+    @staticmethod
+    def normalize(x : Tensor, old_range : tuple, new_range : tuple) -> Tensor:
+        old_min, old_max = old_range
+        new_min, new_max = new_range
+        return (x - old_min) * (new_max - new_min) / (old_max - old_min) + new_min
     
     def encode(self, x : Tensor) -> Tensor:
         # x is audio with shape (batch_size, 1, seq_len)
@@ -73,11 +81,11 @@ class Mimi(MimiModel):
         ).to(self.device)
         encoded = super().encode(inputs["input_values"]).audio_codes
         encoded = encoded.unsqueeze(1).float()
-        encoded = (encoded - 1000.) / 500.
+        encoded = self.normalize(encoded, self.old_range, self.new_range)
         return encoded
     def decode(self, h : Tensor) -> Tensor:
-        h = (h * 500.) + 1000.
-        h = h.long().squeeze(1).clamp(0, 2000)
+        h = self.normalize(h, self.new_range, self.old_range)
+        h = h.round().squeeze(1).clamp(*self.old_range).long()
         return super().decode(h).audio_values
     
 class PretrainedMimi:

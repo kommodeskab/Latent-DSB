@@ -13,6 +13,7 @@ optimizer:
 
 num_timesteps: 100
 target: 'terminal'
+scheduler: 'i2'
 
 lr_scheduler:
   scheduler:

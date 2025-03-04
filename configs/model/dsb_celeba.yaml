@@ -2,7 +2,12 @@ _target_: src.lightning_modules.DSB
 
 model:
   _target_: src.networks.PretrainedModel
-  experiment_id: '250225230121'
+  experiment_id: '010325151137'
+  model_keyword: 'model'
+
+backward_model:
+  _target_: src.networks.PretrainedModel
+  experiment_id: '020325212054'
   model_keyword: 'model'
 
 encoder_decoder:
@@ -11,13 +16,14 @@ encoder_decoder:
 optimizer:
   _target_: torch.optim.AdamW
   _partial_: True
-  lr: 1e-5
+  lr: 1.e-4
 
 num_steps: 100
 max_iterations: 15000
-cache_max_size: 10000
-cache_num_iters: 15
+cache_max_size: 5000
+cache_num_iters: 20
 use_pretrained_flow: True
-gamma_frac: 0.01
+target: 'terminal'
+gamma_frac: 1.0
 added_noise: 0.001
 max_norm: 1.0

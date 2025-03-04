@@ -1,12 +1,7 @@
 import torch
 from torch import Tensor
 import random
-import math
-import os
-from torch.utils.data import DataLoader, Dataset
-import hashlib
-from src.networks.encoders import BaseEncoderDecoder
-from tqdm import tqdm
+from typing import Any
 
 class Cache:
     def __init__(self, max_size : int):
@@ -50,3 +45,9 @@ class Cache:
         
     def __len__(self) -> int:
         return len(self.cache)
+    
+def sort_dict_by_model(state_dict : dict[str, Any], models_to_keep : list[str]):
+    def is_ok(key : str) -> bool:
+        return any([key.startswith(m) for m in models_to_keep])
+    new_state_dict = {k : v for k, v in state_dict.items() if is_ok(k)}
+    return new_state_dict
