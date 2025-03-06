@@ -1,15 +1,13 @@
-from .utils import get_batches, get_batch_from_dataset
-from src.lightning_modules import DSB, FM, VAE, Classifier
+from .utils import get_batch_from_dataset
+from src.lightning_modules import DSB, FM
 import matplotlib.pyplot as plt
 import wandb
 from pytorch_lightning import Callback, Trainer
 from torch import Tensor
 import torch
 from matplotlib.figure import Figure
-from torch.utils.data import Dataset, Subset
 import numpy as np
 from pytorch_lightning.loggers import WandbLogger
-from typing import Literal
 
 def plot_images(samples : Tensor, height : int | None = None, width : int | None = None) -> Figure:
     # assume samples have shape (k, c, h, w)
@@ -89,44 +87,7 @@ def plot_graph(y, x = None, title = None, xlabel = None, ylabel = None):
         
     return fig
 
-class VAECB(Callback):
-    def __init__(self):
-        super().__init__()
-        
-    def on_train_start(self, trainer : Trainer, pl_module : VAE):
-        logger = pl_module.logger
-        device = pl_module.device
-        
-        dataset = trainer.datamodule.val_dataset
-        self.x0 = get_batch_from_dataset(dataset, batch_size=16).to(device)
-        fig = plot_images(self.x0.cpu())
-        logger.log_image(
-            key = "Initial samples",
-            images = [wandb.Image(fig)],
-        )
-        
-        encoded = pl_module.encode(self.x0)
-        encoded_size = encoded.flatten(1).size(1)
-        original_size = self.x0.flatten(1).size(1)
-        logger.log_metrics({
-            "encoded_size": encoded_size,
-            "original_size": original_size,
-        })
-        plt.close('all')
-        
-    def on_validation_end(self, trainer : Trainer, pl_module : VAE):
-        logger = pl_module.logger
-        
-        x0 = self.x0
-        reconstructed = pl_module.encode_decode(x0)
-        fig = plot_images(reconstructed.cpu())
-        logger.log_image(
-            key = "Reconstructed samples",
-            images = [wandb.Image(fig)],
-            step = pl_module.global_step,
-        )
-        plt.close('all')
-        
+
 class DiffusionCBMixin:
     def log_line_series(self, pl_module : FM | DSB):
         logger = pl_module.logger
@@ -368,30 +329,5 @@ class DSBCB(Callback, DiffusionCBMixin):
             key = f"iteration_{iteration}/{caption}_trajectory",
             images = [wandb.Image(sampled_trajectory_fig)],
             step = pl_module.global_step,
-        )
-        plt.close('all')
-        
-        
-class ClassificationCB(Callback):
-    def __init__(self):
-        super().__init__()
-        
-    def on_train_start(self, trainer : Trainer, pl_module : Classifier):
-        dataset = trainer.datamodule.val_dataset
-        batch = get_batch_from_dataset(dataset, batch_size=32)
-        x0, x1 = batch
-        x0, x1 = x0.to(pl_module.device), x1.to(pl_module.device)
-        self.x0_encoded = pl_module.encoder_decoder.encode(x0)
-        self.x1_encoded = pl_module.encoder_decoder.encode(x1)
-        
-        x0_decoded = pl_module.encoder_decoder.decode(self.x0_encoded)
-        x1_decoded = pl_module.encoder_decoder.decode(self.x1_encoded)
-        
-        fig_x0 = plot_images(x0_decoded.cpu()[:16])
-        fig_x1 = plot_images(x1_decoded.cpu()[:16])
-        pl_module.logger.log_image(
-            key = "Initial samples",
-            images = [wandb.Image(fig_x0), wandb.Image(fig_x1)],
-            caption = ["x0", "x1"],
         )
         plt.close('all')

@@ -29,20 +29,12 @@ class ImageDataset(BaseDataset):
         Enables data augmentation and resizing.
         """
         super().__init__()
-        self.dataset = dataset
-        img_example = self.dataset[0]
-        _, h, w = img_example.shape
-        original_size = min(h, w)
-        
-        padding = int(0.2 * original_size)
+        self.dataset = dataset        
                 
         if augment:
             self.transform = transforms.Compose([
-                transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2),
+                transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
                 transforms.RandomHorizontalFlip(),
-                transforms.Pad(padding, padding_mode='reflect'),
-                transforms.RandomRotation(10),
-                transforms.CenterCrop(original_size),
                 transforms.RandomResizedCrop(img_size, scale=(0.8, 1.0), ratio=(0.9, 1.1)),
                 transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
             ])

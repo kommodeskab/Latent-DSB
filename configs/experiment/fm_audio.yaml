@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
   - override /trainer: gpu
-  - override /data: fm_ears
+  - override /data: fm_audio
   - override /callbacks: fm_callbacks
   - override /model: fm_audio
   - override /logger: default

@@ -1,7 +1,9 @@
 _target_: src.lightning_modules.FM
 
 model:
-  _target_: src.networks.MediumUNet
+  _target_: src.networks.PretrainedModel
+  experiment_id: '010325151137'
+  model_keyword: 'model'
 
 encoder_decoder:
   _target_: src.networks.StableDiffusionXL

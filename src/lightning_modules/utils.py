@@ -1,7 +1,33 @@
 import torch
 from torch import Tensor
-import random
 from typing import Any
+from collections import deque
+
+class DSBCache:
+    def __init__(self, max_size : int):
+        self.cache = deque(maxlen=max_size)
+        self.batch_size = None
+        
+    def add(self, sample : Tensor) -> None:
+        # sample.shape (num_steps, batch_size, ...)
+        batch_size = sample.size(1)
+        if self.batch_size is None:
+            self.batch_size = batch_size
+            
+        for i in range(batch_size):
+            self.cache.append(sample[:, i])
+            
+    def sample(self) -> Tensor:
+        rand_idxs = torch.randint(0, len(self.cache), (self.batch_size,))
+        batch = [self.cache[idx] for idx in rand_idxs]
+        batch = torch.stack(batch, dim=1)
+        return batch
+    
+    def clear(self) -> None:
+        self.cache.clear()
+        
+    def __len__(self) -> int:
+        return len(self.cache)
 
 class Cache:
     def __init__(self, max_size : int):
@@ -38,7 +64,7 @@ class Cache:
         self.cache = []
         
     def rand_idx(self) -> int:
-        return random.randint(0, len(self.cache) - 1)
+        return torch.randint(0, len(self.cache), (1,)).item()
     
     def is_full(self) -> bool:
         return len(self) == self.max_size

@@ -61,7 +61,7 @@ class Mimi(MimiModel):
     feature_extractor : AutoFeatureExtractor
     sample_rate : int
     old_range = (0., 2047.)
-    new_range = (-5., 5.)
+    new_range = (-20., 20.)
     
     @staticmethod
     def normalize(x : Tensor, old_range : tuple, new_range : tuple) -> Tensor:

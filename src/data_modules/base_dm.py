@@ -1,6 +1,5 @@
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader, random_split, Dataset
-import random
 import torch
 
 def split_dataset(train_dataset : Dataset, val_dataset : Dataset | None, train_val_split : float) -> tuple[Dataset, Dataset]:
@@ -54,15 +53,15 @@ class RandomPairDataset(Dataset):
     def __init__(self, x0_dataset : Dataset, x1_dataset : Dataset | None = None):
         self.x0_dataset = x0_dataset
         self.x1_dataset = x1_dataset
-                
+                        
     def __len__(self):
         return len(self.x0_dataset)
     
     def __getitem__(self, idx):
         x0_sample = self.x0_dataset[idx]
         if self.x1_dataset is not None:
-            rand_idx = random.randint(0, len(self.x1_dataset) - 1)
-            x1_sample = self.x1_dataset[rand_idx]
+            rand_idx = torch.randint(0, len(self.x1_dataset), (1,)).item()
+            x1_sample = self.x1_dataset[rand_idx] 
         else:
             x1_sample = torch.randn_like(x0_sample)
             

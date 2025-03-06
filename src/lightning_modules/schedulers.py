@@ -98,9 +98,8 @@ class DSBScheduler(BaseScheduler):
         num_timesteps : int,
         gamma_frac : float = 1.0,
         target : Literal['terminal', 'flow'] = 'terminal',
-        T : float = 1.0
     ):
-        super().__init__(num_timesteps, gamma_frac, T)
+        super().__init__(num_timesteps, gamma_frac)
         assert target in ['terminal', 'flow'], "Target should be either 'terminal' or 'flow'"
         self.target = target
     

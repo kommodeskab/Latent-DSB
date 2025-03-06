@@ -12,7 +12,7 @@ optimizer:
   lr: 1.e-4
 
 num_timesteps: 100
-target: 'terminal'
+target: 'flow'
 scheduler: 'i2'
 
 lr_scheduler:

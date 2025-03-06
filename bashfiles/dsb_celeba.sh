@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SET JOB NAME
-#BSUB -J dsb
+#BSUB -J dsb_celeba
 
 # select gpu, choose gpuv100 or gpua100 (best)
 #BSUB -q gpuv100
@@ -13,7 +13,7 @@
 #BSUB -n 4
 
 # gb memory per core
-#BSUB -R "rusage[mem=5G]"
+#BSUB -R "rusage[mem=4G]"
 # cores is on the same slot
 #BSUB -R "span[hosts=1]"
 
