@@ -4,7 +4,6 @@ from torch import Tensor
 from src.lightning_modules.baselightningmodule import BaseLightningModule
 from src.networks.encoders import BaseEncoderDecoder
 from torch.optim import Optimizer
-from torch.nn import Module
 from pytorch_lightning.utilities import grad_norm
 import copy
 from src.lightning_modules.utils import Cache, DSBCache

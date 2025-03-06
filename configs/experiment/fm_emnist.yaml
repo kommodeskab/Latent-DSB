@@ -3,7 +3,7 @@ defaults:
   - override /trainer: gpu
   - override /data: fm_emnist
   - override /callbacks: fm_callbacks
-  - override /model: fm_emnist
+  - override /model: init_dsb_emnist
   - override /logger: default
 
 project_name: 'flow matching'

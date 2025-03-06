@@ -60,7 +60,7 @@ class FM(BaseLightningModule, EncoderDecoderMixin):
         loss = mse_loss(model_output, target)
         return loss
     
-    def training_step(self, batch : Tensor, batch_idx : int) -> Tensor:
+    def training_step(self, batch : tuple[Tensor, Tensor], batch_idx : int) -> Tensor:
         x0, x1 = batch
         x0, x1 = self.encode(x0, add_noise=True), self.encode(x1, add_noise=True)
         loss = self.common_step(x0, x1)
@@ -70,7 +70,7 @@ class FM(BaseLightningModule, EncoderDecoderMixin):
     def validation_step(self, batch : Tensor, batch_idx : int) -> Tensor:
         torch.manual_seed(0)
         x0, x1 = batch
-        x0, x1 = self.encode(x0, add_noise=True), self.encode(x1, add_noise=True)
+        x0, x1 = self.encode(x0, add_noise=False), self.encode(x1, add_noise=False)
         with self.ema.average_parameters():
             loss = self.common_step(x0, x1)
         
