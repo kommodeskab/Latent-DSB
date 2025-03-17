@@ -68,7 +68,6 @@ class FM(BaseLightningModule, EncoderDecoderMixin):
         return loss
     
     def validation_step(self, batch : Tensor, batch_idx : int) -> Tensor:
-        torch.manual_seed(0)
         x0, x1 = batch
         x0, x1 = self.encode(x0, add_noise=False), self.encode(x1, add_noise=False)
         with self.ema.average_parameters():

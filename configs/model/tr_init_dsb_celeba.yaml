@@ -1,26 +1,31 @@
 _target_: src.lightning_modules.InitDSB
 
 model:
-  _target_: src.networks.EMNISTUNet
+  _target_: src.networks.PretrainedModel
+  experiment_id: '130325143057'
+  model_keyword: 'model'
 
 encoder_decoder:
-  _target_: src.networks.IdentityEncoderDecoder
+  _target_: src.networks.StableDiffusionXL
 
 optimizer:
   _target_: torch.optim.AdamW
   _partial_: True
-  lr: 1.e-5
+  lr: 1.e-4
+  weight_decay: 0.01
 
 num_timesteps: 100
 gamma_frac: 0.01
-target: 'flow'
+added_noise: 0.001
+target: 'terminal'
+ema_decay: 0.999
 
 lr_scheduler:
   scheduler:
     _target_: torch.optim.lr_scheduler.OneCycleLR
     _partial_: True
     max_lr: 1.e-4
-    total_steps: 50000
+    total_steps: 300000
   monitor: 'val_loss'
   interval: 'step'
   frequency: 1

@@ -3,4 +3,20 @@ from .celeba import CelebADataset, CelebA
 from .basedataset import BaseDataset, ImageDataset
 from .afhq import AFHQDataset
 from .points import Points
-from .audio import EarsGender, VoxCeleb, GenderAudioDataset, CREMAD, SampleVoiceData, JLCorpus
+from .audio import (
+    EarsGender, 
+    VoxCeleb, 
+    GenderAudioDataset, 
+    CREMAD, 
+    SampleVoiceData, 
+    JLCorpus, 
+    LibriSpeech, 
+    FSDNoisy18k,
+    SpeechNoiseDataset,
+    BaseConcatAudio,
+    LibriFSD,
+    MSSNSD,
+    WHAM,
+    AllEars, 
+    AllVoxCeleb
+)

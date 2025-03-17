@@ -25,13 +25,12 @@ def instantiate_callbacks(callback_cfg : DictConfig | None) -> list:
 def get_project_from_id(experiment_id : str) -> str:
     project_names = wandb.Api().projects()
     project_names = [project.name for project in project_names]
-    # go through the projects and find the one that has the experiment_id
     for project_name in project_names:
         runs = wandb.Api().runs(project_name)
         run_ids = [run.id for run in runs]
         if experiment_id in run_ids:
             return project_name
-    raise ValueError("No project found with the given experiment_id")
+    raise ValueError("No project found with the given experiment_id: ", experiment_id)
 
 def get_ckpt_path(experiment_id : str, last : bool = True, filename : str | None = None) -> str:
     assert not (last and filename is not None), "last cannot be True when filename is not None"

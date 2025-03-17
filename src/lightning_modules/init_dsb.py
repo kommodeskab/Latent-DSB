@@ -13,6 +13,7 @@ from torch import Tensor, IntTensor
 import torch
 from src.lightning_modules.utils import sort_dict_by_model
 from tqdm import tqdm
+from pytorch_lightning.utilities.seed import isolate_rng
 
 class InitDSB(BaseLightningModule, EncoderDecoderMixin):
     def __init__(
@@ -32,7 +33,6 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         self.save_hyperparameters(ignore=['model', 'encoder_decoder'])
         self.model = model
         self.encoder_decoder = encoder_decoder
-        self.scheduler = DSBScheduler(num_timesteps=100)
         self.ema = ExponentialMovingAverage(self.model.parameters(), decay=ema_decay)
         self.added_noise = added_noise
         
@@ -77,13 +77,15 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         self.log('train_loss', loss, prog_bar=True)
         return loss
     
+    @torch.no_grad()
     def validation_step(self, batch : tuple[Tensor, Tensor], batch_idx : int) -> Tensor:
-        x0, x1 = batch
-        x0, x1 = self.encode(x0, add_noise=False), self.encode(x1, add_noise=False)
-        with self.ema.average_parameters():
-            loss = self.common_step(x0, x1)
-            
-        self.log('val_loss', loss, prog_bar=True)
+        with self.fix_validation_seed():
+            x0, x1 = batch
+            x0, x1 = self.encode(x0, add_noise=False), self.encode(x1, add_noise=False)
+            with self.ema.average_parameters():
+                loss = self.common_step(x0, x1)
+                
+            self.log('val_loss', loss, prog_bar=True)
         return loss
     
     def state_dict(self):
@@ -92,8 +94,8 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         model_state_dict = sort_dict_by_model(state_dict, ['model.'])
         model_state_dict_keys = model_state_dict.keys()
         shadow_state_dict = {k: p for k, p in zip(model_state_dict_keys, shadow_params)}
-        print("Saving EMA state dict")
-        return shadow_state_dict
+        state_dict.update(shadow_state_dict)
+        return state_dict
     
     def on_before_zero_grad(self, optimizer):
         self.ema.update()

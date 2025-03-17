@@ -4,5 +4,4 @@ defaults:
   - richmodelsummary
   - timer
   - modelcheckpoint
-  - early_stopping
   - flowmatching

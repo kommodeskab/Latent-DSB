@@ -5,7 +5,6 @@ import random
 class Points(Dataset):
     def __init__(self, n_points : int = 50_000):
         super().__init__()
-        torch.manual_seed(0)
         self.n_points = n_points
         n_modes = 2
         

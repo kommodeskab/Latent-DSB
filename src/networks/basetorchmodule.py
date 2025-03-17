@@ -5,6 +5,19 @@ import wandb
 from torch.nn import Module
 from src.utils import filter_dict_by_prefix
 
+def config_from_id(experiment_id : str) -> dict:
+    project_name = get_project_from_id(experiment_id)
+    api = wandb.Api()
+    run = api.run(f"kommodeskab-danmarks-tekniske-universitet-dtu/{project_name}/{experiment_id}")
+    return run.config
+
+def model_config_from_id(experiment_id : str, model_keyword : str) -> dict:
+    config = config_from_id(experiment_id)
+    if 'PretrainedModel' in config['model'][model_keyword]['_target_']:
+        new_id = config['model'][model_keyword]['experiment_id']
+        return model_config_from_id(new_id, model_keyword)
+    return config['model'][model_keyword]
+
 class PretrainedModel:
     def __new__(
         cls,
@@ -12,11 +25,7 @@ class PretrainedModel:
         model_keyword : str,
         ckpt_filename : str | None = None,
     ) -> Module:
-        project_name = get_project_from_id(experiment_id)
-        api = wandb.Api()
-        run = api.run(f"kommodeskab-danmarks-tekniske-universitet-dtu/{project_name}/{experiment_id}")
-        config = run.config
-        model_config = config['model'][model_keyword]
+        model_config = model_config_from_id(experiment_id, model_keyword)
         dummy_model : Module = instantiate(model_config)
         ckpt_path = get_ckpt_path(experiment_id, last=False, filename=ckpt_filename)
         print("Loading pretrained model of type", type(dummy_model))

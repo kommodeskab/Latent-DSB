@@ -34,6 +34,9 @@ class BaseScheduler:
         random_indices = torch.randint(0, len(self.timesteps), (batch_size,))
         return self.timesteps[random_indices]
     
+    def step(self, xt_plus_1 : Tensor, t_plus_1 : int, model_output : Tensor) -> Tensor:
+        raise NotImplementedError
+
     @staticmethod
     def to_dim(x : Tensor, dim : int) -> Tensor:
         while x.dim() < dim:
@@ -95,13 +98,29 @@ class FMScheduler(BaseScheduler):
 class DSBScheduler(BaseScheduler):
     def __init__(
         self,
-        num_timesteps : int,
+        num_timesteps : int = 100,
         gamma_frac : float = 1.0,
         target : Literal['terminal', 'flow'] = 'terminal',
     ):
         super().__init__(num_timesteps, gamma_frac)
         assert target in ['terminal', 'flow'], "Target should be either 'terminal' or 'flow'"
         self.target = target
+        
+    def forward_process(self, x0 : Tensor, x1 : Tensor, timesteps : IntTensor | int) -> Tuple[Tensor, Tensor]:
+        device = x0.device
+        dim = x0.dim()
+        
+        gammas_bar = self.gammas_bar.to(device)
+        gammas_bar = self.to_dim(gammas_bar, dim)
+        gammas_bar = gammas_bar[timesteps]
+        xt = (1 - gammas_bar) * x0 + gammas_bar * x1
+        
+        if self.target == 'flow':
+            target = x1 - x0
+        else:
+            target = x0
+            
+        return xt, target 
     
     def sample_batch(self, batch : Tensor) -> tuple[Tensor, Tensor, Tensor]:
         # batch.shape = (num_steps, batch_size, ...)

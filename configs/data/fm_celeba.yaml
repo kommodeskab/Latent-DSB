@@ -2,13 +2,13 @@ _target_: src.data_modules.FlowMatchingDM
 x0_dataset:
   _target_: src.dataset.CelebADataset
   attr: 20
-  on_or_off: 1
+  on_or_off: 0
   img_size: 128
   augment: True
 x1_dataset:
   _target_: src.dataset.CelebADataset
   attr: 20
-  on_or_off: 0
+  on_or_off: 1
   img_size: 128
   augment: True
 batch_size: 64

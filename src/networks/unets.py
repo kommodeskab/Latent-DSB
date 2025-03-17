@@ -41,7 +41,7 @@ class SmallUNet(UNet2D):
             "sample_size": 16,
             "down_block_types": ["DownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D"],
             "up_block_types": ["AttnUpBlock2D", "AttnUpBlock2D", "AttnUpBlock2D", "UpBlock2D"],
-            "block_out_channels": [128, 256, 384, 512],
+            "block_out_channels": [192, 256, 384, 512],
             "dropout": 0.1,
         }
         args.update(kwargs)

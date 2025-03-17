@@ -4,6 +4,8 @@ from torch.nn import Module
 from src.networks import PretrainedModel
 from transformers import MimiModel, AutoFeatureExtractor
 from torch import Tensor
+import torch
+
 class BaseEncoderDecoder(Module):
     def encode(self, x : Tensor) -> Tensor: ...    
     def decode(self, h : Tensor) -> Tensor: ...
@@ -50,18 +52,12 @@ class StableDiffusionXL:
         encoder = PretrainedVAE("stabilityai/stable-diffusion-xl-base-1.0", subfolder="vae", revision=None, variant=None)
         encoder.latent_std = 8.0
         return encoder
-        
-class EMNISTVAE:
-    def __new__(cls):
-        model = PretrainedModel("300125161951", "vae")
-        model.__class__ = Autoencoder
-        return model
-    
+
 class Mimi(MimiModel):
     feature_extractor : AutoFeatureExtractor
     sample_rate : int
     old_range = (0., 2047.)
-    new_range = (-20., 20.)
+    new_range = (-1024., 1024.)
     
     @staticmethod
     def normalize(x : Tensor, old_range : tuple, new_range : tuple) -> Tensor:
@@ -83,16 +79,49 @@ class Mimi(MimiModel):
         encoded = encoded.unsqueeze(1).float()
         encoded = self.normalize(encoded, self.old_range, self.new_range)
         return encoded
+    
     def decode(self, h : Tensor) -> Tensor:
         h = self.normalize(h, self.new_range, self.old_range)
         h = h.round().squeeze(1).clamp(*self.old_range).long()
         return super().decode(h).audio_values
-    
+
 class PretrainedMimi:
     def __new__(cls):
         model = MimiModel.from_pretrained("kyutai/mimi")
         model.feature_extractor = AutoFeatureExtractor.from_pretrained("kyutai/mimi")
-        model.sample_rate = model.feature_extractor.sampling_rate
+        model.sample_rate= model.feature_extractor.sampling_rate
         print("Loaded Mimi model")
         model.__class__ = Mimi
         return model
+    
+class STFTEncoderDecoder(Module):
+    def __init__(self, n_fft : int, hop_length : int, win_length : int):
+        self.n_fft = n_fft
+        self.hop_length = hop_length
+        self.win_length = win_length
+        
+    def encode(self, audio : Tensor) -> Tensor:
+        audio = audio.squeeze(1)
+        spec = torch.stft(
+            audio,
+            n_fft=self.n_fft,
+            hop_length=self.hop_length,
+            win_length=self.win_length,
+            return_complex=False
+        )
+        spec = spec.permute(0, 3, 1, 2)
+        return spec
+    
+    def decode(self, spec : Tensor) -> Tensor:
+        spec = spec.permute(0, 2, 3, 1)
+        real, imag = spec[..., 0], spec[..., 1]
+        spec = torch.complex(real, imag)
+        
+        audio = torch.istft(
+            spec,
+            n_fft=self.n_fft,
+            hop_length=self.hop_length,
+            win_length=self.win_length,
+            return_complex=False
+        )
+        return audio

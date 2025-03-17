@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SET JOB NAME
-#BSUB -J dsb_celeba
+#BSUB -J init_dsb_celeba
 
 # select gpu, choose gpuv100 or gpua100 (best)
 #BSUB -q gpuv100
@@ -13,7 +13,7 @@
 #BSUB -n 4
 
 # gb memory per core
-#BSUB -R "rusage[mem=6G]"
+#BSUB -R "rusage[mem=4G]"
 # cores is on the same slot
 #BSUB -R "span[hosts=1]"
 
@@ -24,4 +24,4 @@
 
 module load python3/3.12
 source .venv/bin/activate
-python3 train.py +experiment=dsb_celeba
+python3 train.py +experiment=fr_init_dsb_celeba

@@ -1,0 +1,21 @@
+# @package _global_
+defaults:
+  - override /trainer: gpu
+  - override /data: fm_celeba
+  - override /callbacks: dsb_callbacks
+  - override /model: fr_dsb_celeba
+  - override /logger: default
+
+project_name: 'dsb'
+task_name: 'fr celeba'
+continue_from_id: '160325101059'
+seed: 1
+
+trainer:
+  fast_dev_run: False
+  reload_dataloaders_every_n_epochs: 1
+  enable_checkpointing: False
+  log_every_n_steps: 1
+  max_epochs: -1
+  val_check_interval: 50
+  limit_val_batches: 2

@@ -3,6 +3,7 @@ from pytorch_lightning.loggers import WandbLogger
 from torch import nn
 import torch.nn.init as init
 import torch
+from contextlib import contextmanager
 
 class BaseLightningModule(pl.LightningModule):
     def __init__(self):
@@ -18,6 +19,23 @@ class BaseLightningModule(pl.LightningModule):
     @property
     def logger(self) -> WandbLogger:
         return self.trainer.logger
+    
+    @contextmanager
+    def fix_validation_seed(self):
+        cuda = self.device.type == 'cuda'
+        
+        cpu_rng_state = torch.get_rng_state()
+        if cuda:
+            cuda_rng_state = torch.cuda.get_rng_state()
+            
+        torch.manual_seed(0)
+        torch.cuda.manual_seed(0)
+        
+        yield
+        
+        torch.set_rng_state(cpu_rng_state)
+        if cuda:
+            torch.cuda.set_rng_state(cuda_rng_state)
     
     @staticmethod
     def init_weights(model : nn.Module) -> None:

@@ -3,7 +3,7 @@ defaults:
   - override /trainer: gpu
   - override /data: fm_celeba
   - override /callbacks: fm_callbacks
-  - override /model: fm_celeba
+  - override /model: init_dsb_celeba
   - override /logger: default
 
 project_name: 'flow matching'
@@ -12,7 +12,7 @@ task_name: 'celeba'
 trainer:
   fast_dev_run: False
   enable_checkpointing: True
-  log_every_n_steps: 100
+  log_every_n_steps: 20
   reload_dataloaders_every_n_epochs: 1
   check_val_every_n_epoch: 1
   max_epochs: -1

@@ -11,6 +11,7 @@ from torchaudio.transforms import Resample, Vol
 from torch.nn.functional import pad
 import glob
 import pandas as pd
+import torch
 
 class BaseAudioDataset(Dataset):
     file_names : list[str]
@@ -24,6 +25,13 @@ class BaseAudioDataset(Dataset):
     def __getitem__(self, idx) -> str:
         file_name = self.file_names[idx]
         return file_name
+    
+class MSSNSD(BaseAudioDataset):
+    def __init__(self, split : Literal['train', 'test'], domain : Literal['clean', 'noise']):
+        super().__init__()
+        data_path = get_data_path()
+        data_path = os.path.join(data_path, f'MS-SNSD/{domain}_{split}')
+        self.file_names = glob.glob(os.path.join(data_path, '*.wav'))
 
 class EarsGender(BaseAudioDataset):
     def __init__(self, gender : Literal['male', 'female']):
@@ -92,19 +100,69 @@ class JLCorpus(BaseAudioDataset):
                     
         self.file_names = file_names
         
-class GenderAudioDataset(ConcatDataset):
-    def __init__(self, gender : Literal['male', 'female'], length_seconds : float = 5.1, sample_rate : int = 24_000):
+class FSDNoisy18k(BaseAudioDataset):
+    def __init__(self, split : Literal['train', 'test']):
+        super().__init__()
+        data_path = get_data_path()
+        data_path = os.path.join(data_path, f'FSDNoisy18k/FSDnoisy18k.audio_{split}')
+        self.file_names = glob.glob(os.path.join(data_path, '*.wav'))
+        
+class WHAM(BaseAudioDataset):
+    def __init__(self, split : Literal['train', 'validation', 'test']):
+        super().__init__()
+        assert split in ['train', 'validation', 'test']
+        if split == 'train':
+            split = 'tr'
+        elif split == 'validation':
+            split = 'cv'
+        elif split == 'test':
+            split = 'tt'
+        
+        data_path = get_data_path()
+        data_path = os.path.join(data_path, f'wham_noise/{split}')
+        self.file_names = glob.glob(os.path.join(data_path, '*.wav'))
+        
+class LibriSpeech(BaseAudioDataset):
+    def __init__(
+        self, 
+        gender : Literal['male', 'female'], 
+        subset : str = 'train-clean-100',
+        ):
+        super().__init__()
+        assert gender in ['male', 'female']
+        data_path = get_data_path()
+        data_path = os.path.join(data_path, 'LibriSpeech')
+        txt_path = os.path.join(data_path, 'SPEAKERS.TXT')
+        
+        with open(txt_path) as f:
+            lines = f.readlines()
+            
+        lines = [l for l in lines if not l.startswith(';')]
+        lines = [l.replace(' ', '') for l in lines]
+        lines = [l.split('|') for l in lines]
+        lines = [l for l in lines if l[2] == subset]
+        
+        gender_str = 'M' if gender == 'male' else 'F'
+        lines = [l for l in lines if l[1] == gender_str]
+        ids = [l[0] for l in lines]
+        
+        self.file_names = []
+        for id in ids:
+            folder = os.path.join(data_path, subset, id)
+            files = glob.glob(os.path.join(folder, '**', '*.flac'), recursive=True)
+            self.file_names.extend(files)  
+        
+class BaseConcatAudio(ConcatDataset):
+    def __init__(
+        self, 
+        datasets : list[Dataset],
+        length_seconds : float,
+        sample_rate : int,
+        ):
+        super().__init__(datasets)
         self.length_seconds = length_seconds
         self.sample_rate = sample_rate
-        datasets = [
-            EarsGender(gender),
-            VoxCeleb(gender),
-            CREMAD(gender),
-            SampleVoiceData(gender),
-            JLCorpus(gender),
-        ]
-        super().__init__(datasets)
-        
+    
     def __getitem__(self, idx) -> Tensor:
         file_name = super().__getitem__(idx)
         info = torchaudio.info(file_name)
@@ -121,8 +179,112 @@ class GenderAudioDataset(ConcatDataset):
         # resmaple to specified sample rate
         waveform = Resample(sample_rate, self.sample_rate)(waveform)
         
-        # randomly increase or decrease volume
-        random_gain = random.uniform(0.5, 1.5)
-        waveform = Vol(random_gain)(waveform)
+        #normalize
+        rms = torch.sqrt(torch.mean(waveform**2) + 1e-8)
+        scale = 0.1 / rms
+        waveform = scale * waveform
         
         return waveform
+          
+class GenderAudioDataset(BaseConcatAudio):
+    def __init__(
+        self, 
+        gender : Literal['male', 'female'], 
+        length_seconds : float = 5.1, 
+        sample_rate : int = 24_000
+        ):
+        datasets = [
+            EarsGender(gender),
+            VoxCeleb(gender),
+            CREMAD(gender),
+            SampleVoiceData(gender),
+            JLCorpus(gender),
+            LibriSpeech(gender),
+        ]
+        super().__init__(
+            datasets,
+            length_seconds,
+            sample_rate,
+        )
+        
+class SpeechNoiseDataset(Dataset):
+    def __init__(
+        self, 
+        speech_datasets : BaseConcatAudio,
+        noise_datasets : BaseConcatAudio,
+        flip : bool = False,
+        ):
+        if flip:
+            speech_datasets, noise_datasets = noise_datasets, speech_datasets
+        
+        self.speech_datasets = speech_datasets
+        self.noise_datasets = noise_datasets
+        
+        assert speech_datasets.length_seconds == noise_datasets.length_seconds
+        assert speech_datasets.sample_rate == noise_datasets.sample_rate
+        
+        self.length_seconds = speech_datasets.length_seconds
+        self.sample_rate = speech_datasets.sample_rate
+        
+        super().__init__()
+        
+    def __len__(self) -> int:
+        return len(self.speech_datasets)
+    
+    def __getitem__(self, idx) -> tuple[Tensor, Tensor]:
+        speech = self.speech_datasets[idx]
+        noise_idx = torch.randint(0, len(self.noise_datasets), (1,)).item()
+        noise = self.noise_datasets[noise_idx]
+        random_snr = torch.randint(-10, 20, (1,))
+        noisy_speech = torchaudio.functional.add_noise(speech, noise, snr=random_snr)
+        return speech, noisy_speech
+    
+class LibriFSD(SpeechNoiseDataset):
+    def __init__(
+        self,
+        length_seconds : float = 5.1,
+        sample_rate : int = 24_000,
+        ):
+        speech = [
+            LibriSpeech('male'),
+            LibriSpeech('female'),
+        ]
+        noise = [
+            FSDNoisy18k('train'),
+            FSDNoisy18k('test'),
+        ]
+        speech_dataset = BaseConcatAudio(speech, length_seconds, sample_rate)
+        noise_dataset = BaseConcatAudio(noise, length_seconds, sample_rate)
+        super().__init__(speech_dataset, noise_dataset)
+        
+class AllVoxCeleb(BaseConcatAudio):
+    def __init__(
+        self,
+        length_seconds : float = 5.1,
+        sample_rate : int = 24_000,
+        ):
+        datasets = [
+            VoxCeleb('male'),
+            VoxCeleb('female'),
+        ]
+        super().__init__(
+            datasets,
+            length_seconds,
+            sample_rate,
+        )
+
+class AllEars(BaseConcatAudio):
+    def __init__(
+        self,
+        length_seconds : float = 5.1,
+        sample_rate : int = 24_000,
+        ):
+        datasets = [
+            EarsGender('male'),
+            EarsGender('female'),
+        ]
+        super().__init__(
+            datasets,
+            length_seconds,
+            sample_rate,
+        )
