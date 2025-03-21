@@ -1,0 +1,33 @@
+_target_: src.lightning_modules.InitDSB
+
+model:
+  _target_: src.networks.PretrainedModel
+  experiment_id: '190325153844'
+  model_keyword: 'model'
+
+encoder_decoder:
+  _target_: src.networks.StableDiffusionXL
+
+optimizer:
+  _target_: torch.optim.AdamW
+  _partial_: True
+  lr: 1.e-4
+  weight_decay: 0.01
+
+num_timesteps: 100
+gamma_min: 1.e-3
+gamma_max: 1.e-2
+added_noise: 0.0
+target: 'semi-flow'
+ema_decay: 0.999
+
+lr_scheduler:
+  scheduler:
+    _target_: torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
+    _partial_: True
+    T_0: 1000
+    T_mult: 2
+    eta_min: 1.e-6
+  monitor: 'val_loss'
+  interval: 'step'
+  frequency: 1

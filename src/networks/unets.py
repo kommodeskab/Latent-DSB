@@ -18,7 +18,7 @@ class PretrainedUNet2D:
 class CelebAUNet2D:
     def __new__(cls): 
         return PretrainedUNet2D("CompVis/ldm-celebahq-256", subfolder="unet", revision=None, variant=None)
-            
+
 class EMNISTUNet(UNet2D):
     def __init__(self, **kwargs):
         args = {

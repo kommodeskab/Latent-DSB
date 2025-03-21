@@ -34,11 +34,10 @@ class CelebAVQ:
     def __new__(cls): return PretrainedVQ("CompVis/ldm-celebahq-256", subfolder="vqvae", revision=None, variant=None)
     
 class Autoencoder(AutoencoderKL):
-    latent_std : float = 1.0
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-    def encode(self, x : Tensor) -> Tensor: return super().encode(x).latent_dist.mean / self.latent_std
-    def decode(self, h : Tensor) -> Tensor: return super().decode(self.latent_std * h).sample
+    def encode(self, x : Tensor) -> Tensor: return super().encode(x).latent_dist.sample() * self.config.scaling_factor
+    def decode(self, h : Tensor) -> Tensor: return super().decode(h / self.config.scaling_factor).sample
     
 class PretrainedVAE:
     def __new__(cls, model_id : str, **kwargs) -> Autoencoder:
@@ -50,14 +49,13 @@ class PretrainedVAE:
 class StableDiffusionXL:
     def __new__(cls):
         encoder = PretrainedVAE("stabilityai/stable-diffusion-xl-base-1.0", subfolder="vae", revision=None, variant=None)
-        encoder.latent_std = 8.0
         return encoder
 
 class Mimi(MimiModel):
     feature_extractor : AutoFeatureExtractor
     sample_rate : int
     old_range = (0., 2047.)
-    new_range = (-1024., 1024.)
+    new_range = (-20., 20.)
     
     @staticmethod
     def normalize(x : Tensor, old_range : tuple, new_range : tuple) -> Tensor:
@@ -86,10 +84,11 @@ class Mimi(MimiModel):
         return super().decode(h).audio_values
 
 class PretrainedMimi:
-    def __new__(cls):
+    def __new__(cls, new_range : tuple = (-20, 20)) -> Mimi:
         model = MimiModel.from_pretrained("kyutai/mimi")
         model.feature_extractor = AutoFeatureExtractor.from_pretrained("kyutai/mimi")
         model.sample_rate= model.feature_extractor.sampling_rate
+        model.new_range = new_range
         print("Loaded Mimi model")
         model.__class__ = Mimi
         return model

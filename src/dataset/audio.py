@@ -25,13 +25,6 @@ class BaseAudioDataset(Dataset):
     def __getitem__(self, idx) -> str:
         file_name = self.file_names[idx]
         return file_name
-    
-class MSSNSD(BaseAudioDataset):
-    def __init__(self, split : Literal['train', 'test'], domain : Literal['clean', 'noise']):
-        super().__init__()
-        data_path = get_data_path()
-        data_path = os.path.join(data_path, f'MS-SNSD/{domain}_{split}')
-        self.file_names = glob.glob(os.path.join(data_path, '*.wav'))
 
 class EarsGender(BaseAudioDataset):
     def __init__(self, gender : Literal['male', 'female']):
@@ -60,45 +53,6 @@ class VoxCeleb(BaseAudioDataset):
         folder_name = f'VoxCeleb_gender/{gender}'
         data_path = os.path.join(data_path, folder_name)
         self.file_names = glob.glob(os.path.join(data_path, '*.m4a'))
-    
-class CREMAD(BaseAudioDataset):
-    def __init__(self, gender : Literal['male', 'female']):
-        super().__init__()
-        data_path = get_data_path()
-        data_path = os.path.join(data_path, 'CREMA-D')
-        demographics = pd.read_csv(os.path.join(data_path, 'VideoDemographics.csv'))
-        id, sex = demographics['ActorID'], demographics['Sex']
-        gender = gender.capitalize()
-        mask = sex == gender
-        id = id[mask].tolist()
-        all_files = glob.glob(os.path.join(data_path, '*.wav'))
-        
-        def is_ok(file_name : str) -> bool:
-            return int(file_name.split('/')[-1].split('_')[0]) in id
-        
-        self.file_names = [f for f in all_files if is_ok(f)]
-
-class SampleVoiceData(BaseAudioDataset):
-    def __init__(self, gender : Literal['male', 'female']):
-        super().__init__()
-        data_path = get_data_path()
-        gender = gender + 's'
-        data_path = os.path.join(data_path, f'sample_voice_data/{gender}')
-        self.file_names = glob.glob(os.path.join(data_path, '*.wav'))
-        
-class JLCorpus(BaseAudioDataset):
-    def __init__(self, gender : Literal['male', 'female']):
-        super().__init__()
-        data_path = get_data_path()
-        data_path = os.path.join(data_path, 'JL')
-        file_names = []
-        for dirpath, _, filenames in os.walk(data_path):
-            for filename in filenames:
-                if filename.endswith('.wav'):
-                    if ('female' in filename and gender == 'female') or (not 'female' in filename and gender == 'male'):
-                        file_names.append(os.path.join(dirpath, filename))
-                    
-        self.file_names = file_names
         
 class FSDNoisy18k(BaseAudioDataset):
     def __init__(self, split : Literal['train', 'test']):
@@ -165,24 +119,33 @@ class BaseConcatAudio(ConcatDataset):
     
     def __getitem__(self, idx) -> Tensor:
         file_name = super().__getitem__(idx)
-        info = torchaudio.info(file_name)
-        sample_rate, number_frames = info.sample_rate, info.num_frames
-        
-        wanted_frames = int(self.length_seconds * sample_rate)
-        max_offset = max(0, number_frames - wanted_frames)
-        offset = random.uniform(0, max_offset)
-        waveform, _ = torchaudio.load(file_name, frame_offset=offset, num_frames=wanted_frames)
-        
-        if waveform.size(1) < wanted_frames:
-            waveform = pad(waveform, (0, wanted_frames - waveform.size(1)))
+        try:
+            info = torchaudio.info(file_name)
+            sample_rate, number_frames = info.sample_rate, info.num_frames
             
-        # resmaple to specified sample rate
-        waveform = Resample(sample_rate, self.sample_rate)(waveform)
-        
-        #normalize
-        rms = torch.sqrt(torch.mean(waveform**2) + 1e-8)
-        scale = 0.1 / rms
-        waveform = scale * waveform
+            wanted_frames = int(self.length_seconds * sample_rate)
+            max_offset = max(0, number_frames - wanted_frames)
+            offset = random.uniform(0, max_offset)
+            waveform, _ = torchaudio.load(file_name, frame_offset=offset, num_frames=wanted_frames)
+            waveform = waveform.mean(0, keepdim=True)
+            
+            if waveform.size(1) < wanted_frames:
+                # randomly pad both sides
+                pad_amount = wanted_frames - waveform.size(1)
+                left_pad = random.randint(0, pad_amount)
+                right_pad = pad_amount - left_pad
+                waveform = pad(waveform, (left_pad, right_pad))
+                
+            # resmaple to specified sample rate
+            waveform = Resample(sample_rate, self.sample_rate)(waveform)
+            
+            #normalize
+            rms = torch.sqrt(torch.mean(waveform**2) + 1e-8)
+            scale = 0.2 / rms
+            waveform = scale * waveform
+        except:
+            print(f'Error loading {file_name}. Defaulting to zeros.')
+            waveform = torch.zeros(1, int(self.length_seconds * self.sample_rate))
         
         return waveform
           
@@ -196,9 +159,6 @@ class GenderAudioDataset(BaseConcatAudio):
         datasets = [
             EarsGender(gender),
             VoxCeleb(gender),
-            CREMAD(gender),
-            SampleVoiceData(gender),
-            JLCorpus(gender),
             LibriSpeech(gender),
         ]
         super().__init__(
@@ -210,44 +170,67 @@ class GenderAudioDataset(BaseConcatAudio):
 class SpeechNoiseDataset(Dataset):
     def __init__(
         self, 
-        speech_datasets : BaseConcatAudio,
-        noise_datasets : BaseConcatAudio,
+        speech_dataset : BaseConcatAudio,
+        noise_dataset : BaseConcatAudio,
         flip : bool = False,
         ):
         if flip:
-            speech_datasets, noise_datasets = noise_datasets, speech_datasets
+            speech_dataset, noise_dataset = noise_dataset, speech_dataset
         
-        self.speech_datasets = speech_datasets
-        self.noise_datasets = noise_datasets
+        self.speech_dataset = speech_dataset
+        self.noise_dataset = noise_dataset
         
-        assert speech_datasets.length_seconds == noise_datasets.length_seconds
-        assert speech_datasets.sample_rate == noise_datasets.sample_rate
+        assert speech_dataset.length_seconds == noise_dataset.length_seconds
+        assert speech_dataset.sample_rate == noise_dataset.sample_rate
         
-        self.length_seconds = speech_datasets.length_seconds
-        self.sample_rate = speech_datasets.sample_rate
+        self.length_seconds = speech_dataset.length_seconds
+        self.sample_rate = speech_dataset.sample_rate
         
         super().__init__()
         
     def __len__(self) -> int:
-        return len(self.speech_datasets)
+        return len(self.speech_dataset)
     
     def __getitem__(self, idx) -> tuple[Tensor, Tensor]:
-        speech = self.speech_datasets[idx]
-        noise_idx = torch.randint(0, len(self.noise_datasets), (1,)).item()
-        noise = self.noise_datasets[noise_idx]
+        speech = self.speech_dataset[idx]
+        noise_idx = torch.randint(0, len(self.noise_dataset), (1,)).item()
+        noise = self.noise_dataset[noise_idx]
         random_snr = torch.randint(-10, 20, (1,))
         noisy_speech = torchaudio.functional.add_noise(speech, noise, snr=random_snr)
         return speech, noisy_speech
-    
-class LibriFSD(SpeechNoiseDataset):
+
+class LibriWhamPaired(SpeechNoiseDataset):
     def __init__(
         self,
         length_seconds : float = 5.1,
         sample_rate : int = 24_000,
+        flip : bool = False,
         ):
         speech = [
             LibriSpeech('male'),
             LibriSpeech('female'),
+        ]
+        noise = [
+            WHAM('train'),
+            WHAM('validation'),
+            WHAM('test'),
+        ]
+        speech_dataset = BaseConcatAudio(speech, length_seconds, sample_rate)
+        noise_dataset = BaseConcatAudio(noise, length_seconds, sample_rate)
+        super().__init__(speech_dataset, noise_dataset, flip)
+    
+class EarsFSDNoisy(SpeechNoiseDataset):
+    def __init__(
+        self,
+        length_seconds : float = 5.1,
+        sample_rate : int = 24_000,
+    ):
+        """
+        Returns only the noisy sample. Can be used for unpaired training.        
+        """
+        speech = [
+            EarsGender('male'),
+            EarsGender('female'),
         ]
         noise = [
             FSDNoisy18k('train'),
@@ -256,6 +239,26 @@ class LibriFSD(SpeechNoiseDataset):
         speech_dataset = BaseConcatAudio(speech, length_seconds, sample_rate)
         noise_dataset = BaseConcatAudio(noise, length_seconds, sample_rate)
         super().__init__(speech_dataset, noise_dataset)
+        
+    def __getitem__(self, idx : int) -> Tensor:
+        _, n = super().__getitem__(idx)
+        return n
+    
+class AllLibri(BaseConcatAudio):
+    def __init__(
+        self,
+        length_seconds : float = 5.1,
+        sample_rate : int = 24_000,
+        ):
+        datasets = [
+            LibriSpeech('male'),
+            LibriSpeech('female'),
+        ]
+        super().__init__(
+            datasets,
+            length_seconds,
+            sample_rate,
+        )
         
 class AllVoxCeleb(BaseConcatAudio):
     def __init__(

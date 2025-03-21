@@ -8,8 +8,6 @@ defaults:
 
 project_name: 'dsb'
 task_name: 'fr celeba'
-continue_from_id: '160325101059'
-seed: 1
 
 trainer:
   fast_dev_run: False

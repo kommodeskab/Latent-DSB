@@ -2,7 +2,7 @@ _target_: src.lightning_modules.InitDSB
 
 model:
   _target_: src.networks.PretrainedModel
-  experiment_id: '130325143057'
+  experiment_id: '130325175337'
   model_keyword: 'model'
 
 encoder_decoder:
@@ -15,17 +15,16 @@ optimizer:
   weight_decay: 0.01
 
 num_timesteps: 100
-gamma_frac: 0.01
-added_noise: 0.001
+gamma_frac: 0.1
+added_noise: 0.0
 target: 'terminal'
 ema_decay: 0.999
 
 lr_scheduler:
   scheduler:
-    _target_: torch.optim.lr_scheduler.OneCycleLR
+    _target_: torch.optim.lr_scheduler.ConstantLR
     _partial_: True
-    max_lr: 1.e-4
-    total_steps: 300000
+    factor: 1.0
   monitor: 'val_loss'
   interval: 'step'
   frequency: 1

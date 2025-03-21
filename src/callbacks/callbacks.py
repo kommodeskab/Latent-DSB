@@ -1,5 +1,5 @@
 from .utils import get_batch_from_dataset
-from src.lightning_modules import DSB, FM
+from src.lightning_modules import DSB, FM, InitDSB
 import matplotlib.pyplot as plt
 import wandb
 from pytorch_lightning import Callback, Trainer
@@ -8,7 +8,7 @@ import torch
 from matplotlib.figure import Figure
 import numpy as np
 from pytorch_lightning.loggers import WandbLogger
-import distillmos
+from src.callbacks.metrics import MOS, KAD
 
 def plot_images(samples : Tensor, height : int | None = None, width : int | None = None) -> Figure:
     # assume samples have shape (k, c, h, w)
@@ -21,7 +21,8 @@ def plot_images(samples : Tensor, height : int | None = None, width : int | None
     samples = samples.clamp(0, 1)
     cmap = 'gray' if samples.shape[1] == 1 else None
     samples = samples.permute(0, 2, 3, 1)
-    fig, axs = plt.subplots(height, width, figsize=(width*5, height*5))
+    fig, axs = plt.subplots(height, width, figsize=(width*5, height*5), dpi=300)
+    axs : list[plt.Axes]
     for i in range(height):
         for j in range(width):
             ax = axs[i, j] if height > 1 else axs[j]
@@ -106,6 +107,16 @@ class DiffusionCBMixin:
                 ys = [gammas_bar],
                 keys = ["gamma_bar"],
             ),
+            "variance": wandb.plot.line_series(
+                xs = torch.linspace(0, 1, len(gammas)).tolist(),
+                ys = [pl_module.scheduler.var.tolist()],
+                keys = ["variance"],
+            ),
+            "sampling_variance": wandb.plot.line_series(
+                xs = torch.linspace(0, 1, len(gammas)).tolist(),
+                ys = [pl_module.scheduler.sampling_var.tolist()],
+                keys = ["sampling_variance"],
+            ),
         })
     
     def visualize_data(self, trainer : Trainer, pl_module : FM | DSB):
@@ -128,11 +139,11 @@ class DiffusionCBMixin:
         elif dim == 4:
             self.data_type = "image"
             
-        self.x0_encoded = pl_module.encode(x0.to(device))
-        self.x1_encoded = pl_module.encode(x1.to(device))
-        encoded = pl_module.encode(x0.to(device), add_noise=True)
-        decoded = pl_module.decode(encoded).cpu()
-        
+        self.x0_encoded = pl_module.encode(x0.to(device)).cpu()
+        self.x1_encoded = pl_module.encode(x1.to(device)).cpu()
+        self.x0_decoded = pl_module.decode(self.x0_encoded.to(device)).cpu()
+        self.x1_decoded = pl_module.decode(self.x1_encoded.to(device)).cpu()
+                
         if self.data_type == "image":
             fig_x0 = plot_images(x0)
             fig_x1 = plot_images(x1)
@@ -141,12 +152,12 @@ class DiffusionCBMixin:
                 images = [wandb.Image(fig_x0), wandb.Image(fig_x1)],
                 caption = ["x0", "x1"],
             )
-            fig = plot_images(decoded)
+            fig = plot_images(self.x0_decoded)
             logger.log_image(
-                key = "Initial decoded (with noise)",
+                key = "Initial decoded",
                 images = [wandb.Image(fig)],
             )
-            self.visualize_latent_space(logger, encoded)
+            self.visualize_latent_space(logger, self.x0_encoded)
             
         elif self.data_type == "points":
             fig = plot_points([x0, x1], keys=["x0", "x1"], colors=['r', 'g'])
@@ -167,10 +178,9 @@ class DiffusionCBMixin:
                 caption=captions,
             )
             
-            x1_encoded = pl_module.encode(x1.to(device))
-            x1_decoded = pl_module.decode(x1_encoded).cpu()
-            x1_decoded_audio = [audio.flatten().numpy() for audio in x1_decoded]
-            x0_decoded_audio = [audio.flatten().numpy() for audio in decoded]
+            x1_decoded_audio = [audio.flatten().numpy() for audio in self.x1_decoded]
+            x0_decoded_audio = [audio.flatten().numpy() for audio in self.x0_decoded]
+            
             decoded_audio = x0_decoded_audio + x1_decoded_audio
             captions = ["x0"] * x0.shape[0] + ["x1"] * x1.shape[0]
             logger.log_audio(
@@ -179,10 +189,10 @@ class DiffusionCBMixin:
                 sample_rate = [self.sample_rate] * len(decoded_audio),
                 caption=captions,
             )
-            self.visualize_latent_space(logger, encoded)
+            self.visualize_latent_space(logger, self.x0_encoded)
             
         original_size = x0.flatten(1).size(1)
-        latent_size = encoded.flatten(1).size(1)
+        latent_size = self.x0_encoded.flatten(1).size(1)
         logger.log_metrics({
             "original_size": original_size,
             "latent_size": latent_size,
@@ -190,7 +200,6 @@ class DiffusionCBMixin:
         
         self.log_line_series(pl_module)
         plt.close('all')
-        
     
     def visualize_latent_space(self, logger : WandbLogger, encodings : Tensor):
         logger.log_image(
@@ -228,12 +237,18 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
                 key = "Initial trajectory",
                 images = [wandb.Image(fig)],
             )
+        
+        elif self.data_type == "audio":
+            self.mos = MOS(pl_module.device)
+            self.kad = KAD()
+            
         plt.close('all')
         
-    def on_validation_end(self, trainer : Trainer, pl_module : FM):
+    def on_validation_end(self, trainer : Trainer, pl_module : InitDSB):
         logger = pl_module.logger
+        device = pl_module.device
         
-        x1_encoded = self.x1_encoded        
+        x1_encoded = self.x1_encoded.to(device)      
         trajectory = pl_module.sample(x1_encoded, return_trajectory=True)
         
         final_samples = trajectory[-1]
@@ -274,6 +289,13 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
                 sample_rate = [self.sample_rate] * len(audios),
                 step = pl_module.global_step,
             )
+            
+            mos = self.mos.evaluate(x0_hat)
+            kad = self.kad.evaluate(x0_hat, self.x0_decoded)
+            logger.log_metrics({
+                "MOS": mos,
+                "KAD": kad,
+            }, step=pl_module.global_step)
         
         plt.close('all')
 
@@ -291,9 +313,10 @@ class DSBCB(Callback, DiffusionCBMixin):
         return samples
         
     def on_train_start(self, trainer : Trainer, pl_module : DSB):
+        device = pl_module.device
         self.visualize_data(trainer, pl_module)
-        x0 = self.x0_encoded
-        trajectory = pl_module.sample(x0, forward=True, return_trajectory=True, show_progress=True)
+        x0 = self.x0_encoded.to(device)
+        trajectory = pl_module.sample(x0, forward=True, return_trajectory=True, show_progress=True, noise='training')
         sampled_trajectory = self.sample_from_trajectory(trajectory, 5, 5)
         sampled_trajectory = pl_module.decode(sampled_trajectory)
         # sampled.trajectory shape: (25, ...)
@@ -317,10 +340,8 @@ class DSBCB(Callback, DiffusionCBMixin):
                     sample_rate = [self.sample_rate],
                 )
             
-            sqa_model = distillmos.ConvTransformerSQAModel()
-            sqa_model = sqa_model.to(pl_module.device)
-            sqa_model.eval()
-            self.sqa_model = sqa_model
+            self.mos = MOS(pl_module.device)
+            self.kad = KAD()
             
         plt.close('all')
         
@@ -331,6 +352,7 @@ class DSBCB(Callback, DiffusionCBMixin):
         iteration   = pl_module.DSB_iteration
         
         x_start = self.x1_encoded if is_backward else self.x0_encoded
+        x_start = x_start.to(device)
         
         # samples shape (num_steps, 16, c, h, w)
         samples = pl_module.sample(
@@ -342,9 +364,9 @@ class DSBCB(Callback, DiffusionCBMixin):
         final_samples = pl_module.decode(final_samples) # shape: (16, c, h, w)
         sampled_trajectory = self.sample_from_trajectory(samples, 5, 5)
         sampled_trajectory = pl_module.decode(sampled_trajectory)
-        sampled_trajectory_fig = plot_images(sampled_trajectory.cpu())
         
         if self.data_type == "image":
+            sampled_trajectory_fig = plot_images(sampled_trajectory.cpu())
             samples_fig = plot_images(final_samples.cpu())
 
             caption = "forward" if not is_backward else "backward"
@@ -369,13 +391,11 @@ class DSBCB(Callback, DiffusionCBMixin):
                 step = pl_module.global_step,
             )
             
-            final_samples = final_samples.squeeze(1)
-            with torch.no_grad():
-                mos : Tensor = self.sqa_model(final_samples.to(device))
-
-            avg_mos = mos.mean().item()
+            mos = self.mos.evaluate(final_samples)
+            kad = self.kad.evaluate(final_samples.cpu(), self.x0_decoded if is_backward else self.x1_decoded)
             logger.log_metrics({
-                f"iteration_{iteration}/MOS": avg_mos,
-            })
+                "MOS": mos,
+                "KAD": kad,
+            }, step=pl_module.global_step)
             
         plt.close('all')

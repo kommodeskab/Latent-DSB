@@ -1,0 +1,7 @@
+_target_: src.data_modules.BaseDM
+dataset:
+  _target_: src.dataset.LibriWhamPaired
+  length_seconds: 2.5
+  sample_rate: 24000
+  flip: False
+batch_size: 64

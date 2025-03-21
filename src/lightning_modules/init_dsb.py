@@ -21,7 +21,8 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         model : Module,
         encoder_decoder : BaseEncoderDecoder,
         num_timesteps : int = 100,
-        gamma_frac : float = 1.0,
+        gamma_min : float = 1e-3,
+        gamma_max : float = 1e-2,
         added_noise : float = 0.0,
         target : Literal['flow', 'terminal'] = 'flow',
         optimizer : Optimizer | None = None,
@@ -29,15 +30,12 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         ema_decay : float = 0.999,
     ):
         super().__init__()
-        assert target in ['flow', 'terminal'], f"Invalid target: {target}"
         self.save_hyperparameters(ignore=['model', 'encoder_decoder'])
         self.model = model
         self.encoder_decoder = encoder_decoder
         self.ema = ExponentialMovingAverage(self.model.parameters(), decay=ema_decay)
         self.added_noise = added_noise
-        
-        self.deterministic_scheduler = DSBScheduler(num_timesteps, gamma_frac, 'terminal')
-        self.scheduler = DSBScheduler(num_timesteps, gamma_frac, target)
+        self.scheduler = DSBScheduler(num_timesteps, gamma_min, gamma_max, target)
         
         self.partial_optimizer = optimizer
         self.partial_lr_scheduler = lr_scheduler
@@ -52,19 +50,8 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         grad_norms = grad_norm(self.model, norm_type=2)
         self.log_dict(grad_norms)
         
-    def deterministic_sample(self, x_start : Tensor, x_end : Tensor, return_trajectory : bool = False, show_progress : bool = False):
-        xk = x_start
-        trajectory = [xk]
-        scheduler = self.deterministic_scheduler
-        for k in reversed(scheduler.timesteps):
-            xk = self.deterministic_scheduler.step(xk, k, x_end)
-            trajectory.append(xk)
-            
-        trajectory = torch.stack(trajectory, dim=0)
-        return trajectory if return_trajectory else trajectory[-1]
-        
     def common_step(self, x0 : Tensor, x1 : Tensor) -> Tensor:
-        trajectory = self.deterministic_sample(x0, x1, return_trajectory=True)
+        trajectory = self.scheduler.deterministic_sample(x0, x1, return_trajectory=True, noise='training')
         xt, timesteps, target = self.scheduler.sample_batch(trajectory)
         model_output = self(xt, timesteps)
         loss = mse_loss(model_output, target)
@@ -89,19 +76,22 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         return loss
     
     def state_dict(self):
-        state_dict = super().state_dict()
-        shadow_params = self.ema.shadow_params
-        model_state_dict = sort_dict_by_model(state_dict, ['model.'])
-        model_state_dict_keys = model_state_dict.keys()
-        shadow_state_dict = {k: p for k, p in zip(model_state_dict_keys, shadow_params)}
-        state_dict.update(shadow_state_dict)
-        return state_dict
+        with self.ema.average_parameters():
+            ema_state_dict = super().state_dict().copy()
+            
+        return ema_state_dict
     
     def on_before_zero_grad(self, optimizer):
         self.ema.update()
         
     @torch.no_grad()
-    def sample(self, x_start : Tensor, return_trajectory : bool = False, show_progress : bool = False) -> Tensor:
+    def sample(
+        self, 
+        x_start : Tensor, 
+        return_trajectory : bool = False, 
+        show_progress : bool = False, 
+        noise : Literal['inference', 'none'] = 'inference'
+    ) -> Tensor:
         self.eval()
         batch_size = x_start.size(0)
         xt = x_start
@@ -110,7 +100,7 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
             timesteps = torch.full((batch_size,), t, dtype=torch.int64, device=xt.device)
             with self.ema.average_parameters():
                 model_output = self(xt, timesteps)
-            xt = self.scheduler.step(xt, t, model_output)
+            xt = self.scheduler.step(xt, t, model_output, noise)
             trajectory.append(xt)
             
         trajectory = torch.stack(trajectory, dim=0)

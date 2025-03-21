@@ -1,15 +1,27 @@
-_target_: src.data_modules.BaseDM
-dataset:
+_target_: src.data_modules.FlowMatchingDM
+x0_dataset:
   _target_: src.dataset.AFHQDataset
   split: 'cat'
-  img_size: 32
+  img_size: 128
   train: True
   augment: True
-  size_multiplier: 5
-val_dataset:
+x1_dataset:
+  _target_: src.dataset.AFHQDataset
+  split: 'dog'
+  img_size: 128
+  train: True
+  augment: True
+x0_dataset_val:
   _target_: src.dataset.AFHQDataset
   split: 'cat'
-  img_size: 32
+  img_size: 128
   train: False
+  augment: True
+x1_dataset_val:
+  _target_: src.dataset.AFHQDataset
+  split: 'dog'
+  img_size: 128
+  train: False
+  augment: True
+  
 batch_size: 64
-num_workers: 4

@@ -12,22 +12,26 @@ def get_symmetric_schedule(min_value : float, max_value : float, num_steps : int
     return gammas
 
 class BaseScheduler:
-    def __init__(self, num_timesteps : int, gamma_frac : float = 0.001, T : float = 1.0):
+    def __init__(self, num_timesteps : int, gamma_min : float, gamma_max : float):
+        assert num_timesteps > 0, "Number of timesteps must be positive"
+        assert gamma_min >= 0, "Gamma min must be non-negative"
+        assert gamma_max >= gamma_min, "Gamma max must be greater than or equal to gamma min"
         self.num_train_timesteps = num_timesteps
-        self.set_timesteps(num_timesteps, gamma_frac, T)
+        self.set_timesteps(num_timesteps, gamma_min, gamma_max)
         self.original_gammas_bar = self.gammas_bar.clone()
     
-    def set_timesteps(self, num_timesteps : int, gamma_frac : float = 1.0, T : float = 1.0) -> None:
-        gammas = get_symmetric_schedule(gamma_frac, 1, num_timesteps)
-        gammas = T * gammas / gammas.sum()
+    def set_timesteps(self, num_timesteps : int, gamma_min : float, gamma_max : float) -> None:
+        gammas = get_symmetric_schedule(gamma_min, gamma_max, num_timesteps)
         gammas_bar = torch.cumsum(gammas, 0)
-        var = 2 * gammas[1:] * gammas_bar[:-1] / gammas_bar[1:]
-        var = torch.cat([torch.tensor([0]), var], 0)
+        sampling_var = 2 * gammas[1:] * gammas_bar[:-1] / gammas_bar[1:]
+        sampling_var = torch.cat([torch.tensor([0]), sampling_var], 0)
+        var = 2 * gammas
         timesteps = torch.arange(1, num_timesteps + 1)
         
         self.timesteps = timesteps
         self.gammas = gammas
         self.gammas_bar = gammas_bar
+        self.sampling_var = sampling_var
         self.var = var
     
     def sample_timesteps(self, batch_size : int) -> Tensor:
@@ -99,28 +103,40 @@ class DSBScheduler(BaseScheduler):
     def __init__(
         self,
         num_timesteps : int = 100,
-        gamma_frac : float = 1.0,
-        target : Literal['terminal', 'flow'] = 'terminal',
+        gamma_min : float = 1e-3,
+        gamma_max : float = 1e-2,
+        target : Literal['terminal', 'flow', 'semi-flow'] = 'terminal',
     ):
-        super().__init__(num_timesteps, gamma_frac)
-        assert target in ['terminal', 'flow'], "Target should be either 'terminal' or 'flow'"
+        super().__init__(num_timesteps, gamma_min, gamma_max)
+        assert target in ['terminal', 'flow', 'semi-flow'], "Target should be either 'terminal' or 'flow'"
         self.target = target
         
+    def deterministic_sample(self, x_start : Tensor, x_end : Tensor, return_trajectory : bool = False, noise : Literal['training', 'inference', 'none'] = 'training') -> Tensor:
+        xk = x_start
+        trajectory = [xk]
+        for k in reversed(self.timesteps):
+            if self.target == 'terminal':
+                pseudo_model_output = x_end
+                
+            elif self.target == 'flow':
+                gammas_bar = self.gammas_bar[k]
+                pseudo_model_output = (xk - x_end) / gammas_bar
+                
+            elif self.target == 'semi-flow':
+                pseudo_model_output = xk - x_end
+                
+            xk = self.step(xk, k, pseudo_model_output, noise)
+            trajectory.append(xk)
+        
+        trajectory = torch.stack(trajectory, dim=0)
+        return trajectory if return_trajectory else trajectory[-1]
+        
     def forward_process(self, x0 : Tensor, x1 : Tensor, timesteps : IntTensor | int) -> Tuple[Tensor, Tensor]:
-        device = x0.device
-        dim = x0.dim()
-        
-        gammas_bar = self.gammas_bar.to(device)
-        gammas_bar = self.to_dim(gammas_bar, dim)
-        gammas_bar = gammas_bar[timesteps]
-        xt = (1 - gammas_bar) * x0 + gammas_bar * x1
-        
-        if self.target == 'flow':
-            target = x1 - x0
-        else:
-            target = x0
-            
-        return xt, target 
+        trajectory = self.deterministic_sample(x0, x1, return_trajectory=True, noise='training')
+        all_batches = torch.arange(trajectory.size(1)).to(trajectory.device)
+        xt = trajectory[timesteps, all_batches]
+
+        return xt, ...
     
     def sample_batch(self, batch : Tensor) -> tuple[Tensor, Tensor, Tensor]:
         # batch.shape = (num_steps, batch_size, ...)
@@ -134,24 +150,37 @@ class DSBScheduler(BaseScheduler):
         if self.target == "flow":
             gammas_bar = self.to_dim(self.gammas_bar, xt.dim()).to(device)
             target = (xt - terminal_points) / gammas_bar[timesteps]
+            
         elif self.target == "terminal":
             target = terminal_points
             
+        elif self.target == "semi-flow":
+            target = xt - terminal_points
+            
         return xt, timesteps, target
     
-    def step(self, xk_plus_1 : Tensor, k_plus_one : int, model_output : Tensor) -> Tensor:
+    def step(self, xk_plus_1 : Tensor, k_plus_one : int, model_output : Tensor, noise : Literal['training', 'inference', 'none']) -> Tensor:
         dim = xk_plus_1.dim()
         device = xk_plus_1.device
         gammas = self.to_dim(self.gammas, dim).to(device)
         gammas_bar = self.to_dim(self.gammas_bar, dim).to(device)
         
-        std = self.var[k_plus_one] ** 0.5
+        if noise == 'training':
+            var = self.var
+        elif noise == 'inference':
+            var = self.sampling_var
+        elif noise == 'none':
+            var = torch.zeros_like(gammas)
+        
+        std = var[k_plus_one] ** 0.5
         step_size = gammas[k_plus_one]
         
         if self.target == "flow":
             direction = model_output
         elif self.target == "terminal":
             direction = (xk_plus_1 - model_output) / gammas_bar[k_plus_one]
+        elif self.target == "semi-flow":
+            direction = model_output / gammas_bar[k_plus_one]
         
         mu = xk_plus_1 - step_size * direction
         noise = torch.randn_like(xk_plus_1) * std

@@ -3,7 +3,7 @@ from torchvision import transforms
 from PIL import Image
 import torch
 from src.dataset.basedataset import ImageDataset, BaseDataset
-
+from typing import Literal
 class AFHQ(BaseDataset):
     """
     Crawls the AFHQ dataset
@@ -19,7 +19,7 @@ class AFHQ(BaseDataset):
                 - dog
                 - wild
     """
-    def __init__(self, split : str, train : bool = True):
+    def __init__(self, split : Literal['dog', 'cat'], train : bool = True):
         super().__init__()
         train = "train" if train else "val"
         root = os.path.join(f"{self.data_path}/afhq/{train}", split)
@@ -41,10 +41,9 @@ class AFHQDataset(ImageDataset):
         train : bool,
         img_size : int,
         augment : bool = False,
-        size_multiplier : int = 1,
     ):
         dataset = AFHQ(split = split, train = train)
-        super().__init__(dataset, img_size, augment, size_multiplier)
+        super().__init__(dataset, img_size, augment)
     
 if __name__ == "__main__":
     dataset = AFHQDataset(split = "cat", train = True)
