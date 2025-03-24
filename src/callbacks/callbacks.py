@@ -55,10 +55,15 @@ def plot_points(points : list[Tensor], keys : list[str], colors : list[str]) -> 
     return fig
 
 def visualize_encodings(encodings : Tensor) -> tuple[Figure, Figure]:
-    assert encodings.dim() == 3, "Encodings must have shape (c, h, w)"
+    while encodings.dim() < 3:
+        encodings = encodings.unsqueeze(0)
+    while encodings.dim() > 3:
+        encodings = encodings.flatten(0, 1)
+    
     n_channels = encodings.size(0)
     v_min, v_max = encodings.min().item(), encodings.max().item()
     fig, axs = plt.subplots(1, n_channels, figsize=(n_channels*5, 5))
+    axs : list[plt.Axes]
     axs = np.atleast_1d(axs)
     norm = plt.Normalize(vmin=v_min, vmax=v_max)
     cmap = 'gray' if n_channels == 1 else 'viridis'

@@ -1,7 +1,10 @@
 _target_: src.lightning_modules.InitDSB
 
 model:
-  _target_: src.networks.DhariwalUNetFromPaper
+  # _target_: src.networks.SmallUNet
+  _target_: src.networks.EMNISTUNet
+  in_channels: 4
+  out_channels: 4
 
 encoder_decoder:
   _target_: src.networks.StableDiffusionXL
@@ -10,10 +13,10 @@ optimizer:
   _target_: torch.optim.AdamW
   _partial_: True
   lr: 1.e-4
-  weight_decay: 0.01
+  weight_decay: 0.0
 
 num_timesteps: 100
-gamma_frac: 0.1
+added_noise: 0.0
 target: 'flow'
 ema_decay: 0.999
 

@@ -11,9 +11,7 @@ from torch.optim.lr_scheduler import LRScheduler
 from typing import Literal
 from torch import Tensor, IntTensor
 import torch
-from src.lightning_modules.utils import sort_dict_by_model
 from tqdm import tqdm
-from pytorch_lightning.utilities.seed import isolate_rng
 
 class InitDSB(BaseLightningModule, EncoderDecoderMixin):
     def __init__(
@@ -21,13 +19,13 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         model : Module,
         encoder_decoder : BaseEncoderDecoder,
         num_timesteps : int = 100,
-        gamma_min : float = 1e-3,
-        gamma_max : float = 1e-2,
         added_noise : float = 0.0,
         target : Literal['flow', 'terminal'] = 'flow',
         optimizer : Optimizer | None = None,
         lr_scheduler : dict[str, LRScheduler | str] | None = None,
         ema_decay : float = 0.999,
+        gamma_min : float | None = None,
+        gamma_max : float | None = None,
     ):
         super().__init__()
         self.save_hyperparameters(ignore=['model', 'encoder_decoder'])
@@ -94,7 +92,7 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
     ) -> Tensor:
         self.eval()
         batch_size = x_start.size(0)
-        xt = x_start
+        xt = x_start.clone()
         trajectory = [xt]
         for t in tqdm(reversed(self.scheduler.timesteps), desc='Sampling', disable=not show_progress):
             timesteps = torch.full((batch_size,), t, dtype=torch.int64, device=xt.device)

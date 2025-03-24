@@ -12,13 +12,11 @@ optimizer:
   _target_: torch.optim.AdamW
   _partial_: True
   lr: 1.e-4
-  weight_decay: 0.01
+  weight_decay: 0.0
 
 num_timesteps: 100
-gamma_min: 1.e-3
-gamma_max: 1.e-2
 added_noise: 0.0
-target: 'semi-flow'
+target: 'flow'
 ema_decay: 0.999
 
 lr_scheduler:

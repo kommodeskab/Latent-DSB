@@ -51,29 +51,42 @@ class BaseDM(pl.LightningDataModule):
             )
         
 class RandomPairDataset(Dataset):
-    def __init__(self, x0_dataset : Dataset, x1_dataset : Dataset | None = None):
+    def __init__(self, x0_dataset : Dataset, x1_dataset : Dataset):
         self.x0_dataset = x0_dataset
         self.x1_dataset = x1_dataset
-                        
+    
     def __len__(self):
         return len(self.x0_dataset)
     
+    def shuffle_x1_indices(self):
+        print("Shuffling dataset for random pairs..")
+        self.x1_indices = torch.randperm(len(self.x1_dataset))
+    
     def __getitem__(self, idx):
+        assert hasattr(self, "x1_indices"), "Please shuffle the x1 indices before getting items."
         x0_sample = self.x0_dataset[idx]
-        if self.x1_dataset is not None:
-            rand_idx = torch.randint(0, len(self.x1_dataset), (1,)).item()
-            x1_sample = self.x1_dataset[rand_idx] 
-        else:
-            x1_sample = torch.randn_like(x0_sample)
-            
+        x1_idx = self.x1_indices[idx % len(self.x1_dataset)]
+        x1_sample = self.x1_dataset[x1_idx]
+        
         return x0_sample, x1_sample
 
 class FlowMatchingDM(BaseDM):
-    def __init__(self, x0_dataset : Dataset, x1_dataset : Dataset, x0_dataset_val : Dataset | None = None, x1_dataset_val : Dataset | None = None, **kwargs):
+    dataset : RandomPairDataset
+    
+    def __init__(self, x0_dataset : Dataset, x1_dataset : Dataset, x0_dataset_val : Dataset | None = None, x1_dataset_val : Dataset | None = None, train_val_split : float = 0.95, **kwargs):
         assert (x0_dataset_val is None) == (x1_dataset_val is None), "Validation datasets must either both be None or both not be None."
-        paired_dataset = RandomPairDataset(x0_dataset, x1_dataset)
-        paired_dataset_val = RandomPairDataset(x0_dataset_val, x1_dataset_val) if x0_dataset_val is not None else None         
-        super().__init__(paired_dataset, paired_dataset_val, pin_memory=False, **kwargs)
+        x0_train, x0_val = split_dataset(x0_dataset, x0_dataset_val, train_val_split)
+        x1_train, x1_val = split_dataset(x1_dataset, x1_dataset_val, train_val_split)
+        
+        train_dataset = RandomPairDataset(x0_train, x1_train)
+        val_dataset = RandomPairDataset(x0_val, x1_val)
+        val_dataset.shuffle_x1_indices()
+        
+        super().__init__(train_dataset, val_dataset, pin_memory=False, **kwargs)
+        
+    def train_dataloader(self):
+        self.dataset.shuffle_x1_indices()
+        return super().train_dataloader()
 
 class BaseDSBDM(pl.LightningDataModule):
     def __init__(

@@ -18,15 +18,27 @@ class BaseScheduler:
         assert gamma_max >= gamma_min, "Gamma max must be greater than or equal to gamma min"
         self.num_train_timesteps = num_timesteps
         self.set_timesteps(num_timesteps, gamma_min, gamma_max)
-        self.original_gammas_bar = self.gammas_bar.clone()
+        self.original_gammas_bar : Tensor = self.gammas_bar.clone()
+        self.original_timesteps : Tensor = self.timesteps.clone()
     
     def set_timesteps(self, num_timesteps : int, gamma_min : float, gamma_max : float) -> None:
         gammas = get_symmetric_schedule(gamma_min, gamma_max, num_timesteps)
         gammas_bar = torch.cumsum(gammas, 0)
+        
         sampling_var = 2 * gammas[1:] * gammas_bar[:-1] / gammas_bar[1:]
         sampling_var = torch.cat([torch.tensor([0]), sampling_var], 0)
         var = 2 * gammas
-        timesteps = torch.arange(1, num_timesteps + 1)
+        
+        if hasattr(self, 'original_gammas_bar'):
+            new_T = gammas_bar[-1].item()
+            old_T = self.original_gammas_bar[-1].item()
+            assert abs(new_T - old_T) < 1e-4, f"New T ({new_T}) is not close to old T ({old_T})"
+            diffs = (gammas_bar[1:].unsqueeze(1) - self.original_gammas_bar[1:].unsqueeze(0)).abs()
+            nearest_idx = diffs.argmin(dim=1)
+            print(nearest_idx)
+            timesteps = self.original_timesteps[nearest_idx]
+        else:  
+            timesteps = torch.arange(1, num_timesteps + 1)
         
         self.timesteps = timesteps
         self.gammas = gammas
@@ -37,6 +49,9 @@ class BaseScheduler:
     def sample_timesteps(self, batch_size : int) -> Tensor:
         random_indices = torch.randint(0, len(self.timesteps), (batch_size,))
         return self.timesteps[random_indices]
+    
+    def sample_batch(self, *args) -> Tuple[Tensor, IntTensor, Tensor]:
+        raise NotImplementedError
     
     def step(self, xt_plus_1 : Tensor, t_plus_1 : int, model_output : Tensor) -> Tensor:
         raise NotImplementedError
@@ -103,12 +118,14 @@ class DSBScheduler(BaseScheduler):
     def __init__(
         self,
         num_timesteps : int = 100,
-        gamma_min : float = 1e-3,
-        gamma_max : float = 1e-2,
+        gamma_min : float | None = None,
+        gamma_max : float | None = None,
         target : Literal['terminal', 'flow', 'semi-flow'] = 'terminal',
     ):
-        super().__init__(num_timesteps, gamma_min, gamma_max)
         assert target in ['terminal', 'flow', 'semi-flow'], "Target should be either 'terminal' or 'flow'"
+        if gamma_min is None and gamma_max is None:
+            gamma_min = gamma_max = 1 / num_timesteps
+        super().__init__(num_timesteps, gamma_min, gamma_max)
         self.target = target
         
     def deterministic_sample(self, x_start : Tensor, x_end : Tensor, return_trajectory : bool = False, noise : Literal['training', 'inference', 'none'] = 'training') -> Tensor:
@@ -138,12 +155,13 @@ class DSBScheduler(BaseScheduler):
 
         return xt, ...
     
-    def sample_batch(self, batch : Tensor) -> tuple[Tensor, Tensor, Tensor]:
+    def sample_batch(self, batch : Tensor, timesteps : Tensor | None = None) -> tuple[Tensor, Tensor, Tensor]:
         # batch.shape = (num_steps, batch_size, ...)
         batch_size = batch.size(1)
         device = batch.device
         terminal_points = batch[0]
-        timesteps = self.sample_timesteps(batch_size).to(device)
+        if timesteps is None:
+            timesteps = self.sample_timesteps(batch_size).to(device)
         all_batches = torch.arange(batch_size).to(device)
         xt = batch[timesteps, all_batches]
         

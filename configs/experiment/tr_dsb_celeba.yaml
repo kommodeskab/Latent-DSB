@@ -8,7 +8,6 @@ defaults:
 
 project_name: 'dsb'
 task_name: 'tr celeba'
-seed: 1
 
 trainer:
   fast_dev_run: False

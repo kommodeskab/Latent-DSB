@@ -1,10 +1,10 @@
 from diffusers import VQModel, AutoencoderKL
 from torch import Tensor
 from torch.nn import Module
-from src.networks import PretrainedModel
 from transformers import MimiModel, AutoFeatureExtractor
 from torch import Tensor
 import torch
+import dac
 
 class BaseEncoderDecoder(Module):
     def encode(self, x : Tensor) -> Tensor: ...    
@@ -124,3 +124,30 @@ class STFTEncoderDecoder(Module):
             return_complex=False
         )
         return audio
+    
+class DACEncodec(Module):
+    def __init__(self, model_type : str = '16khz'):
+        super().__init__()
+        dac_path = dac.utils.download(model_type=model_type)
+        self.model = dac.DAC.load(dac_path)
+        self.model.eval()
+        self.waveform_len = None
+        
+    def s_to_zq(self, s : Tensor) -> Tensor:
+        zq, _, _ = self.model.quantizer.from_codes(s)
+        return zq
+        
+    @torch.no_grad()
+    def encode(self, x : Tensor) -> Tensor:
+        if self.waveform_len is None:
+            self.waveform_len = x.size(2)
+        _, s, _, _, _ = self.model.encode(x)
+        return s
+    
+    @torch.no_grad()
+    def decode(self, s : Tensor) -> Tensor:
+        zq = self.s_to_zq(s)
+        x = self.model.decode(zq)
+        # pad to original length
+        x = torch.nn.functional.pad(x, (0, self.waveform_len - x.size(2)), mode='constant', value=0)
+        return x
