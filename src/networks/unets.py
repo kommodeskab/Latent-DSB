@@ -1,11 +1,12 @@
 from diffusers import UNet2DModel, UNet1DModel
 import torch
+from torch import Tensor
 
 class UNet2D(UNet2DModel):
     def __init__(self, **kwargs,):
         super().__init__(**kwargs)
 
-    def forward(self, x : torch.Tensor, time_step : torch.Tensor): 
+    def forward(self, x : Tensor, time_step : Tensor): 
         return super().forward(x, time_step).sample
         
 class PretrainedUNet2D:
@@ -93,10 +94,31 @@ class UNet1D(UNet1DModel):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def forward(self, x : torch.Tensor, time_step : torch.Tensor): 
+    def forward(self, x : Tensor, time_step : Tensor) -> Tensor:
         return super().forward(x, time_step).sample
     
-if __name__ == "__main__":
-    unet = UNet50()
-    num_params = sum(p.numel() for p in unet.parameters() if p.requires_grad)
-    print(f"Number of parameters: {num_params}")
+class SmallUNet1D(UNet1D):
+    def __init__(self, **kwargs):
+        args = {
+            "in_channels": 12,
+            "out_channels": 12,
+            "block_out_channels": [32, 32, 64],
+            "extra_in_channels": 16,
+            "down_block_types": ["DownBlock1DNoSkip", "DownBlock1D", "AttnDownBlock1D"],
+            "up_block_types": ["AttnUpBlock1D", "UpBlock1D", "UpBlock1DNoSkip"],
+        }
+        args.update(kwargs)
+        super().__init__(**args)
+    
+class MediumUNet1D(UNet1D):
+    def __init__(self, **kwargs):
+        args = {
+            "in_channels": 12,
+            "out_channels": 12,
+            "block_out_channels": [192, 256, 384, 512],
+            "extra_in_channels": 16,
+            "down_block_types": ["DownBlock1DNoSkip", "DownBlock1D", "AttnDownBlock1D", "AttnDownBlock1D"],
+            "up_block_types": ["AttnUpBlock1D", "AttnUpBlock1D", "UpBlock1D", "UpBlock1DNoSkip"],
+        }
+        args.update(kwargs)
+        super().__init__(**args)

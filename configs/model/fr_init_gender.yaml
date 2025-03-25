@@ -1,0 +1,30 @@
+_target_: src.lightning_modules.InitDSB
+
+model:
+  _target_: src.networks.MediumUNet1D
+  extra_in_channels: 16
+
+encoder_decoder:
+  _target_: src.networks.DACEncodec
+
+optimizer:
+  _target_: torch.optim.AdamW
+  _partial_: True
+  lr: 1.e-4
+  weight_decay: 0.0
+
+num_timesteps: 100
+added_noise: 0.0
+target: 'flow'
+ema_decay: 0.999
+
+lr_scheduler:
+  scheduler:
+    _target_: torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
+    _partial_: True
+    T_0: 1000
+    T_mult: 2
+    eta_min: 1.e-6
+  monitor: 'val_loss'
+  interval: 'step'
+  frequency: 1

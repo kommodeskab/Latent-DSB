@@ -114,21 +114,24 @@ class FMScheduler(BaseScheduler):
         xt = xt_plus_1 - delta_t * direction
         return xt
     
+NOISE_TYPES = Literal['training', 'inference', 'none', 'training-inference']
+TARGETS = Literal['terminal', 'flow', 'semi-flow']
+    
 class DSBScheduler(BaseScheduler):
     def __init__(
         self,
         num_timesteps : int = 100,
         gamma_min : float | None = None,
         gamma_max : float | None = None,
-        target : Literal['terminal', 'flow', 'semi-flow'] = 'terminal',
+        target : TARGETS = 'terminal',
     ):
-        assert target in ['terminal', 'flow', 'semi-flow'], "Target should be either 'terminal' or 'flow'"
+        assert target in ['terminal', 'flow', 'semi-flow'], "Target should be either 'terminal', 'flow' or 'semi-flow'"
         if gamma_min is None and gamma_max is None:
             gamma_min = gamma_max = 1 / num_timesteps
         super().__init__(num_timesteps, gamma_min, gamma_max)
         self.target = target
         
-    def deterministic_sample(self, x_start : Tensor, x_end : Tensor, return_trajectory : bool = False, noise : Literal['training', 'inference', 'none'] = 'training') -> Tensor:
+    def deterministic_sample(self, x_start : Tensor, x_end : Tensor, return_trajectory : bool = False, noise : NOISE_TYPES = 'training') -> Tensor:
         xk = x_start
         trajectory = [xk]
         for k in reversed(self.timesteps):
@@ -162,6 +165,7 @@ class DSBScheduler(BaseScheduler):
         terminal_points = batch[0]
         if timesteps is None:
             timesteps = self.sample_timesteps(batch_size).to(device)
+            
         all_batches = torch.arange(batch_size).to(device)
         xt = batch[timesteps, all_batches]
         
@@ -177,20 +181,21 @@ class DSBScheduler(BaseScheduler):
             
         return xt, timesteps, target
     
-    def step(self, xk_plus_1 : Tensor, k_plus_one : int, model_output : Tensor, noise : Literal['training', 'inference', 'none']) -> Tensor:
+    def step(self, xk_plus_1 : Tensor, k_plus_one : int, model_output : Tensor, noise : NOISE_TYPES) -> Tensor:
         dim = xk_plus_1.dim()
         device = xk_plus_1.device
         gammas = self.to_dim(self.gammas, dim).to(device)
         gammas_bar = self.to_dim(self.gammas_bar, dim).to(device)
         
         if noise == 'training':
-            var = self.var
+            std = self.var[k_plus_one] ** 0.5
         elif noise == 'inference':
-            var = self.sampling_var
+            std = self.var[k_plus_one] ** 0.5
         elif noise == 'none':
-            var = torch.zeros_like(gammas)
-        
-        std = var[k_plus_one] ** 0.5
+            std = 0
+        elif noise == 'training-inference':
+            std = 0 if k_plus_one == 1 else self.var[k_plus_one] ** 0.5
+                
         step_size = gammas[k_plus_one]
         
         if self.target == "flow":

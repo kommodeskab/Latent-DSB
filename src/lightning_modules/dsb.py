@@ -10,7 +10,7 @@ from torch.nn.functional import mse_loss
 from torch.nn import Module
 import time
 from .mixins import EncoderDecoderMixin
-from .schedulers import DSBScheduler
+from .schedulers import DSBScheduler, NOISE_TYPES
 from tqdm import tqdm
 from torch_ema import ExponentialMovingAverage
 import matplotlib.pyplot as plt
@@ -111,8 +111,8 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
                 self._reset_optimizers()
                 self.DSB_iteration += 1
                 
-            return -1
-        
+            return -1    
+    
     def on_validation_end(self):
         # save checkpoint under "logs/project/version/checkpoints"
         save_dir = f"logs/{self.logger.name}/{self.logger.version}/checkpoints/DSB_iteration_{self.DSB_iteration}.ckpt"
@@ -146,7 +146,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         forward : bool = True, 
         return_trajectory : bool = False, 
         show_progress : bool = False,
-        noise : Literal['training', 'inference', 'none'] = 'inference',
+        noise : NOISE_TYPES = 'inference',
     ) -> Tensor:
         model, ema = self.get_model(backward = not forward)
         model.eval()
@@ -170,7 +170,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         forward : bool = True, 
         return_trajectory : bool = False, 
         show_progress : bool = False,
-        noise : Literal['training', 'inference', 'none'] = 'inference',
+        noise : NOISE_TYPES = 'inference',
     ) -> Tensor:
         if (self.training_backward and self.DSB_iteration == 1 and forward): # when sampling forward in the first iteration
             if self.first_iteration == 'noise':
@@ -275,15 +275,18 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
             terminal_encoded = self.encode(terminal_point)
             
             trajectory = self.sample(terminal_encoded, forward = training_backward, return_trajectory = True, noise='training')
+            batch_size = trajectory.size(1)
             
             model, ema = self.get_model(training_backward)
             model.eval()
             
-            for _ in range(self.hparams.cache_num_iters):
-                xk, timesteps, target = self.scheduler.sample_batch(trajectory)
+            for k in self.scheduler.timesteps:
+                timesteps = torch.full((batch_size,), k, dtype=torch.int64, device=trajectory.device)
+                xk, timesteps, target = self.scheduler.sample_batch(trajectory, timesteps)
                 with ema.average_parameters():
                     model_output = model(xk, timesteps)
                 loss = mse_loss(model_output, target)
+                
                 self.log_dict({
                     "curr_num_iters": self.curr_num_iters,
                     self._get_loss_name(backward = training_backward, is_training = False): loss,

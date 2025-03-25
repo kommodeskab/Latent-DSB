@@ -23,7 +23,7 @@ num_steps: 100
 max_iterations: 20000
 cache_num_iters: 10
 cache_max_size: 5000
-first_iteration: 'network-straight'
+first_iteration: 'network'
 target: 'flow'
 added_noise: 0.0
 max_norm: 1.0

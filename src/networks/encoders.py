@@ -49,19 +49,19 @@ class PretrainedVAE:
 class StableDiffusionXL:
     def __new__(cls):
         encoder = PretrainedVAE("stabilityai/stable-diffusion-xl-base-1.0", subfolder="vae", revision=None, variant=None)
+        encoder.eval()
         return encoder
+    
+def normalize(x : Tensor, old_range : tuple, new_range : tuple) -> Tensor:
+    old_min, old_max = old_range
+    new_min, new_max = new_range
+    return (x - old_min) * (new_max - new_min) / (old_max - old_min) + new_min
 
 class Mimi(MimiModel):
     feature_extractor : AutoFeatureExtractor
     sample_rate : int
     old_range = (0., 2047.)
     new_range = (-20., 20.)
-    
-    @staticmethod
-    def normalize(x : Tensor, old_range : tuple, new_range : tuple) -> Tensor:
-        old_min, old_max = old_range
-        new_min, new_max = new_range
-        return (x - old_min) * (new_max - new_min) / (old_max - old_min) + new_min
     
     def encode(self, x : Tensor) -> Tensor:
         # x is audio with shape (batch_size, 1, seq_len)
@@ -75,11 +75,11 @@ class Mimi(MimiModel):
         ).to(self.device)
         encoded = super().encode(inputs["input_values"]).audio_codes
         encoded = encoded.unsqueeze(1).float()
-        encoded = self.normalize(encoded, self.old_range, self.new_range)
+        encoded = normalize(encoded, self.old_range, self.new_range)
         return encoded
     
     def decode(self, h : Tensor) -> Tensor:
-        h = self.normalize(h, self.new_range, self.old_range)
+        h = normalize(h, self.new_range, self.old_range)
         h = h.round().squeeze(1).clamp(*self.old_range).long()
         return super().decode(h).audio_values
 
@@ -126,8 +126,15 @@ class STFTEncoderDecoder(Module):
         return audio
     
 class DACEncodec(Module):
+    old_range = (0., 1023.)
+    new_range = (-10., 10.)
+    
     def __init__(self, model_type : str = '16khz'):
         super().__init__()
+        if model_type == '16khz':
+            self.sample_rate = 16000
+        else:
+            raise NotImplementedError(f"Not implemented for {model_type} yet.")
         dac_path = dac.utils.download(model_type=model_type)
         self.model = dac.DAC.load(dac_path)
         self.model.eval()
@@ -142,10 +149,12 @@ class DACEncodec(Module):
         if self.waveform_len is None:
             self.waveform_len = x.size(2)
         _, s, _, _, _ = self.model.encode(x)
+        s = normalize(s, self.old_range, self.new_range).float()
         return s
     
     @torch.no_grad()
     def decode(self, s : Tensor) -> Tensor:
+        s = normalize(s, self.new_range, self.old_range).round().clamp(*self.old_range).long()
         zq = self.s_to_zq(s)
         x = self.model.decode(zq)
         # pad to original length
