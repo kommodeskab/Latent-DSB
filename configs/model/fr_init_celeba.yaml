@@ -15,7 +15,6 @@ optimizer:
   weight_decay: 0.0
 
 num_timesteps: 100
-added_noise: 0.0
 target: 'flow'
 ema_decay: 0.999
 

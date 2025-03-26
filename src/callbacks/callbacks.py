@@ -1,5 +1,5 @@
 from .utils import get_batch_from_dataset
-from src.lightning_modules import DSB, FM, InitDSB
+from src.lightning_modules import DSB, InitDSB
 import matplotlib.pyplot as plt
 import wandb
 from pytorch_lightning import Callback, Trainer
@@ -96,7 +96,7 @@ def plot_graph(y, x = None, title = None, xlabel = None, ylabel = None):
 
 
 class DiffusionCBMixin:
-    def log_line_series(self, pl_module : FM | DSB):
+    def log_line_series(self, pl_module : DSB):
         logger = pl_module.logger
         gammas = pl_module.scheduler.gammas.tolist()
         gammas_bar = pl_module.scheduler.gammas_bar.tolist()
@@ -124,7 +124,7 @@ class DiffusionCBMixin:
             ),
         })
     
-    def visualize_data(self, trainer : Trainer, pl_module : FM | DSB):
+    def visualize_data(self, trainer : Trainer, pl_module : DSB):
         logger = pl_module.logger
         device = pl_module.device
         
@@ -140,7 +140,6 @@ class DiffusionCBMixin:
         elif dim == 3:
             self.data_type = "audio"
             self.sample_rate = pl_module.encoder_decoder.sample_rate
-            assert pl_module.added_noise == 0., "Cannot visualize audio with added noise"
         elif dim == 4:
             self.data_type = "image"
             
@@ -220,7 +219,7 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
     def __init__(self):
         super().__init__()
         
-    def on_train_start(self, trainer : Trainer, pl_module : FM):
+    def on_train_start(self, trainer : Trainer, pl_module : DSB):
         self.visualize_data(trainer, pl_module)
         x0_encoded = self.x0_encoded[:5]
         x1_encoded = self.x1_encoded[:5]
@@ -324,7 +323,7 @@ class DSBCB(Callback, DiffusionCBMixin):
         device = pl_module.device
         self.visualize_data(trainer, pl_module)
         x0 = self.x0_encoded.to(device)
-        trajectory = pl_module.sample(x0, forward=True, return_trajectory=True, show_progress=True, noise='training')
+        trajectory = pl_module.sample(x0, forward=True, return_trajectory=True, show_progress=True, noise='inference')
         sampled_trajectory = self.sample_from_trajectory(trajectory, 5, 5)
         sampled_trajectory = pl_module.decode(sampled_trajectory)
         # sampled.trajectory shape: (25, ...)

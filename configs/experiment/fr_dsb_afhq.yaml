@@ -1,13 +1,13 @@
 # @package _global_
 defaults:
   - override /trainer: gpu
-  - override /data: fm_celeba
+  - override /data: afhq
   - override /callbacks: dsb_callbacks
-  - override /model: dsb_celeba
+  - override /model: fr_dsb_afhq
   - override /logger: default
 
 project_name: 'dsb'
-task_name: 'celeba'
+task_name: 'fr afhq'
 
 trainer:
   fast_dev_run: False
@@ -16,4 +16,4 @@ trainer:
   log_every_n_steps: 1
   max_epochs: -1
   val_check_interval: 50
-  limit_val_batches: 5
+  limit_val_batches: 10

@@ -1,4 +1,4 @@
-from src.lightning_modules.schedulers import DSBScheduler
+from src.lightning_modules.schedulers import DSBScheduler, NOISE_TYPES, TARGETS
 from src.lightning_modules.baselightningmodule import BaseLightningModule
 from src.networks.encoders import BaseEncoderDecoder
 from torch.optim import Optimizer
@@ -19,8 +19,7 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         model : Module,
         encoder_decoder : BaseEncoderDecoder,
         num_timesteps : int = 100,
-        added_noise : float = 0.0,
-        target : Literal['flow', 'terminal'] = 'flow',
+        target : TARGETS = 'flow',
         optimizer : Optimizer | None = None,
         lr_scheduler : dict[str, LRScheduler | str] | None = None,
         ema_decay : float = 0.999,
@@ -32,7 +31,6 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         self.model = model
         self.encoder_decoder = encoder_decoder
         self.ema = ExponentialMovingAverage(self.model.parameters(), decay=ema_decay)
-        self.added_noise = added_noise
         self.scheduler = DSBScheduler(num_timesteps, gamma_min, gamma_max, target)
         
         self.partial_optimizer = optimizer
@@ -57,7 +55,7 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
     
     def training_step(self, batch : tuple[Tensor, Tensor], batch_idx : int) -> Tensor:
         x0, x1 = batch
-        x0, x1 = self.encode(x0, add_noise=True), self.encode(x1, add_noise=True)
+        x0, x1 = self.encode(x0), self.encode(x1)
         loss = self.common_step(x0, x1)
         self.log('train_loss', loss, prog_bar=True)
         return loss
@@ -66,7 +64,7 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
     def validation_step(self, batch : tuple[Tensor, Tensor], batch_idx : int) -> Tensor:
         with self.fix_validation_seed():
             x0, x1 = batch
-            x0, x1 = self.encode(x0, add_noise=False), self.encode(x1, add_noise=False)
+            x0, x1 = self.encode(x0), self.encode(x1)
             with self.ema.average_parameters():
                 loss = self.common_step(x0, x1)
                 
@@ -88,17 +86,17 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         x_start : Tensor, 
         return_trajectory : bool = False, 
         show_progress : bool = False, 
-        noise : Literal['inference', 'none'] = 'inference'
+        noise : NOISE_TYPES = 'inference'
     ) -> Tensor:
         self.eval()
         batch_size = x_start.size(0)
         xt = x_start.clone()
         trajectory = [xt]
-        for t in tqdm(reversed(self.scheduler.timesteps), desc='Sampling', disable=not show_progress):
-            timesteps = torch.full((batch_size,), t, dtype=torch.int64, device=xt.device)
+        for k in tqdm(reversed(self.scheduler.timesteps), desc='Sampling', disable=not show_progress):
+            timesteps = torch.full((batch_size,), k, dtype=torch.int64, device=xt.device)
             with self.ema.average_parameters():
                 model_output = self(xt, timesteps)
-            xt = self.scheduler.step(xt, t, model_output, noise)
+            xt = self.scheduler.step(xt, k, model_output, noise)
             trajectory.append(xt)
             
         trajectory = torch.stack(trajectory, dim=0)

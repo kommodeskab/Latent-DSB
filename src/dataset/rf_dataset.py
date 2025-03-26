@@ -47,7 +47,7 @@ def make_reflow_dataset(
     for i, batch in tqdm(enumerate(dataloader), desc='Generating dataset'):
         x0, x1 = batch
         x_start = x1 if making_x0 else x0
-        x_start_encoded = fm.encode(x_start, add_noise=True)
+        x_start_encoded = fm.encode(x_start)
         x_end_encoded = fm.sample(x_start_encoded, return_trajectory=False)
         x_end = fm.decode(x_end_encoded)
         

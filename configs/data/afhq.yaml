@@ -1,25 +1,25 @@
 _target_: src.data_modules.FlowMatchingDM
 x0_dataset:
   _target_: src.dataset.AFHQDataset
-  split: 'cat'
+  split: 'dog'
   img_size: 128
   train: True
   augment: True
 x1_dataset:
   _target_: src.dataset.AFHQDataset
-  split: 'dog'
+  split: 'cat'
   img_size: 128
   train: True
   augment: True
 x0_dataset_val:
   _target_: src.dataset.AFHQDataset
-  split: 'cat'
+  split: 'dog'
   img_size: 128
   train: False
   augment: True
 x1_dataset_val:
   _target_: src.dataset.AFHQDataset
-  split: 'dog'
+  split: 'cat'
   img_size: 128
   train: False
   augment: True

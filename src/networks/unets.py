@@ -113,9 +113,19 @@ class SmallUNet1D(UNet1D):
 class MediumUNet1D(UNet1D):
     def __init__(self, **kwargs):
         args = {
-            "in_channels": 12,
-            "out_channels": 12,
             "block_out_channels": [192, 256, 384, 512],
+            "extra_in_channels": 16,
+            "down_block_types": ["DownBlock1DNoSkip", "DownBlock1D", "AttnDownBlock1D", "AttnDownBlock1D"],
+            "up_block_types": ["AttnUpBlock1D", "AttnUpBlock1D", "UpBlock1D", "UpBlock1DNoSkip"],
+        }
+        args.update(kwargs)
+        super().__init__(**args)
+        
+    
+class LargeUNet1D(UNet1D):
+    def __init__(self, **kwargs):
+        args = {
+            "block_out_channels": [256, 384, 512, 640],
             "extra_in_channels": 16,
             "down_block_types": ["DownBlock1DNoSkip", "DownBlock1D", "AttnDownBlock1D", "AttnDownBlock1D"],
             "up_block_types": ["AttnUpBlock1D", "AttnUpBlock1D", "UpBlock1D", "UpBlock1DNoSkip"],

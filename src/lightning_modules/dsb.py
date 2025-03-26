@@ -10,7 +10,7 @@ from torch.nn.functional import mse_loss
 from torch.nn import Module
 import time
 from .mixins import EncoderDecoderMixin
-from .schedulers import DSBScheduler, NOISE_TYPES
+from .schedulers import DSBScheduler, NOISE_TYPES, TARGETS
 from tqdm import tqdm
 from torch_ema import ExponentialMovingAverage
 import matplotlib.pyplot as plt
@@ -44,19 +44,18 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         forward_model : Module,
         encoder_decoder : BaseEncoderDecoder,
         num_steps : int = 100,
-        cache_max_size : int = 5000,
-        max_iterations : int = 20000,
+        cache_max_size : int = 5_000,
+        max_iterations : int = 32_000,
         cache_num_iters : int = 20,
         first_iteration : Literal['network', 'network-straight', 'noise', 'pretrained'] = 'network',
         gamma_min : float | None = None,
         gamma_max : float | None = None,
         optimizer : Optimizer | None = None,
-        target : Literal["terminal", "flow", "semi-flow"] = "terminal",
-        max_dsb_iterations : int | None = 10,
-        max_norm : float = float("inf"),
-        added_noise : float = 0.0,
+        target : TARGETS = "terminal",
+        max_dsb_iterations : int | None = 20,
+        max_norm : float = 5.0,
         ema_decay : float = 0.999,
-        pretrained_target : Literal["terminal", "flow", "semi-flow"] | None = None,
+        pretrained_target : TARGETS | None = None,
     ):
         super().__init__()
         assert first_iteration in ["network", "network-straight", "noise", "pretrained"], "Invalid first_iteration"
@@ -67,7 +66,6 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         self.training_backward = True
         self.curr_num_iters = 0
         self.DSB_iteration = 1
-        self.added_noise = added_noise
         self.first_iteration = first_iteration
         
         self.scheduler = DSBScheduler(num_steps, gamma_min, gamma_max, target)
@@ -153,7 +151,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         xk = x_start.clone()
         trajectory = [xk]
         batch_size = xk.size(0)
-        for k in tqdm(reversed(scheduler.timesteps), desc='Sampling', disable=not show_progress):
+        for k in tqdm(reversed(self.scheduler.timesteps), desc='Sampling', disable=not show_progress):
             ks = torch.full((batch_size,), k, dtype=torch.int64, device=xk.device)
             with ema.average_parameters():
                 model_output = model(xk, ks)
@@ -208,7 +206,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         x0, x1 = batch
         terminal_points = x0 if training_backward else x1
                 
-        terminal_encoded = self.encode(terminal_points, add_noise = True)
+        terminal_encoded = self.encode(terminal_points)
         t1 = time.time()
         new_trajectory = self.sample(terminal_encoded, forward = training_backward, return_trajectory = True, noise='training')
         time_to_sample = time.time() - t1

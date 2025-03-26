@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SET JOB NAME
-#BSUB -J fm_audio
+#BSUB -J init_noise
 
 # select gpu, choose gpuv100 or gpua100 (best)
 #BSUB -q gpuv100
@@ -24,4 +24,4 @@
 
 module load python3/3.12
 source .venv/bin/activate
-python3 train.py +experiment=fm_audio
+python3 train.py +experiment=fr_init_noise

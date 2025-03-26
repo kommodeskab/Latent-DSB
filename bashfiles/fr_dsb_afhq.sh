@@ -1,10 +1,10 @@
 #!/bin/sh
 
 # SET JOB NAME
-#BSUB -J dsb
+#BSUB -J fr_dsb_afhq
 
 # select gpu, choose gpuv100 or gpua100 (best)
-#BSUB -q gpuv100
+#BSUB -q gpua100
 
 # number of GPUs to use
 #BSUB -gpu "num=1:mode=exclusive_process"
@@ -13,15 +13,15 @@
 #BSUB -n 4
 
 # gb memory per core
-#BSUB -R "rusage[mem=1G]"
+#BSUB -R "rusage[mem=6G]"
 # cores is on the same slot
 #BSUB -R "span[hosts=1]"
 
 # walltime
-#BSUB -W 6:00
+#BSUB -W 24:00
 #BSUB -o hpc/output_%J.out 
 #BSUB -e hpc/error_%J.err 
 
 module load python3/3.12
 source .venv/bin/activate
-python3 train.py +experiment=dsb_emnist
+python3 train.py +experiment=fr_dsb_afhq

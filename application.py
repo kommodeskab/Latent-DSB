@@ -84,10 +84,11 @@ img = image_to_tensor(img)
 img = img.to(device)
 
 def gif_generator(dsb : DSB, img_tensor : Tensor):
-    img_encoded = dsb.encode(img_tensor)
-    encoded_trajectory = dsb.sample(img_encoded, forward=to_woman, return_trajectory=True, show_progress=True, noise='inference')
-    encoded_trajectory = encoded_trajectory.flatten(0, 1)
-    decoded_trajectory = dsb.decode(encoded_trajectory)
+    with torch.no_grad():
+        img_encoded = dsb.encode(img_tensor)
+        encoded_trajectory = dsb.sample(img_encoded, forward=to_woman, return_trajectory=True, show_progress=True, noise='inference')
+        encoded_trajectory = encoded_trajectory.flatten(0, 1)
+        decoded_trajectory = dsb.decode(encoded_trajectory)
     gif_buffer = create_gif(decoded_trajectory)
     return gif_buffer
 

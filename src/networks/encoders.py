@@ -5,6 +5,7 @@ from transformers import MimiModel, AutoFeatureExtractor
 from torch import Tensor
 import torch
 import dac
+from diffusers import AutoencoderOobleck
 
 class BaseEncoderDecoder(Module):
     def encode(self, x : Tensor) -> Tensor: ...    
@@ -158,5 +159,31 @@ class DACEncodec(Module):
         zq = self.s_to_zq(s)
         x = self.model.decode(zq)
         # pad to original length
+        x = torch.nn.functional.pad(x, (0, self.waveform_len - x.size(2)), mode='constant', value=0)
+        return x
+    
+class StableAudioEncoder(Module):
+    def __init__(self, scaling_factor : float = 1.0):
+        super().__init__()
+        self.autoencoder : AutoencoderOobleck = AutoencoderOobleck.from_pretrained(
+            'stabilityai/stable-audio-open-1.0', 
+            subfolder='vae', 
+            variant=None,
+            token='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'
+        )
+        self.scaling_factor = scaling_factor
+        self.sample_rate = 41_100
+        self.waveform_len = None
+        
+    def encode(self, x : Tensor) -> Tensor:
+        if self.waveform_len is None:
+            self.waveform_len = x.size(2)
+        if x.size(1) == 1:
+            x = x.repeat(1, 2, 1)
+        return self.autoencoder.encode(x).latent_dist.sample() * self.scaling_factor
+    
+    def decode(self, h : Tensor) -> Tensor:
+        x = self.autoencoder.decode(h / self.scaling_factor).sample
+        x = x[:, :1, :]
         x = torch.nn.functional.pad(x, (0, self.waveform_len - x.size(2)), mode='constant', value=0)
         return x

@@ -141,7 +141,7 @@ class BaseConcatAudio(ConcatDataset):
             
             #normalize
             rms = torch.sqrt(torch.mean(waveform**2) + 1e-8)
-            scale = 0.2 / rms
+            scale = 0.1 / rms
             waveform = scale * waveform
         except:
             print(f'Error loading {file_name}. Defaulting to zeros.')
@@ -195,8 +195,9 @@ class SpeechNoiseDataset(Dataset):
         speech = self.speech_dataset[idx]
         noise_idx = torch.randint(0, len(self.noise_dataset), (1,)).item()
         noise = self.noise_dataset[noise_idx]
-        random_snr = torch.randint(-10, 20, (1,))
-        noisy_speech = torchaudio.functional.add_noise(speech, noise, snr=random_snr)
+        # random_snr = torch.randint(-15, 0, (1,))
+        # noisy_speech = torchaudio.functional.add_noise(speech, noise, snr=random_snr)
+        noisy_speech = speech + 0.5 * noise
         return speech, noisy_speech
 
 class LibriWhamPaired(SpeechNoiseDataset):
