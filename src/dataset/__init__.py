@@ -15,6 +15,6 @@ from .audio import (
     AllEars, 
     AllVoxCeleb,
     LibriWhamPaired,
-    EarsFSDNoisy,
+    LibriFSDPaired,
     AllLibri,
 )

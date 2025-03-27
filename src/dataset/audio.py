@@ -220,18 +220,19 @@ class LibriWhamPaired(SpeechNoiseDataset):
         noise_dataset = BaseConcatAudio(noise, length_seconds, sample_rate)
         super().__init__(speech_dataset, noise_dataset, flip)
     
-class EarsFSDNoisy(SpeechNoiseDataset):
+class LibriFSDPaired(SpeechNoiseDataset):
     def __init__(
         self,
         length_seconds : float = 5.1,
         sample_rate : int = 24_000,
+        flip : bool = False,
     ):
         """
         Returns only the noisy sample. Can be used for unpaired training.        
         """
         speech = [
-            EarsGender('male'),
-            EarsGender('female'),
+            LibriSpeech('male'),
+            LibriSpeech('female'),
         ]
         noise = [
             FSDNoisy18k('train'),
@@ -239,12 +240,8 @@ class EarsFSDNoisy(SpeechNoiseDataset):
         ]
         speech_dataset = BaseConcatAudio(speech, length_seconds, sample_rate)
         noise_dataset = BaseConcatAudio(noise, length_seconds, sample_rate)
-        super().__init__(speech_dataset, noise_dataset)
+        super().__init__(speech_dataset, noise_dataset, flip)
         
-    def __getitem__(self, idx : int) -> Tensor:
-        _, n = super().__getitem__(idx)
-        return n
-    
 class AllLibri(BaseConcatAudio):
     def __init__(
         self,

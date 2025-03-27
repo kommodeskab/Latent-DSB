@@ -9,6 +9,7 @@ playground.py
 playground2.py
 /stable-diffusion-vae
 /latent_means
+/people_images
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
