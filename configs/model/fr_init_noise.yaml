@@ -1,10 +1,13 @@
 _target_: src.lightning_modules.InitDSB
 
 model:
-  _target_: src.networks.LargeUNet1D
-  extra_in_channels: 16
-  in_channels: 64
-  out_channels: 64
+  # _target_: src.networks.LargeUNet1D
+  # extra_in_channels: 16
+  # in_channels: 64
+  # out_channels: 64
+  _target_: src.networks.PretrainedModel
+  experiment_id: '280325100212'
+  model_keyword: 'model'
 
 encoder_decoder:
   _target_: src.networks.StableAudioEncoder

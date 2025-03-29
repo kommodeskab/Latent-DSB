@@ -296,9 +296,6 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
             
             mos = self.mos.evaluate(x0_hat)
             kad = self.kad.evaluate(x0_hat, self.x0_decoded)
-            print("MOS:", mos)
-            print("KAD:", kad)
-            print(pl_module.global_step)
             logger.log_metrics({
                 "MOS": mos,
                 "KAD": kad,

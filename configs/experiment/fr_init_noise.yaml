@@ -8,6 +8,7 @@ defaults:
 
 project_name: 'flow matching'
 task_name: 'fr init noise'
+continue_from_id: '280325100212'
 
 trainer:
   fast_dev_run: False

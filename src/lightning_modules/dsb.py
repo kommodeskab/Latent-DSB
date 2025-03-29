@@ -13,29 +13,7 @@ from .mixins import EncoderDecoderMixin
 from .schedulers import DSBScheduler, NOISE_TYPES, TARGETS
 from tqdm import tqdm
 from torch_ema import ExponentialMovingAverage
-import matplotlib.pyplot as plt
-import wandb
-from matplotlib.figure import Figure
 
-def plot_images(samples : Tensor, height : int | None = None, width : int | None = None) -> Figure:
-    # assume samples have shape (k, c, h, w)
-    # and have values between -1 and 1
-    if height is None and width is None:
-        k = int(samples.size(0) ** 0.5)
-        height = width = k
-
-    samples = (samples + 1) / 2
-    samples = samples.clamp(0, 1)
-    cmap = 'gray' if samples.shape[1] == 1 else None
-    samples = samples.permute(0, 2, 3, 1)
-    fig, axs = plt.subplots(height, width, figsize=(width*5, height*5), dpi=300)
-    axs : list[plt.Axes]
-    for i in range(height):
-        for j in range(width):
-            ax = axs[i, j] if height > 1 else axs[j]
-            ax.imshow(samples[i * height + j], cmap=cmap)
-            ax.axis('off')
-    return fig
 
 class DSB(BaseLightningModule, EncoderDecoderMixin):
     def __init__(
@@ -52,7 +30,6 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         gamma_max : float | None = None,
         optimizer : Optimizer | None = None,
         target : TARGETS = "terminal",
-        max_dsb_iterations : int | None = 20,
         max_norm : float = 5.0,
         ema_decay : float = 0.999,
         pretrained_target : TARGETS | None = None,
@@ -89,15 +66,8 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         self.forward_ema.to(self.device)
         self.backward_ema.to(self.device)
         
-    def _has_converged(self) -> bool:
-        dsb_iters = self.DSB_iteration
-        curr_iters = self.curr_num_iters
-        max_iters = self.hparams.max_iterations
-        max_dsb_iters = self.hparams.max_dsb_iterations
-        return (curr_iters >= max_iters) or (dsb_iters >= max_dsb_iters)
-    
     def on_train_batch_start(self, batch : Tensor, batch_idx : int) -> None:
-        if self._has_converged():
+        if self.curr_num_iters >= self.hparams.max_iterations:
             self.curr_num_iters = 0
             self.training_backward = not self.training_backward
             self.cache.clear()
@@ -109,8 +79,6 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
                 self._reset_optimizers()
                 self.DSB_iteration += 1
                 
-            return -1    
-    
     def on_validation_end(self):
         # save checkpoint under "logs/project/version/checkpoints"
         save_dir = f"logs/{self.logger.name}/{self.logger.version}/checkpoints/DSB_iteration_{self.DSB_iteration}.ckpt"
@@ -172,7 +140,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
     ) -> Tensor:
         if (self.training_backward and self.DSB_iteration == 1 and forward): # when sampling forward in the first iteration
             if self.first_iteration == 'noise':
-                x_end = torch.randn_like(x_start).to(x_start.device)
+                x_end = torch.randn_like(x_start)
                 return self.scheduler.deterministic_sample(x_start, x_end, return_trajectory, noise=noise)
             
             elif self.first_iteration == 'pretrained':
@@ -211,30 +179,14 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         new_trajectory = self.sample(terminal_encoded, forward = training_backward, return_trajectory = True, noise='training')
         time_to_sample = time.time() - t1
         self.cache.add(new_trajectory.cpu())
-        
-        if self.curr_num_iters == 0:
-            logger = self.logger
-            idxs_to_log = torch.linspace(0, new_trajectory.size(0) - 1, 5).long()
-            trajectory_to_log = new_trajectory[idxs_to_log, :5].flatten(0, 1)
-            trajectory_to_log = self.decode(trajectory_to_log)
-            trajectory_to_log = trajectory_to_log.cpu()
-
-            if x0.dim() == 4:
-                fig = plot_images(trajectory_to_log, 5, 5,)
-                key = f"iteration_{self.DSB_iteration}"
-                key = f"{key}/forward_sample_for_backward_training" if training_backward else f"{key}/backward_sample_for_forward_training"
-                logger.log_image(
-                    key=key,
-                    images=[wandb.Image(fig)],
-                )
-                plt.close(fig)
-        
+  
         model, ema = self.get_model(backward = training_backward)
         model.train()
         optimizer = self.get_optimizer(backward = training_backward)
         
         for i in range(self.hparams.cache_num_iters):
-            trajectory = new_trajectory if i == 0 else self.cache.sample().to(self.device)                
+            trajectory = new_trajectory if i == 0 else self.cache.sample()
+            trajectory = trajectory.to(device=self.device)               
             xt, timesteps, target = self.scheduler.sample_batch(trajectory)
             model_output = model(xt, timesteps)
 

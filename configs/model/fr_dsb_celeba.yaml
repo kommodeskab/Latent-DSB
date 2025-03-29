@@ -20,8 +20,8 @@ optimizer:
   weight_decay: 0.0
 
 num_steps: 100
-max_iterations: 20000
-cache_num_iters: 10
+max_iterations: 32000
+cache_num_iters: 50
 cache_max_size: 5000
 first_iteration: 'network'
 target: 'flow'
