@@ -7,6 +7,9 @@ class UNet2D(UNet2DModel):
         super().__init__(**kwargs)
 
     def forward(self, x : Tensor, time_step : Tensor): 
+        if x.dim() == 3:
+            x = x.unsqueeze(1)
+            return super().forward(x, time_step).sample.squeeze(1)
         return super().forward(x, time_step).sample
         
 class PretrainedUNet2D:
@@ -100,12 +103,10 @@ class UNet1D(UNet1DModel):
 class SmallUNet1D(UNet1D):
     def __init__(self, **kwargs):
         args = {
-            "in_channels": 12,
-            "out_channels": 12,
-            "block_out_channels": [32, 32, 64],
+            "block_out_channels": [128, 192, 256, 384],
             "extra_in_channels": 16,
-            "down_block_types": ["DownBlock1DNoSkip", "DownBlock1D", "AttnDownBlock1D"],
-            "up_block_types": ["AttnUpBlock1D", "UpBlock1D", "UpBlock1DNoSkip"],
+            "down_block_types": ["DownBlock1DNoSkip", "DownBlock1D", "AttnDownBlock1D", "AttnDownBlock1D"],
+            "up_block_types": ["AttnUpBlock1D", "AttnUpBlock1D", "UpBlock1D", "UpBlock1DNoSkip"],
         }
         args.update(kwargs)
         super().__init__(**args)

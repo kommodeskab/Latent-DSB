@@ -7,10 +7,9 @@ import torchaudio
 from typing import Literal
 import random
 from torch import Tensor
-from torchaudio.transforms import Resample, Vol
+from torchaudio.transforms import Resample
 from torch.nn.functional import pad
 import glob
-import pandas as pd
 import torch
 
 class BaseAudioDataset(Dataset):
@@ -80,7 +79,7 @@ class LibriSpeech(BaseAudioDataset):
     def __init__(
         self, 
         gender : Literal['male', 'female'], 
-        subset : str = 'train-clean-100',
+        subset : Literal['train-clean-100', 'test-clean'],
         ):
         super().__init__()
         assert gender in ['male', 'female']
@@ -194,50 +193,33 @@ class SpeechNoiseDataset(Dataset):
     def __getitem__(self, idx) -> tuple[Tensor, Tensor]:
         speech = self.speech_dataset[idx]
         noise_idx = torch.randint(0, len(self.noise_dataset), (1,)).item()
-        noise = self.noise_dataset[noise_idx]
+        if torch.rand(1).item() < 0.1:
+            noise = torch.zeros_like(speech)
+        else:
+            noise = self.noise_dataset[noise_idx]
         # random_snr = torch.randint(-15, 0, (1,))
         # noisy_speech = torchaudio.functional.add_noise(speech, noise, snr=random_snr)
         noisy_speech = speech + 0.5 * noise
         return speech, noisy_speech
-
-class LibriWhamPaired(SpeechNoiseDataset):
-    def __init__(
-        self,
-        length_seconds : float = 5.1,
-        sample_rate : int = 24_000,
-        flip : bool = False,
-        ):
-        speech = [
-            LibriSpeech('male'),
-            LibriSpeech('female'),
-        ]
-        noise = [
-            WHAM('train'),
-            WHAM('validation'),
-            WHAM('test'),
-        ]
-        speech_dataset = BaseConcatAudio(speech, length_seconds, sample_rate)
-        noise_dataset = BaseConcatAudio(noise, length_seconds, sample_rate)
-        super().__init__(speech_dataset, noise_dataset, flip)
     
 class LibriFSDPaired(SpeechNoiseDataset):
     def __init__(
         self,
         length_seconds : float = 5.1,
         sample_rate : int = 24_000,
+        train : bool = True,
         flip : bool = False,
     ):
         """
         Returns only the noisy sample. Can be used for unpaired training.        
         """
-        speech = [
-            LibriSpeech('male'),
-            LibriSpeech('female'),
-        ]
-        noise = [
-            FSDNoisy18k('train'),
-            FSDNoisy18k('test'),
-        ]
+        if train:
+            speech = [LibriSpeech('male', 'train-clean-100'), LibriSpeech('female', 'train-clean-100')]
+            noise = [FSDNoisy18k('train')]
+        else:
+            speech = [LibriSpeech('male', 'test-clean'), LibriSpeech('female', 'test-clean')]
+            noise = [FSDNoisy18k('test')]
+            
         speech_dataset = BaseConcatAudio(speech, length_seconds, sample_rate)
         noise_dataset = BaseConcatAudio(noise, length_seconds, sample_rate)
         super().__init__(speech_dataset, noise_dataset, flip)

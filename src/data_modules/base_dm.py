@@ -1,7 +1,6 @@
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader, random_split, Dataset
 import torch
-from collections import defaultdict
 
 def split_dataset(train_dataset : Dataset, val_dataset : Dataset | None, train_val_split : float) -> tuple[Dataset, Dataset]:
     if val_dataset is None:
@@ -25,7 +24,7 @@ class BaseDM(pl.LightningDataModule):
         """
         super().__init__()
         self.save_hyperparameters(ignore=["dataset", "val_dataset"])
-        self.dataset = dataset
+        self.original_dataset = dataset
         self.train_dataset, self.val_dataset = split_dataset(dataset, val_dataset, train_val_split)
         
     def train_dataloader(self):
@@ -82,6 +81,7 @@ class FlowMatchingDM(BaseDM):
         val_dataset.shuffle_x1_indices()
         
         super().__init__(train_dataset, val_dataset, pin_memory=False, **kwargs)
+        self.original_dataset = x0_dataset
         
     def train_dataloader(self):
         self.dataset.shuffle_x1_indices()

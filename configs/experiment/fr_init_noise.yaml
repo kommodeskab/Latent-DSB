@@ -8,7 +8,6 @@ defaults:
 
 project_name: 'flow matching'
 task_name: 'fr init noise'
-continue_from_id: '280325100212'
 
 trainer:
   fast_dev_run: False
@@ -20,3 +19,4 @@ trainer:
   max_steps: -1
   gradient_clip_val: 5.0
   accumulate_grad_batches: 1
+  precision: 16

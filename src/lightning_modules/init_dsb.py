@@ -53,7 +53,6 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         return loss
     
     def training_step(self, batch : tuple[Tensor, Tensor], batch_idx : int) -> Tensor:
-        self.encoder_decoder.eval()
         x0, x1 = batch
         x0, x1 = self.encode(x0), self.encode(x1)
         loss = self.common_step(x0, x1)
@@ -62,7 +61,6 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
     
     @torch.no_grad()
     def validation_step(self, batch : tuple[Tensor, Tensor], batch_idx : int) -> Tensor:
-        self.encoder_decoder.eval()
         with self.fix_validation_seed():
             x0, x1 = batch
             x0, x1 = self.encode(x0), self.encode(x1)

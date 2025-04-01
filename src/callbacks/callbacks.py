@@ -98,31 +98,24 @@ def plot_graph(y, x = None, title = None, xlabel = None, ylabel = None):
 class DiffusionCBMixin:
     def log_line_series(self, pl_module : DSB):
         logger = pl_module.logger
-        gammas = pl_module.scheduler.gammas.tolist()
-        gammas_bar = pl_module.scheduler.gammas_bar.tolist()
+  
+        def plot_line_series(y : Tensor, xlabel : str, ylabel : str) -> Figure:
+            fig, _ = plt.subplots()
+            plt.plot(y.flatten().numpy())
+            plt.xlabel(xlabel)
+            plt.ylabel(ylabel)
+            return fig
         
-        logger.log_metrics({
-            "gammas": wandb.plot.line_series(
-                xs = torch.linspace(0, 1, len(gammas)).tolist(),
-                ys = [gammas],
-                keys = ["gamma"],
-            ),
-            "gammas_bar": wandb.plot.line_series(
-                xs = torch.linspace(0, 1, len(gammas_bar)).tolist(),
-                ys = [gammas_bar],
-                keys = ["gamma_bar"],
-            ),
-            "variance": wandb.plot.line_series(
-                xs = torch.linspace(0, 1, len(gammas)).tolist(),
-                ys = [pl_module.scheduler.var.tolist()],
-                keys = ["variance"],
-            ),
-            "sampling_variance": wandb.plot.line_series(
-                xs = torch.linspace(0, 1, len(gammas)).tolist(),
-                ys = [pl_module.scheduler.sampling_var.tolist()],
-                keys = ["sampling_variance"],
-            ),
-        })
+        gammas_fig = plot_line_series(pl_module.scheduler.gammas, "timesteps", "gammas")
+        gammas_bar_fig = plot_line_series(pl_module.scheduler.gammas_bar,"timesteps", "gammas_bar")
+        variance_fig = plot_line_series(pl_module.scheduler.var, "timesteps", "variance")
+        sampling_variance_fig = plot_line_series(pl_module.scheduler.sampling_var, "timesteps", "sampling_variance")
+        logger.log_image(
+            key = "Scheduler",
+            images = [wandb.Image(f) for f in [gammas_fig, gammas_bar_fig, variance_fig, sampling_variance_fig]],
+            caption = ["gammas", "gammas_bar", "variance", "sampling_variance"],
+        )
+        plt.close('all')
     
     def visualize_data(self, trainer : Trainer, pl_module : DSB):
         logger = pl_module.logger
@@ -139,7 +132,7 @@ class DiffusionCBMixin:
             x0, x1 = dataset_batch
         elif dim == 3:
             self.data_type = "audio"
-            self.sample_rate = pl_module.encoder_decoder.sample_rate
+            self.sample_rate = trainer.datamodule.original_dataset.sample_rate
         elif dim == 4:
             self.data_type = "image"
             

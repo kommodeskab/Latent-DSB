@@ -11,6 +11,7 @@ playground2.py
 /latent_means
 /people_images
 /gifs
+make_gifs.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

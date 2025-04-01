@@ -14,7 +14,6 @@ from .audio import (
     WHAM,
     AllEars, 
     AllVoxCeleb,
-    LibriWhamPaired,
     LibriFSDPaired,
     AllLibri,
 )
