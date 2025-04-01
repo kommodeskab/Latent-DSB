@@ -59,7 +59,6 @@ class RandomPairDataset(Dataset):
         return len(self.x0_dataset)
     
     def shuffle_x1_indices(self):
-        print("Shuffling dataset for random pairs..")
         self.x1_indices = torch.randperm(len(self.x1_dataset))
     
     def __getitem__(self, idx):

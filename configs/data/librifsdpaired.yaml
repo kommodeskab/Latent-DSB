@@ -4,4 +4,4 @@ dataset:
   length_seconds: 3.0
   sample_rate: 44100
   flip: False
-batch_size: 32
+batch_size: 42

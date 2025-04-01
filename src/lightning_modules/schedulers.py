@@ -25,7 +25,7 @@ class BaseScheduler:
         gammas_bar = torch.cumsum(gammas, 0)
         
         sampling_var = 2 * gammas[1:] * gammas_bar[:-1] / gammas_bar[1:]
-        sampling_var = torch.cat([torch.tensor([0]), sampling_var], 0)
+        sampling_var = torch.cat([torch.tensor([0.]), sampling_var], 0)
         var = 2 * gammas
         
         timesteps = torch.arange(1, num_timesteps + 1)
@@ -106,7 +106,7 @@ class DSBScheduler(BaseScheduler):
         xt = batch[timesteps, all_batches]
         
         if self.target == "flow":
-            gammas_bar = self.to_dim(self.gammas_bar, xt.dim()).to(device)
+            gammas_bar = self.to_dim(self.gammas_bar, xt.dim()).to(device = xt.device, dtype=xt.dtype)
             target = (xt - terminal_points) / gammas_bar[timesteps]
             
         elif self.target == "terminal":
@@ -120,8 +120,8 @@ class DSBScheduler(BaseScheduler):
     def step(self, xk_plus_1 : Tensor, k_plus_one : int, model_output : Tensor, noise : NOISE_TYPES) -> Tensor:
         dim = xk_plus_1.dim()
         device = xk_plus_1.device
-        gammas = self.to_dim(self.gammas, dim).to(device)
-        gammas_bar = self.to_dim(self.gammas_bar, dim).to(device)
+        gammas = self.to_dim(self.gammas, dim).to(device=device, dtype=xk_plus_1.dtype)
+        gammas_bar = self.to_dim(self.gammas_bar, dim).to(device=device, dtype=xk_plus_1.dtype)
         
         if noise == 'training':
             std = self.var[k_plus_one] ** 0.5

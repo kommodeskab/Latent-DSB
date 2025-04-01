@@ -1,7 +1,7 @@
 _target_: src.lightning_modules.InitDSB
 
 model:
-  _target_: src.networks.MediumUNet1D
+  _target_: src.networks.LargeUNet1D
   extra_in_channels: 16
   in_channels: 64
   out_channels: 64
