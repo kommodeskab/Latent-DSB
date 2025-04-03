@@ -11,6 +11,7 @@ from torch.optim.lr_scheduler import LRScheduler
 from torch import Tensor, IntTensor
 import torch
 from tqdm import tqdm
+from time import time
 
 class InitDSB(BaseLightningModule, EncoderDecoderMixin):
     def __init__(
@@ -24,26 +25,34 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         ema_decay : float = 0.999,
         gamma_min : float | None = None,
         gamma_max : float | None = None,
+        log_grad_norm : bool = False,
     ):
         super().__init__()
         self.save_hyperparameters(ignore=['model', 'encoder_decoder'])
         self.model = model
         self.encoder_decoder = encoder_decoder
-        self.ema = ExponentialMovingAverage(self.model.parameters(), decay=ema_decay)
+        self.ema = ExponentialMovingAverage(self.model.parameters(), decay=ema_decay, use_num_updates=True)
         self.scheduler = DSBScheduler(num_timesteps, gamma_min, gamma_max, target)
         
         self.partial_optimizer = optimizer
         self.partial_lr_scheduler = lr_scheduler
         
+        self.log_grad_norm = log_grad_norm
+        
     def on_fit_start(self):
         self.ema.to(self.device)
+        
+        # freeze network parameters
+        for param in self.encoder_decoder.parameters():
+            param.requires_grad = False
         
     def forward(self, x : Tensor, timesteps : IntTensor) -> Tensor:
         return self.model(x, timesteps)
     
     def on_before_optimizer_step(self, optimizer):
-        grad_norms = grad_norm(self.model, norm_type=2)
-        self.log_dict(grad_norms)
+        if self.log_grad_norm:
+            grad_norms = grad_norm(self.model, norm_type=2)
+            self.log_dict(grad_norms)
         
     def common_step(self, x0 : Tensor, x1 : Tensor) -> Tensor:
         trajectory = self.scheduler.deterministic_sample(x0, x1, return_trajectory=True, noise='training')
@@ -77,7 +86,11 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         return ema_state_dict
     
     def on_before_zero_grad(self, optimizer):
-        self.ema.update()
+        # update ema parameters
+        # to save time, only update ema parameters every n steps
+        n = 20
+        if self.global_step % n == 0:
+            self.ema.update()
         
     @torch.no_grad()
     def sample(

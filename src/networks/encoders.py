@@ -50,7 +50,11 @@ class PretrainedVAE:
 class StableDiffusionXL:
     def __new__(cls):
         encoder = PretrainedVAE("stabilityai/stable-diffusion-xl-base-1.0", subfolder="vae", revision=None, variant=None)
-        encoder.eval()
+        return encoder
+    
+class AudioLDMEncoder:
+    def __new__(cls):
+        encoder = PretrainedVAE("cvssp/audioldm2", subfolder="vae", revision=None, variant=None)
         return encoder
     
 def normalize(x : Tensor, old_range : tuple, new_range : tuple) -> Tensor:
@@ -95,35 +99,49 @@ class PretrainedMimi:
         return model
     
 class STFTEncoderDecoder(Module):
-    def __init__(self, n_fft : int, hop_length : int, win_length : int):
+    def __init__(
+        self, 
+        n_fft : int = 510, 
+        hop_length : int = 256, 
+        win_length : int = 510
+        ):
+        super().__init__()
         self.n_fft = n_fft
         self.hop_length = hop_length
         self.win_length = win_length
+        self.original_length = None
         
     def encode(self, audio : Tensor) -> Tensor:
+        if self.original_length is None:
+            self.original_length = audio.size(2)
+            self.window = torch.hann_window(self.win_length).to(audio.device)
+            
         audio = audio.squeeze(1)
         spec = torch.stft(
             audio,
             n_fft=self.n_fft,
             hop_length=self.hop_length,
             win_length=self.win_length,
-            return_complex=False
+            return_complex=True,
+            window=self.window,
         )
-        spec = spec.permute(0, 3, 1, 2)
+        spec = torch.view_as_real(spec).permute(0, 3, 1, 2)
         return spec
     
     def decode(self, spec : Tensor) -> Tensor:
-        spec = spec.permute(0, 2, 3, 1)
-        real, imag = spec[..., 0], spec[..., 1]
-        spec = torch.complex(real, imag)
+        spec = spec.permute(0, 2, 3, 1).contiguous()
+        spec = torch.view_as_complex(spec)
         
         audio = torch.istft(
             spec,
             n_fft=self.n_fft,
             hop_length=self.hop_length,
             win_length=self.win_length,
-            return_complex=False
+            return_complex=False,
+            window=self.window,
         )
+        audio = audio.unsqueeze(1)
+        audio = torch.nn.functional.pad(audio, (0, self.original_length - audio.size(2)), mode='constant', value=0)
         return audio
     
 class DACEncodec(Module):

@@ -1,6 +1,7 @@
 import distillmos
 import torch
 from torch import Tensor
+import torchaudio
 
 class MOS:
     def __init__(self, device = 'cuda'):
@@ -9,12 +10,17 @@ class MOS:
         self.sqa_model = sqa_model
         self.device = device
     
-    @torch.no_grad()
-    def evaluate(self, samples : Tensor) -> float:
+    def evaluate(self, samples : Tensor, old_sample_rate : int) -> float:
         samples = samples.to(self.device)
         if samples.dim() == 3:
             samples = samples.mean(dim=1)
-        mos : Tensor = self.sqa_model(samples)
+        # resample to 16kHz (this is what the model expects)
+        if old_sample_rate != 16000:
+            resampler = torchaudio.transforms.Resample(old_sample_rate, 16000).to(self.device)
+            samples = resampler(samples)
+            
+        with torch.no_grad():
+            mos : Tensor = self.sqa_model(samples)
         mos = mos.mean().item()
         return mos
     

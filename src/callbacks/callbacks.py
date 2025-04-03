@@ -216,19 +216,19 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
         self.visualize_data(trainer, pl_module)
         x0_encoded = self.x0_encoded[:5]
         x1_encoded = self.x1_encoded[:5]
-        tensor_for_fig = torch.zeros(5, *x0_encoded.shape)
-        indices = torch.linspace(0, pl_module.scheduler.timesteps.max(), 5, dtype=torch.int64)
-        for i, t in enumerate(indices):
-            if i == 0:
-                tensor_for_fig[i] = x0_encoded
-                continue
-            xt, _ = pl_module.scheduler.forward_process(x0_encoded, x1_encoded, t)
-            tensor_for_fig[i] = xt
-        
-        tensor_for_fig = tensor_for_fig.flatten(0, 1).to(pl_module.device)
-        decoded = pl_module.decode(tensor_for_fig).cpu()
         
         if self.data_type == "image":
+            tensor_for_fig = torch.zeros(5, *x0_encoded.shape)
+            indices = torch.linspace(0, pl_module.scheduler.timesteps.max(), 5, dtype=torch.int64)
+            for i, t in enumerate(indices):
+                if i == 0:
+                    tensor_for_fig[i] = x0_encoded
+                    continue
+                xt, _ = pl_module.scheduler.forward_process(x0_encoded, x1_encoded, t)
+                tensor_for_fig[i] = xt
+            
+            tensor_for_fig = tensor_for_fig.flatten(0, 1).to(pl_module.device)
+            decoded = pl_module.decode(tensor_for_fig).cpu()
             fig = plot_images(decoded)
             pl_module.logger.log_image(
                 key = "Initial trajectory",
@@ -287,11 +287,9 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
                 step = pl_module.global_step,
             )
             
-            mos = self.mos.evaluate(x0_hat)
-            kad = self.kad.evaluate(x0_hat, self.x0_decoded)
+            mos = self.mos.evaluate(x0_hat, self.sample_rate)
             logger.log_metrics({
                 "MOS": mos,
-                "KAD": kad,
             }, step=pl_module.global_step)
         
         plt.close('all')
@@ -338,7 +336,6 @@ class DSBCB(Callback, DiffusionCBMixin):
                 )
             
             self.mos = MOS(pl_module.device)
-            self.kad = KAD()
             
         plt.close('all')
         
@@ -389,10 +386,8 @@ class DSBCB(Callback, DiffusionCBMixin):
             )
             
             mos = self.mos.evaluate(final_samples)
-            kad = self.kad.evaluate(final_samples.cpu(), self.x0_decoded if is_backward else self.x1_decoded)
             logger.log_metrics({
                 "MOS": mos,
-                "KAD": kad,
             }, step=pl_module.global_step)
             
         plt.close('all')
