@@ -12,7 +12,6 @@ import yaml
 
 os.environ["HYDRA_FULL_ERROR"] = "1"
 os.environ["USE_FLASH_ATTENTION"] = "1"
-os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 def update_dict(d : dict | list):
     if isinstance(d, dict):
