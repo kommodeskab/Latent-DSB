@@ -14,4 +14,5 @@ val_dataset:
   train: False
   flip: False
 batch_size: 64
-pin_memory: False
+pin_memory: True
+persistent_workers : True

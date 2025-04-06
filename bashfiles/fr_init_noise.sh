@@ -10,15 +10,15 @@
 #BSUB -gpu "num=1:mode=exclusive_process"
 
 # number of cores to use
-#BSUB -n 4
+#BSUB -n 12
 
 # gb memory per core
-#BSUB -R "rusage[mem=4G]"
+#BSUB -R "rusage[mem=500mb]"
 # cores is on the same slot
 #BSUB -R "span[hosts=1]"
 
 # walltime
-#BSUB -W 24:00
+#BSUB -W 00:30
 #BSUB -o hpc/output_%J.out 
 #BSUB -e hpc/error_%J.err 
 

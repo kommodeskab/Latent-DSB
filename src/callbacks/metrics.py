@@ -21,7 +21,7 @@ class MOS:
             
         with torch.no_grad():
             mos : Tensor = self.sqa_model(samples)
-        mos = mos.mean().item()
+        mos = mos.mean()
         return mos
     
 class KAD:
@@ -60,7 +60,7 @@ class KAD:
         Kyy = Kyy.sum() / (m * (m - 1))
         Kxy = Kxy.sum() / (n * m)
         
-        return self.alpha * (Kxx + Kyy - 2 * Kxy).item()
+        return self.alpha * (Kxx + Kyy - 2 * Kxy)
     
 if __name__ == "__main__":
     x1 = torch.randn(16, 1, 16000)

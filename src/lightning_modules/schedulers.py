@@ -1,7 +1,8 @@
 import torch
 import math
 from torch import Tensor, IntTensor
-from typing import Tuple, Literal, Iterable
+from typing import Tuple, Literal
+from time import time
 
 def get_symmetric_schedule(min_value : float, max_value : float, num_steps : int) -> Tensor:
     gammas = torch.zeros(num_steps)
@@ -10,12 +11,32 @@ def get_symmetric_schedule(min_value : float, max_value : float, num_steps : int
     gammas[-first_half_length:] = torch.flip(gammas[:first_half_length], [0])
     gammas = torch.cat([torch.tensor([0]), gammas], 0)
     return gammas
-
-class BaseScheduler:
-    def __init__(self, num_timesteps : int, gamma_min : float | None = None, gamma_max : float | None = None):
+    
+NOISE_TYPES = Literal['training', 'inference', 'none', 'training-inference']
+TARGETS = Literal['terminal', 'flow', 'semi-flow']
+    
+class DSBScheduler:
+    def __init__(
+        self,
+        num_timesteps : int = 100,
+        gamma_min : float | None = None,
+        gamma_max : float | None = None,
+        target : TARGETS = 'flow',
+    ):
+        assert target in ['terminal', 'flow', 'semi-flow'], "Target should be either 'terminal', 'flow' or 'semi-flow'"
         assert num_timesteps > 0, "Number of timesteps must be positive"
-        self.num_train_timesteps = num_timesteps
+        self.target = target
         self.set_timesteps(num_timesteps, gamma_min, gamma_max)
+        
+    @staticmethod
+    def to_dim(x : Tensor, dim : int) -> Tensor:
+        while x.dim() < dim:
+            x = x.unsqueeze(-1)
+        return x
+    
+    def sample_timesteps(self, batch_size : int) -> Tensor:
+        random_indices = torch.randint(0, len(self.timesteps), (batch_size,))
+        return self.timesteps[random_indices]
     
     def set_timesteps(self, num_timesteps : int, gamma_min : float | None = None, gamma_max : float | None = None) -> None:
         if gamma_min is None and gamma_max is None:
@@ -35,37 +56,6 @@ class BaseScheduler:
         self.gammas_bar = gammas_bar
         self.sampling_var = sampling_var
         self.var = var
-
-    def sample_timesteps(self, batch_size : int) -> Tensor:
-        random_indices = torch.randint(0, len(self.timesteps), (batch_size,))
-        return self.timesteps[random_indices]
-    
-    def sample_batch(self, *args) -> Tuple[Tensor, IntTensor, Tensor]:
-        raise NotImplementedError
-    
-    def step(self, xt_plus_1 : Tensor, t_plus_1 : int, model_output : Tensor) -> Tensor:
-        raise NotImplementedError
-
-    @staticmethod
-    def to_dim(x : Tensor, dim : int) -> Tensor:
-        while x.dim() < dim:
-            x = x.unsqueeze(-1)
-        return x
-    
-NOISE_TYPES = Literal['training', 'inference', 'none', 'training-inference']
-TARGETS = Literal['terminal', 'flow', 'semi-flow']
-    
-class DSBScheduler(BaseScheduler):
-    def __init__(
-        self,
-        num_timesteps : int = 100,
-        gamma_min : float | None = None,
-        gamma_max : float | None = None,
-        target : TARGETS = 'flow',
-    ):
-        assert target in ['terminal', 'flow', 'semi-flow'], "Target should be either 'terminal', 'flow' or 'semi-flow'"
-        super().__init__(num_timesteps, gamma_min, gamma_max)
-        self.target = target
         
     def deterministic_sample(self, x_start : Tensor, x_end : Tensor, return_trajectory : bool = False, noise : NOISE_TYPES = 'training') -> Tensor:
         xk = x_start
@@ -116,6 +106,17 @@ class DSBScheduler(BaseScheduler):
             target = xt - terminal_points
             
         return xt, timesteps, target
+    
+    def sample_init_batch(self, x0 : Tensor, x1 : Tensor) -> Tuple[Tensor, IntTensor, Tensor]:
+        # trajectory = self.deterministic_sample(x0, x1, return_trajectory=True, noise='training')
+        # xk, timesteps, target = self.sample_batch(trajectory)
+        
+        # dummy training
+        xk = x0
+        timesteps = torch.randint(1, self.timesteps.size(0), (x0.size(0),)).to(x0.device)
+        target = x1
+            
+        return xk, timesteps, target
     
     def step(self, xk_plus_1 : Tensor, k_plus_one : int, model_output : Tensor, noise : NOISE_TYPES) -> Tensor:
         dim = xk_plus_1.dim()

@@ -181,7 +181,7 @@ class DACEncodec(Module):
         return x
     
 class StableAudioEncoder(Module):
-    def __init__(self):
+    def __init__(self, chunk_size : int = 32):
         super().__init__()
         self.autoencoder : AutoencoderOobleck = AutoencoderOobleck.from_pretrained(
             'stabilityai/stable-audio-open-1.0', 
@@ -189,10 +189,13 @@ class StableAudioEncoder(Module):
             variant=None,
             token='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'
         )
-        self.sample_rate = 41_100
+        for param in self.autoencoder.parameters():
+            param.requires_grad = False
+        
+        self.sample_rate = 44100
         # chunk size is used for chunked encoding and decoding to avoid oom errors
         # batch is chunked into chunks of this size
-        self.chunk_size = 32
+        self.chunk_size = chunk_size
         self.waveform_len = None
         
     def _encode(self, x : Tensor) -> Tensor:

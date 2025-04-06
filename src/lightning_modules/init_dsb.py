@@ -28,7 +28,7 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         log_grad_norm : bool = False,
     ):
         super().__init__()
-        self.save_hyperparameters(ignore=['model', 'encoder_decoder'])
+        self.save_hyperparameters(ignore=['model', 'encoder_decoder', 'optimizer', 'lr_scheduler'])
         self.model = model
         self.encoder_decoder = encoder_decoder
         self.ema = ExponentialMovingAverage(self.model.parameters(), decay=ema_decay, use_num_updates=True)
@@ -41,10 +41,7 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         
     def on_fit_start(self):
         self.ema.to(self.device)
-        
-        # freeze network parameters
-        for param in self.encoder_decoder.parameters():
-            param.requires_grad = False
+        self.encoder_decoder.to(self.device)
         
     def forward(self, x : Tensor, timesteps : IntTensor) -> Tensor:
         return self.model(x, timesteps)
@@ -55,26 +52,39 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
             self.log_dict(grad_norms)
         
     def common_step(self, x0 : Tensor, x1 : Tensor) -> Tensor:
-        trajectory = self.scheduler.deterministic_sample(x0, x1, return_trajectory=True, noise='training')
-        xt, timesteps, target = self.scheduler.sample_batch(trajectory)
+        xt, timesteps, target = self.scheduler.sample_init_batch(x0, x1)
         model_output = self(xt, timesteps)
         loss = mse_loss(model_output, target)
         return loss
     
+    def encode_batch(self, x0 : Tensor, x1 : Tensor) -> tuple[Tensor, Tensor]:
+        xs_stacked = torch.cat([x0, x1], dim=0)
+        xs_encoded = self.encode(xs_stacked)
+        x0_encoded, x1_encoded = xs_encoded.chunk(2, dim=0)
+        return x0_encoded, x1_encoded
+    
     def training_step(self, batch : tuple[Tensor, Tensor], batch_idx : int) -> Tensor:
         x0, x1 = batch
-        x0, x1 = self.encode(x0), self.encode(x1)
-        loss = self.common_step(x0, x1)
-        self.log('train_loss', loss, prog_bar=True)
+        t = time()
+        x0_encoded, x1_encoded = self.encode_batch(x0, x1)
+        time_to_encode = time() - t
+        t = time()
+        loss = self.common_step(x0_encoded, x1_encoded)
+        time_for_common_step = time() - t
+        self.log_dict({
+            'train_loss': loss,
+            'time_to_encode': time_to_encode,
+            'time_for_common_step': time_for_common_step
+        }, prog_bar=True)
         return loss
     
     @torch.no_grad()
     def validation_step(self, batch : tuple[Tensor, Tensor], batch_idx : int) -> Tensor:
         with self.fix_validation_seed():
             x0, x1 = batch
-            x0, x1 = self.encode(x0), self.encode(x1)
+            x0_encoded, x1_encoded = self.encode_batch(x0, x1)
             with self.ema.average_parameters():
-                loss = self.common_step(x0, x1)
+                loss = self.common_step(x0_encoded, x1_encoded)
                 
             self.log('val_loss', loss, prog_bar=True)
         return loss
@@ -88,7 +98,7 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
     def on_before_zero_grad(self, optimizer):
         # update ema parameters
         # to save time, only update ema parameters every n steps
-        n = 20
+        n = 1
         if self.global_step % n == 0:
             self.ema.update()
         

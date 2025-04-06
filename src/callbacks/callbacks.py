@@ -61,7 +61,7 @@ def visualize_encodings(encodings : Tensor) -> tuple[Figure, Figure]:
         encodings = encodings.flatten(0, 1)
     
     n_channels = encodings.size(0)
-    v_min, v_max = encodings.min().item(), encodings.max().item()
+    v_min, v_max = encodings.min(), encodings.max()
     fig, axs = plt.subplots(1, n_channels, figsize=(n_channels*5, 5))
     axs : list[plt.Axes]
     axs = np.atleast_1d(axs)
@@ -106,10 +106,10 @@ class DiffusionCBMixin:
             plt.ylabel(ylabel)
             return fig
         
-        gammas_fig = plot_line_series(pl_module.scheduler.gammas, "timesteps", "gammas")
-        gammas_bar_fig = plot_line_series(pl_module.scheduler.gammas_bar,"timesteps", "gammas_bar")
-        variance_fig = plot_line_series(pl_module.scheduler.var, "timesteps", "variance")
-        sampling_variance_fig = plot_line_series(pl_module.scheduler.sampling_var, "timesteps", "sampling_variance")
+        gammas_fig = plot_line_series(pl_module.scheduler.gammas.cpu(), "timesteps", "gammas")
+        gammas_bar_fig = plot_line_series(pl_module.scheduler.gammas_bar.cpu(),"timesteps", "gammas_bar")
+        variance_fig = plot_line_series(pl_module.scheduler.var.cpu(), "timesteps", "variance")
+        sampling_variance_fig = plot_line_series(pl_module.scheduler.sampling_var.cpu(), "timesteps", "sampling_variance")
         logger.log_image(
             key = "Scheduler",
             images = [wandb.Image(f) for f in [gammas_fig, gammas_bar_fig, variance_fig, sampling_variance_fig]],

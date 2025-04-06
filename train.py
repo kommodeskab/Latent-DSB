@@ -10,9 +10,6 @@ from pytorch_lightning import LightningDataModule, LightningModule, Callback
 import wandb
 import yaml
 
-os.environ["HYDRA_FULL_ERROR"] = "1"
-os.environ["USE_FLASH_ATTENTION"] = "1"
-
 def update_dict(d : dict | list):
     if isinstance(d, dict):
         if d.get('_target_', None) == "src.networks.PretrainedModel":
@@ -29,7 +26,6 @@ def update_dict(d : dict | list):
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def my_app(cfg : DictConfig) -> None:
-    torch.set_float32_matmul_precision("high")
     pl.seed_everything(cfg.seed)
 
     project_name, task_name, id = cfg.project_name, cfg.task_name, cfg.continue_from_id

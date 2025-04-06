@@ -9,14 +9,23 @@ defaults:
 project_name: 'flow matching'
 task_name: 'fr init noise'
 
+data:
+  batch_size: 16
+  num_workers: 12
+
+model:
+  encoder_decoder:
+    chunk_size: 128
+
 trainer:
-  fast_dev_run: False
+  fast_dev_run: False  
   enable_checkpointing: True
-  log_every_n_steps: 20
-  reload_dataloaders_every_n_epochs: 1
+  log_every_n_steps: 50
+  reload_dataloaders_every_n_epochs: 0
   check_val_every_n_epoch: 1
   max_epochs: -1
   max_steps: -1
   gradient_clip_val: 5.0
   accumulate_grad_batches: 1
   precision: '16-mixed'
+  strategy: 'auto'

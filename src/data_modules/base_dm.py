@@ -1,6 +1,7 @@
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader, random_split, Dataset
 import torch
+import os
 
 def split_dataset(train_dataset : Dataset, val_dataset : Dataset | None, train_val_split : float) -> tuple[Dataset, Dataset]:
     if val_dataset is None:
@@ -14,9 +15,7 @@ class BaseDM(pl.LightningDataModule):
         dataset : Dataset,
         val_dataset : Dataset | None = None,
         train_val_split : float = 0.95,
-        batch_size : int = 32,
-        num_workers: int = 4,
-        pin_memory: bool = True
+        **kwargs
         ):
         """
         A base data module for datasets. 
@@ -26,16 +25,17 @@ class BaseDM(pl.LightningDataModule):
         self.save_hyperparameters(ignore=["dataset", "val_dataset"])
         self.original_dataset = dataset
         self.train_dataset, self.val_dataset = split_dataset(dataset, val_dataset, train_val_split)
+        self.num_workers = kwargs.pop("num_workers", os.cpu_count())
+        print(f"Using {self.num_workers} workers for data loading.")
+        self.kwargs = kwargs
         
     def train_dataloader(self):
         return DataLoader(
             dataset = self.train_dataset, 
             shuffle = True, 
             drop_last=True,
-            persistent_workers=True,
-            batch_size = self.hparams.batch_size, 
-            num_workers = self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory
+            num_workers=self.num_workers,
+            **self.kwargs,
             )
         
     def val_dataloader(self):
@@ -43,10 +43,8 @@ class BaseDM(pl.LightningDataModule):
             dataset = self.val_dataset, 
             shuffle = False, 
             drop_last=True,
-            persistent_workers=True,
-            batch_size = self.hparams.batch_size, 
-            num_workers = self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory
+            num_workers=self.num_workers,
+            **self.kwargs,
             )
         
 class RandomPairDataset(Dataset):

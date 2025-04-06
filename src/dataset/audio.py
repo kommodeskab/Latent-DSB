@@ -212,15 +212,15 @@ class SpeechNoiseDataset(Dataset):
     
     def __getitem__(self, idx) -> tuple[Tensor, Tensor]:
         speech = self.speech_dataset[idx]
-        noise_idx = torch.randint(0, len(self.noise_dataset), (1,)).item()
-        if torch.rand(1).item() < 0.1:
+        noise_idx = torch.randint(0, len(self.noise_dataset), (1,))
+        if torch.rand(1) < 0.1:
             noise = torch.zeros_like(speech)
         else:
             noise = self.noise_dataset[noise_idx]
-        random_snr = torch.randint(-5, 20, (1,)).item()
+        random_snr = torch.randint(-5, 20, (1,))
         noise_factor = self.calculate_noise_factor(speech, noise, random_snr)
         noisy_speech = speech + noise_factor * noise
-        
+
         return speech, noisy_speech
     
 class LibriFSDPaired(SpeechNoiseDataset):
