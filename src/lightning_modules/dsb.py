@@ -5,15 +5,32 @@ from src.lightning_modules.baselightningmodule import BaseLightningModule
 from src.networks.encoders import BaseEncoderDecoder
 from torch.optim import Optimizer
 from pytorch_lightning.utilities import grad_norm
-from src.lightning_modules.utils import DSBCache
 from torch.nn.functional import mse_loss
 from torch.nn import Module
-import time
 from .mixins import EncoderDecoderMixin
 from .schedulers import DSBScheduler, NOISE_TYPES, TARGETS
 from tqdm import tqdm
 from torch_ema import ExponentialMovingAverage
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
+from src.data_modules.base_dm import split_dataset
+from torch.utils.data import random_split
+import math
+
+class DSBCacheDataset(Dataset):
+    def __init__(self):
+        super().__init__()
+        self.cache = []
+        
+    def __len__(self):
+        return len(self.cache)
+    
+    def add(self, trajectory : Tensor):
+        batch_size = trajectory.size(1)
+        for i in range(batch_size):
+            self.cache.append(trajectory[:, i])
+            
+    def __getitem__(self, idx : int) -> Tensor:
+        return self.cache[idx]
 
 class DSB(BaseLightningModule, EncoderDecoderMixin):
     def __init__(
@@ -21,11 +38,17 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         backward_model : Module,
         forward_model : Module,
         encoder_decoder : BaseEncoderDecoder,
+        num_iterations : int,
         effective_batch_size : int,
+        cache_max_size : int,
+        num_cache_iterations : int,
+        x0_dataset : Dataset,
+        x1_dataset : Dataset,
+        x0_dataset_val : Dataset | None = None,
+        x1_dataset_val : Dataset | None = None,
+        cache_generator_batch_size : int = 128,
+        num_workers : int = 4,
         num_timesteps : int = 100,
-        cache_max_size : int = 5_000,
-        max_iterations : int = 32_000,
-        cache_num_iters : int = 20,
         first_iteration : Literal['network', 'network-straight', 'noise', 'pretrained'] = 'network',
         gamma_min : float | None = None,
         gamma_max : float | None = None,
@@ -58,10 +81,97 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
 
         self.encoder_decoder = encoder_decoder
         self.partial_optimizer = optimizer
-        self.cache = DSBCache(max_size=cache_max_size, batch_size=effective_batch_size)
         
         self.forward_ema = ExponentialMovingAverage(self.forward_model.parameters(), decay=ema_decay)
         self.backward_ema = ExponentialMovingAverage(self.backward_model.parameters(), decay=ema_decay)
+        
+        self.original_dataset = x0_dataset # for accessing hyperparameters
+        self.x0_dataset, self.x0_dataset_val = split_dataset(x0_dataset, x0_dataset_val, 0.95)
+        self.x1_dataset, self.x1_dataset_val = split_dataset(x1_dataset, x1_dataset_val, 0.95)
+        
+        self.effective_batch_size = effective_batch_size
+        self.cache_max_size = cache_max_size
+        self.cache_generator_batch_size = cache_generator_batch_size
+        self.num_workers = num_workers
+        self.num_iterations = num_iterations
+        self.num_cache_iterations = num_cache_iterations
+        self.cache_iteration = -1
+        
+        self.max_norm = max_norm
+        
+    def make_cache_dataset(self, start_dataset : Dataset, cache_size : int) -> Dataset:
+        start_dataset_loader = DataLoader(
+            start_dataset,
+            batch_size=self.cache_generator_batch_size,
+            shuffle=False,
+            drop_last=False,
+            num_workers=self.num_workers,
+            pin_memory=True,
+            persistent_workers=False,
+        )
+        
+        num_batches = math.ceil(cache_size / self.cache_generator_batch_size)
+        cache_dataset = DSBCacheDataset()
+        for i, x_start in enumerate(start_dataset_loader, start=1):
+            dtype = self.get_precision_dtype()
+            print(f"Generating batch {i} / {num_batches} for DSB iteration {self.DSB_iteration} | training backward: {self.training_backward} | dtype: {dtype}.")
+            x_start : Tensor
+            x_start = x_start.to(self.device)
+            with torch.autocast(device_type=self.device.type, dtype=dtype):
+                x_start = self.encode(x_start)
+                trajectory = self.sample(x_start, forward=self.training_backward, return_trajectory=True, noise='training', show_progress=True)
+                cache_dataset.add(trajectory.cpu())
+            
+            if i >= num_batches:
+                break
+                
+        return cache_dataset
+    
+    def train_dataloader(self):
+        # the dataset is generated on the fly but augmenting the dataset
+        self.cache_iteration = (self.cache_iteration + 1) % self.num_cache_iterations
+        refresh_cache = self.cache_iteration == 0
+        
+        if refresh_cache:    
+            start_dataset_train = self.x0_dataset if self.training_backward else self.x1_dataset
+            start_dataset_val = self.x1_dataset if self.training_backward else self.x0_dataset
+            
+            self.cache_dataset_train = self.make_cache_dataset(start_dataset_train, self.cache_max_size)
+            # for the validation dataset, just generate a single trajectory, i.e. cache_size = cache_generator_batch_size
+            self.cache_dataset_val = self.make_cache_dataset(start_dataset_val, self.cache_generator_batch_size)
+                
+        return DataLoader(
+            dataset = self.cache_dataset_train,
+            batch_size = self.effective_batch_size,
+            shuffle = True,
+            drop_last=True,
+            num_workers=self.num_workers,
+            pin_memory=True,
+            persistent_workers=False,
+        )
+        
+    def val_dataloader(self):
+        return DataLoader(
+            dataset = self.cache_dataset_val,
+            batch_size = self.effective_batch_size,
+            shuffle = False,
+            drop_last = True,
+            num_workers=self.num_workers,
+            pin_memory=True,
+            persistent_workers=False,
+        )
+        
+    def get_precision_dtype(self):
+        dtype_str = self.trainer.precision
+        if dtype_str == 'bf16-mixed':
+            return torch.bfloat16
+        elif dtype_str == '16-mixed':
+            return torch.float16
+        elif dtype_str == '32-true':
+            return torch.float32
+        elif dtype_str == '16-true':
+            return torch.float16
+        raise ValueError(f"Unknown precision {dtype_str}. Please use 'bf16-mixed' or '16-mixed'.")
         
     def on_fit_start(self) -> None:
         self.forward_ema.to(self.device)
@@ -69,17 +179,14 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         self.encoder_decoder.to(self.device)
         
     def on_train_batch_start(self, batch : Tensor, batch_idx : int) -> None:
-        if self.curr_num_iters >= self.hparams.max_iterations:
+        self.curr_num_iters += 1
+        
+        if self.curr_num_iters >= self.num_iterations:
             print(f"Max iteration reached for DSB iteration {self.DSB_iteration} / training backward: {self.training_backward}.")
-            old_optim = self.get_optimizer(self.training_backward)
-            self.untoggle_optimizer(old_optim)
-            
+
             self.curr_num_iters = 0
+            self.cache_iteration = -1
             self.training_backward = not self.training_backward
-            self.cache.clear()
-            
-            new_optim = self.get_optimizer(self.training_backward)
-            self.toggle_optimizer(new_optim)
             
             self.forward_ema.copy_to()
             self.backward_ema.copy_to()
@@ -89,6 +196,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
                 self.DSB_iteration += 1
                 
             print(f"Starting DSB iteration {self.DSB_iteration} / training backward: {self.training_backward}.")
+            return -1
                 
     def on_validation_end(self):
         # save checkpoint under "logs/project/version/checkpoints"
@@ -130,7 +238,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         xk = x_start.clone()
         trajectory = [xk]
         batch_size = xk.size(0)
-        for k in tqdm(reversed(scheduler.timesteps), desc='Sampling', disable=not show_progress):
+        for k in tqdm(reversed(scheduler.timesteps), desc='Sampling', disable=not show_progress, leave=False):
             ks = torch.full((batch_size,), k, dtype=torch.int64, device=xk.device)
             with ema.average_parameters():
                 model_output = model(xk, ks)
@@ -176,83 +284,57 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         iteration = self.DSB_iteration
         direction = "backward" if backward else "forward"
         training = "train" if is_training else "val"
-        return f"iteration_{iteration}/{direction}_loss/{training}"
+        return f"iteration_{iteration}/{direction}_loss/{training}"    
     
     def training_step(self, batch : Tensor, batch_idx : int) -> Tensor:
-        training_backward = self.training_backward
+        # permute the first two dimensions of the batch
+        batch = batch.permute(1, 0, *range(2, len(batch.shape)))
         
-        x0, x1 = batch
-        terminal_points = x0 if training_backward else x1
-            
-        terminal_encoded = self.encode(terminal_points)
-        new_trajectory = self.sample(terminal_encoded, forward = training_backward, return_trajectory = True, noise='training', show_progress=False)
-        self.cache.add(new_trajectory.cpu())
-  
-        model, ema = self.get_model(backward = training_backward)
-        model.train()
-        optimizer = self.get_optimizer(backward = training_backward)
+        model, ema = self.get_model(backward = self.training_backward)
+        if not model.training:
+            model.train()
+    
+        optimizer = self.get_optimizer(backward = self.training_backward)
+        xt, timesteps, target = self.scheduler.sample_batch(batch)
+        model_output = model(xt, timesteps)
+        loss = mse_loss(model_output, target)
+        optimizer.zero_grad()
+        self.manual_backward(loss)
+        # clip the gradients. first, save the norm for later logging
+        norm = grad_norm(model, norm_type=2).get('grad_2.0_norm_total', 0)
+        self.clip_gradients(optimizer, self.max_norm, "norm")
+        optimizer.step()
+        ema.update()
         
-        num_iters = self.hparams.cache_num_iters if self.cache.is_full() else 1
-        
-        for i in range(num_iters):
-            if i == 0:
-                trajectory = new_trajectory[:, :8]
-            else:
-                trajectory = self.cache.sample().to(device=self.device)               
-            
-            xt, timesteps, target = self.scheduler.sample_batch(trajectory)
-            
-            model_output = model(xt, timesteps)
-            loss = mse_loss(model_output, target)
-            
-            optimizer.zero_grad()
-            self.manual_backward(loss)
-            
-            # clip the gradients. first, save the norm for later logging
-            norm = grad_norm(model, norm_type=2).get('grad_2.0_norm_total', 0)
-            self.clip_gradients(optimizer, self.hparams.max_norm, "norm")
-            optimizer.step()
-            ema.update()
-            
-            self.curr_num_iters += 1
-            
-            if i == 0:
-                model_name = "backward_model" if training_backward else "forward_model"
-                self.log_dict({
-                    self._get_loss_name(backward = training_backward, is_training = True): loss,
-                    f"{model_name}_grad": norm,
-                    "curr_num_iters": self.curr_num_iters,
-                    "DSB_iteration": self.DSB_iteration,
-                    "training_backward": training_backward,
-                    "cache_size": len(self.cache),
-                }, on_step=True, prog_bar=True)
+        self.log_dict({
+            self._get_loss_name(backward = self.training_backward, is_training = True): loss,
+            "curr_num_iters": self.curr_num_iters,
+            "DSB_iteration": self.DSB_iteration,
+            "training_backward": self.training_backward,
+            f"{'backward' if self.training_backward else 'forward'}_norm": norm,
+            "cache_iteration": self.cache_iteration,
+        }, on_step=True, prog_bar=True)
 
 
     @torch.no_grad()
     def validation_step(self, batch : Tensor, batch_idx : int) -> None:
+        batch = batch.permute(1, 0, *range(2, len(batch.shape)))
+        
         with self.fix_validation_seed():
-            training_backward = self.training_backward
-            x0, x1 = batch
-            terminal_point = x0 if training_backward else x1
-            terminal_encoded = self.encode(terminal_point)
-            
-            trajectory = self.sample(terminal_encoded, forward = training_backward, return_trajectory = True, noise='training')
-            batch_size = trajectory.size(1)
-            
-            model, ema = self.get_model(training_backward)
-            model.eval()
-            
-            for k in self.scheduler.timesteps:
-                timesteps = torch.full((batch_size,), k, dtype=torch.int64, device=trajectory.device)
-                xk, timesteps, target = self.scheduler.sample_batch(trajectory, timesteps)
-                with ema.average_parameters():
-                    model_output = model(xk, timesteps)
-                loss = mse_loss(model_output, target)
+            model, ema = self.get_model(backward = self.training_backward)
+            if model.training:
+                model.eval()
                 
-                self.log_dict({
-                    "curr_num_iters": self.curr_num_iters,
-                    self._get_loss_name(backward = training_backward, is_training = False): loss,
-                }, on_step=False, on_epoch=True, prog_bar=True)
+            xt, timesteps, target = self.scheduler.sample_batch(batch)
+            with ema.average_parameters():
+                model_output = model(xt, timesteps)
+                
+            loss = mse_loss(model_output, target)
+            
+            self.log_dict({
+                self._get_loss_name(backward = self.training_backward, is_training = False): loss,
+                "curr_num_iters": self.curr_num_iters,
+            }, on_step=False, prog_bar=True)
     
     def configure_optimizers(self) -> Tuple[list[Optimizer], list[dict]]:
         # make the optimizers

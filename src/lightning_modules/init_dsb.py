@@ -96,7 +96,7 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         batch_size = x_start.size(0)
         xt = x_start.clone()
         trajectory = [xt]
-        for k in tqdm(reversed(self.scheduler.timesteps), desc='Sampling', disable=not show_progress):
+        for k in tqdm(reversed(self.scheduler.timesteps), desc='Sampling', disable=not show_progress, leave=False):
             timesteps = torch.full((batch_size,), k, dtype=torch.int64, device=xt.device)
             with self.ema.average_parameters():
                 model_output = self(xt, timesteps)

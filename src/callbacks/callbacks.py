@@ -121,18 +121,32 @@ class DiffusionCBMixin:
         logger = pl_module.logger
         device = pl_module.device
         
-        dataset = trainer.datamodule.val_dataset
-        dataset_batch = get_batch_from_dataset(dataset, batch_size=16)
-        x0, x1 = dataset_batch
+        def get_x0_x1(trainer : Trainer, pl_module : DSB | InitDSB, batch_size : int) -> tuple[Tensor, Tensor]:
+            if isinstance(pl_module, InitDSB):
+                dataset = trainer.datamodule.val_dataset
+                dataset_batch = get_batch_from_dataset(dataset, batch_size=16)
+                x0, x1 = dataset_batch
+            else:
+                x0_dataset = pl_module.x0_dataset_val
+                x1_dataset = pl_module.x1_dataset_val
+                x0 = get_batch_from_dataset(x0_dataset, batch_size=16)
+                x1 = get_batch_from_dataset(x1_dataset, batch_size=16)
+                
+            return x0, x1
+                
+        x0, x1 = get_x0_x1(trainer, pl_module, batch_size=16)
+            
         dim = x0.dim()
         if dim == 2:
             self.data_type = "points"
             # if we are working with points, we might aswell load some more
-            dataset_batch = get_batch_from_dataset(dataset, batch_size=256)
-            x0, x1 = dataset_batch
+            x0, x1 = get_x0_x1(trainer, pl_module, batch_size=256)
         elif dim == 3:
             self.data_type = "audio"
-            self.sample_rate = trainer.datamodule.original_dataset.sample_rate
+            if isinstance(pl_module, InitDSB):
+                self.sample_rate = trainer.datamodule.original_dataset.sample_rate
+            else:
+                self.sample_rate = pl_module.original_dataset.sample_rate
         elif dim == 4:
             self.data_type = "image"
         
@@ -249,6 +263,7 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
             self.kad = KAD()
             
         plt.close('all')
+        return
         if isinstance(pl_module, DSB):
             # it is a good idea to check the quality of the initial samples
             # therefore, we momentarily set the model to "training forward" in order to sample from the forward model

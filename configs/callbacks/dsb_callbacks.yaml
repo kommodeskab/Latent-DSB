@@ -1,6 +1,6 @@
 defaults:
   - learningratemonitor
-  - richprogressbar
+#  - richprogressbar
   - richmodelsummary
   - timer
   - flowmatching

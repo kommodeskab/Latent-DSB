@@ -20,11 +20,31 @@ optimizer:
   weight_decay: 0.0
 
 effective_batch_size: 8
+num_workers: 12
+num_iterations: 100
+cache_max_size : 64
+cache_generator_batch_size: 32
+num_cache_iterations: 5
 num_timesteps: 100
-max_iterations: 40000
-cache_num_iters: 200
-cache_max_size: 320
 first_iteration: 'network'
 target: 'flow'
 max_norm: 5.0
 ema_decay: 0.999
+
+x0_dataset:
+  _target_: src.dataset.AllLibri
+  length_seconds: 2.23
+  sample_rate: 16000
+  train: True
+
+x0_dataset_val:
+  _target_: src.dataset.AllLibri
+  length_seconds: 2.23
+  sample_rate: 16000
+  train: False
+
+x1_dataset:
+  _target_: src.dataset.EarsWHAMUnpaired
+  length_seconds: 2.23
+  sample_rate: 16000
+  train: True
