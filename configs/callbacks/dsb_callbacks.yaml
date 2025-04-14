@@ -3,4 +3,4 @@ defaults:
   - richprogressbar
   - richmodelsummary
   - timer
-  - dsbcb
+  - flowmatching

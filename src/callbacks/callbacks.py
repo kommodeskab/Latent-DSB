@@ -96,7 +96,7 @@ def plot_graph(y, x = None, title = None, xlabel = None, ylabel = None):
 
 
 class DiffusionCBMixin:
-    def log_line_series(self, pl_module : DSB):
+    def log_line_series(self, pl_module : DSB | InitDSB):
         logger = pl_module.logger
   
         def plot_line_series(y : Tensor, xlabel : str, ylabel : str) -> Figure:
@@ -117,7 +117,7 @@ class DiffusionCBMixin:
         )
         plt.close('all')
     
-    def visualize_data(self, trainer : Trainer, pl_module : DSB):
+    def visualize_data(self, trainer : Trainer, pl_module : DSB | InitDSB):
         logger = pl_module.logger
         device = pl_module.device
         
@@ -135,11 +135,16 @@ class DiffusionCBMixin:
             self.sample_rate = trainer.datamodule.original_dataset.sample_rate
         elif dim == 4:
             self.data_type = "image"
-            
-        self.x0_encoded = pl_module.encode(x0.to(device)).cpu()
-        self.x1_encoded = pl_module.encode(x1.to(device)).cpu()
-        self.x0_decoded = pl_module.decode(self.x0_encoded.to(device)).cpu()
-        self.x1_decoded = pl_module.decode(self.x1_encoded.to(device)).cpu()
+        
+        self.x0_encoded = pl_module.encode(x0.to(device))
+        self.x1_encoded = pl_module.encode(x1.to(device))
+        self.x0_decoded = pl_module.decode(self.x0_encoded)
+        self.x1_decoded = pl_module.decode(self.x1_encoded)
+        
+        self.x0_encoded = self.x0_encoded.cpu()
+        self.x1_encoded = self.x1_encoded.cpu()
+        self.x0_decoded = self.x0_decoded.cpu()
+        self.x1_decoded = self.x1_decoded.cpu()
                 
         if self.data_type == "image":
             fig_x0 = plot_images(x0)
@@ -149,12 +154,15 @@ class DiffusionCBMixin:
                 images = [wandb.Image(fig_x0), wandb.Image(fig_x1)],
                 caption = ["x0", "x1"],
             )
-            fig = plot_images(self.x0_decoded)
+            fig_x0_decoded = plot_images(self.x0_decoded)
+            fig_x1_decoded = plot_images(self.x1_decoded)
             logger.log_image(
                 key = "Initial decoded",
-                images = [wandb.Image(fig)],
+                images = [wandb.Image(fig_x0_decoded), wandb.Image(fig_x1_decoded)],
+                caption = ["x0_decoded", "x1_decoded"],
             )
-            self.visualize_latent_space(logger, self.x0_encoded)
+            self.visualize_latent_space(logger, self.x0_encoded, "x0")
+            self.visualize_latent_space(logger, self.x1_encoded, "x1")
             
         elif self.data_type == "points":
             fig = plot_points([x0, x1], keys=["x0", "x1"], colors=['r', 'g'])
@@ -186,7 +194,8 @@ class DiffusionCBMixin:
                 sample_rate = [self.sample_rate] * len(decoded_audio),
                 caption=captions,
             )
-            self.visualize_latent_space(logger, self.x0_encoded)
+            self.visualize_latent_space(logger, self.x0_encoded, "x0")
+            self.visualize_latent_space(logger, self.x1_encoded, "x1")
             
         original_size = x0.flatten(1).size(1)
         latent_size = self.x0_encoded.flatten(1).size(1)
@@ -198,13 +207,13 @@ class DiffusionCBMixin:
         self.log_line_series(pl_module)
         plt.close('all')
     
-    def visualize_latent_space(self, logger : WandbLogger, encodings : Tensor):
+    def visualize_latent_space(self, logger : WandbLogger, encodings : Tensor, title : str):
         logger.log_image(
-            key="Encodings",
+            key=f"Encodings {title}",
             images = [wandb.Image(visualize_encodings(e)) for e in encodings.cpu()],
         )
         logger.log_image(
-            key="Encodings histogram",
+            key=f"Encodings histogram {title}",
             images = [wandb.Image(plot_histogram(e)) for e in encodings.cpu()],
         )
     
@@ -212,7 +221,7 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
     def __init__(self):
         super().__init__()
         
-    def on_train_start(self, trainer : Trainer, pl_module : DSB):
+    def on_train_start(self, trainer : Trainer, pl_module : DSB | InitDSB):
         self.visualize_data(trainer, pl_module)
         x0_encoded = self.x0_encoded[:5]
         x1_encoded = self.x1_encoded[:5]
@@ -240,23 +249,49 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
             self.kad = KAD()
             
         plt.close('all')
+        if isinstance(pl_module, DSB):
+            # it is a good idea to check the quality of the initial samples
+            # therefore, we momentarily set the model to "training forward" in order to sample from the forward model
+            # samples can be generated via self.on_validation_end
+            # we only test the forward process at the very start of training
+            if pl_module.training_backward and pl_module.DSB_iteration == 1:
+                pl_module.DSB_iteration = 0
+                print("Testing initial backward process..")
+                self.on_validation_end(trainer, pl_module)
+                pl_module.training_backward = False
+                print("Testing initial forward process..")
+                self.on_validation_end(trainer, pl_module)
+                pl_module.training_backward = True
+                pl_module.DSB_iteration = 1
         
-    def on_validation_end(self, trainer : Trainer, pl_module : InitDSB):
+    def on_validation_end(self, trainer : Trainer, pl_module : DSB | InitDSB):
         logger = pl_module.logger
         device = pl_module.device
         
-        x1_encoded = self.x1_encoded.to(device)      
-        trajectory = pl_module.sample(x1_encoded, return_trajectory=True)
+        if isinstance(pl_module, InitDSB):
+            x1_encoded = self.x1_encoded.to(device)      
+            trajectory = pl_module.sample(x1_encoded, return_trajectory=True)
+            caption = "x0 Samples"
+            mos_caption = "x0 MOS"
+        else:
+            backward = pl_module.training_backward
+            x_start = self.x1_encoded if backward else self.x0_encoded
+            x_start = x_start.to(device)
+            trajectory = pl_module.sample(x_start, forward=not backward, return_trajectory=True)
+            iteration = pl_module.DSB_iteration
+            backward_str = "x0 samples" if backward else "x1 samples"
+            caption = f"iteration_{iteration}/{backward_str}"
+            mos_caption = f"iteration_{iteration}/{backward_str} MOS"
         
         final_samples = trajectory[-1]
         initial_samples = trajectory[0]
-        x0_hat = pl_module.decode(final_samples).cpu()
-        x1 = pl_module.decode(initial_samples).cpu()
+        final_decoded = pl_module.decode(final_samples).cpu()
+        initial_decoded = pl_module.decode(initial_samples).cpu()
         
         if self.data_type == 'image':
-            fig = plot_images(x0_hat)
+            fig = plot_images(final_decoded)
             logger.log_image(
-                key = "Samples",
+                key = caption,
                 images = [wandb.Image(fig)],
                 step = pl_module.global_step,
             )
@@ -271,26 +306,33 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
             )
         
         elif self.data_type == "points":
-            fig = plot_points([trajectory.cpu(), x0_hat, x1], keys=["trajectory", "x0_hat", "x1"], colors=['b', 'r', 'g'])
+            fig = plot_points([trajectory.cpu(), final_decoded, initial_decoded], keys=["trajectory", "x0_hat", "x1"], colors=['b', 'r', 'g'])
             logger.log_image(
-                key = "Samples",
+                key = caption,
                 images = [wandb.Image(fig)],
                 step = pl_module.global_step,
             )
             
         elif self.data_type == "audio":
-            audios = [audio.flatten().numpy() for audio in x0_hat]
+            audios = [audio.flatten().numpy() for audio in final_decoded]
             logger.log_audio(
-                key = "Samples",
+                key = caption,
                 audios=audios,
                 sample_rate = [self.sample_rate] * len(audios),
                 step = pl_module.global_step,
             )
             
-            mos = self.mos.evaluate(x0_hat, self.sample_rate)
-            logger.log_metrics({
-                "MOS": mos,
-            }, step=pl_module.global_step)
+            mos = self.mos.evaluate(final_decoded, self.sample_rate)
+        
+            if isinstance(pl_module, InitDSB):
+                logger.log_metrics({
+                    mos_caption: mos,
+                }, step=pl_module.global_step)
+            else:
+                logger.log_metrics({
+                    mos_caption: mos,
+                    'curr_num_iters': pl_module.curr_num_iters,
+                }, step=pl_module.global_step)
         
         plt.close('all')
 

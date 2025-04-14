@@ -13,12 +13,12 @@
 #BSUB -n 4
 
 # gb memory per core
-#BSUB -R "rusage[mem=4G]"
+#BSUB -R "rusage[mem=1G]"
 # cores is on the same slot
 #BSUB -R "span[hosts=1]"
 
 # walltime
-#BSUB -W 24:00
+#BSUB -W 00:10
 #BSUB -o hpc/output_%J.out 
 #BSUB -e hpc/error_%J.err 
 

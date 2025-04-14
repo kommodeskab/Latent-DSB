@@ -2,7 +2,6 @@ import torch
 import math
 from torch import Tensor, IntTensor
 from typing import Tuple, Literal
-from time import time
 
 def get_symmetric_schedule(min_value : float, max_value : float, num_steps : int) -> Tensor:
     gammas = torch.zeros(num_steps)
@@ -108,14 +107,9 @@ class DSBScheduler:
         return xt, timesteps, target
     
     def sample_init_batch(self, x0 : Tensor, x1 : Tensor) -> Tuple[Tensor, IntTensor, Tensor]:
-        # trajectory = self.deterministic_sample(x0, x1, return_trajectory=True, noise='training')
-        # xk, timesteps, target = self.sample_batch(trajectory)
+        trajectory = self.deterministic_sample(x0, x1, return_trajectory=True, noise='training')
+        xk, timesteps, target = self.sample_batch(trajectory)
         
-        # dummy training
-        xk = x0
-        timesteps = torch.randint(1, self.timesteps.size(0), (x0.size(0),)).to(x0.device)
-        target = x1
-            
         return xk, timesteps, target
     
     def step(self, xk_plus_1 : Tensor, k_plus_one : int, model_output : Tensor, noise : NOISE_TYPES) -> Tensor:

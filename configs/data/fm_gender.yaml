@@ -2,11 +2,14 @@ _target_: src.data_modules.FlowMatchingDM
 x0_dataset:
   _target_: src.dataset.GenderAudioDataset
   gender: 'male'
-  length_seconds: 3.0
-  sample_rate: 44100
+  length_seconds: 2.04
+  sample_rate: 16000
 x1_dataset:
   _target_: src.dataset.GenderAudioDataset
   gender: 'female'
-  length_seconds: 3.0
-  sample_rate: 44100
-batch_size: 32
+  length_seconds: 2.04
+  sample_rate: 16000
+  
+batch_size: 16
+num_workers: 12
+persistent_workers: True

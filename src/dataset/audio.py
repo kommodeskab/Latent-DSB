@@ -123,7 +123,6 @@ class BaseConcatAudio(ConcatDataset):
         try:
             info = torchaudio.info(file_name)
             original_sample_rate, number_frames = info.sample_rate, info.num_frames
-            
             wanted_frames = int(self.length_seconds * original_sample_rate)
             max_offset = max(0, number_frames - wanted_frames)
             offset = random.uniform(0, max_offset)
@@ -166,7 +165,8 @@ class GenderAudioDataset(BaseConcatAudio):
         datasets = [
             EarsGender(gender),
             VoxCeleb(gender),
-            LibriSpeech(gender),
+            LibriSpeech(gender, 'train-clean-100'),
+            LibriSpeech(gender, 'test-clean'),
         ]
         super().__init__(
             datasets,
@@ -182,11 +182,9 @@ class SpeechNoiseDataset(Dataset):
         noise_dataset : BaseConcatAudio,
         flip : bool = False,
         ):
-        if flip:
-            speech_dataset, noise_dataset = noise_dataset, speech_dataset
-        
         self.speech_dataset = speech_dataset
         self.noise_dataset = noise_dataset
+        self.flip = flip
         
         assert speech_dataset.length_seconds == noise_dataset.length_seconds
         assert speech_dataset.sample_rate == noise_dataset.sample_rate
@@ -213,15 +211,19 @@ class SpeechNoiseDataset(Dataset):
     def __getitem__(self, idx) -> tuple[Tensor, Tensor]:
         speech = self.speech_dataset[idx]
         noise_idx = torch.randint(0, len(self.noise_dataset), (1,))
-        if torch.rand(1) < 0.1:
-            noise = torch.zeros_like(speech)
+        if torch.rand(1) < 0.05:
+            noisy_speech = speech.clone()
         else:
             noise = self.noise_dataset[noise_idx]
-        random_snr = torch.randint(-5, 20, (1,))
-        noise_factor = self.calculate_noise_factor(speech, noise, random_snr)
-        noisy_speech = speech + noise_factor * noise
+            random_snr = torch.randint(-10, 20, (1,))
+            noise_factor = self.calculate_noise_factor(speech, noise, random_snr)
+            noisy_speech = speech + noise_factor * noise
 
-        return speech, noisy_speech
+        if not self.flip:
+            return speech, noisy_speech
+        else:
+            # flip the order of speech and noise
+            return noisy_speech, speech
     
 class LibriFSDPaired(SpeechNoiseDataset):
     def __init__(
@@ -246,50 +248,85 @@ class LibriFSDPaired(SpeechNoiseDataset):
         noise_dataset = BaseConcatAudio(noise, length_seconds, sample_rate, initial_sample_rate)
         super().__init__(speech_dataset, noise_dataset, flip)
         
+class EarsWHAMUnpaired(SpeechNoiseDataset):
+    def __init__(
+        self,
+        length_seconds : float = 5.1,
+        sample_rate : int = 24_000,
+        initial_sample_rate : int | None = None,
+        train : bool = True,
+    ):
+        """
+        This is a noisy speech datset consisting of Ears and WHAM, but only the noisy speech is returned.
+        This is used for unpaired training.
+        """
+        if train:
+            speech = [EarsGender('male'), EarsGender('female')]
+            noise = [WHAM('train')]
+        else:
+            noise = [WHAM('test')]
+            raise NotImplementedError('Test set not implemented for Ears dataset yet.')
+    
+        speech_dataset = BaseConcatAudio(speech, length_seconds, sample_rate, initial_sample_rate)
+        noise_dataset = BaseConcatAudio(noise, length_seconds, sample_rate, initial_sample_rate)
+        super().__init__(speech_dataset, noise_dataset)
+        
+    def __getitem__(self, idx) -> Tensor:
+        _, noisy_speech = super().__getitem__(idx)
+        return noisy_speech
+    
+class EarsClipped(BaseConcatAudio):
+    def __init__(
+        self,
+        length_seconds : float = 5.1,
+        sample_rate : int = 24_000,
+        initial_sample_rate : int | None = None,
+        train : bool = True,
+    ):
+        if not train:
+            raise NotImplementedError('Test set not implemented for Ears dataset yet.')
+        
+        datasets = [
+            EarsGender('male'),
+            EarsGender('female'),
+        ]
+        
+        super().__init__(
+            datasets,
+            length_seconds,
+            sample_rate,
+            initial_sample_rate,
+        )
+    
+    def __getitem__(self, idx) -> Tensor:
+        waveform = super().__getitem__(idx)
+        # randomly clip the waveform 
+        clip_val = torch.rand(1) * 0.1
+        waveform = torch.clamp(waveform, -clip_val, clip_val)
+        return waveform
+        
 class AllLibri(BaseConcatAudio):
     def __init__(
         self,
         length_seconds : float = 5.1,
         sample_rate : int = 24_000,
+        initial_sample_rate : int | None = None,
+        train : bool = True,
         ):
-        datasets = [
-            LibriSpeech('male'),
-            LibriSpeech('female'),
-        ]
-        super().__init__(
-            datasets,
-            length_seconds,
-            sample_rate,
-        )
+        if train:
+            datasets = [
+                LibriSpeech('male', 'train-clean-100'),
+                LibriSpeech('female', 'train-clean-100'),
+            ]
+        else:
+            datasets = [
+                LibriSpeech('male', 'test-clean'),
+                LibriSpeech('female', 'test-clean'),
+            ]
         
-class AllVoxCeleb(BaseConcatAudio):
-    def __init__(
-        self,
-        length_seconds : float = 5.1,
-        sample_rate : int = 24_000,
-        ):
-        datasets = [
-            VoxCeleb('male'),
-            VoxCeleb('female'),
-        ]
         super().__init__(
             datasets,
             length_seconds,
             sample_rate,
-        )
-
-class AllEars(BaseConcatAudio):
-    def __init__(
-        self,
-        length_seconds : float = 5.1,
-        sample_rate : int = 24_000,
-        ):
-        datasets = [
-            EarsGender('male'),
-            EarsGender('female'),
-        ]
-        super().__init__(
-            datasets,
-            length_seconds,
-            sample_rate,
+            initial_sample_rate,
         )

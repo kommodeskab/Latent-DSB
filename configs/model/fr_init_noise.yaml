@@ -7,7 +7,6 @@ model:
 
 encoder_decoder:
   _target_: src.networks.StableAudioEncoder
-  chunk_size: 128
 
 optimizer:
   _target_: torch.optim.AdamW

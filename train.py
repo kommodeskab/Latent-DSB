@@ -10,6 +10,8 @@ from pytorch_lightning import LightningDataModule, LightningModule, Callback
 import wandb
 import yaml
 
+os.environ["HYDRA_FULL_ERROR"] = "1"
+
 def update_dict(d : dict | list):
     if isinstance(d, dict):
         if d.get('_target_', None) == "src.networks.PretrainedModel":

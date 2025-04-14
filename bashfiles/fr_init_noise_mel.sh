@@ -4,7 +4,7 @@
 #BSUB -J init_noise
 
 # select gpu, choose gpuv100 or gpua100 (best)
-#BSUB -q gpuv100
+#BSUB -q gpua100
 
 # number of GPUs to use
 #BSUB -gpu "num=1:mode=exclusive_process"
@@ -13,7 +13,7 @@
 #BSUB -n 12
 
 # gb memory per core
-#BSUB -R "rusage[mem=500MB]"
+#BSUB -R "rusage[mem=2GB]"
 # cores is on the same slot
 #BSUB -R "span[hosts=1]"
 
@@ -24,4 +24,4 @@
 
 module load python3/3.12
 source .venv/bin/activate
-python3 train.py +experiment=fr_init_noise
+python3 train.py +experiment=fr_init_noise_mel

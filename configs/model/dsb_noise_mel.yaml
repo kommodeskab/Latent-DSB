@@ -1,0 +1,30 @@
+_target_: src.lightning_modules.DSB
+
+forward_model:
+  _target_: src.networks.PretrainedModel
+  experiment_id: '120425231556'
+  model_keyword: 'model'
+
+backward_model:
+  _target_: src.networks.PretrainedModel
+  experiment_id: '100425172156'
+  model_keyword: 'model'
+
+encoder_decoder:
+  _target_: src.networks.HifiGan
+
+optimizer:
+  _target_: torch.optim.AdamW
+  _partial_: True
+  lr: 1.e-5
+  weight_decay: 0.0
+
+effective_batch_size: 8
+num_timesteps: 100
+max_iterations: 40000
+cache_num_iters: 200
+cache_max_size: 320
+first_iteration: 'network'
+target: 'flow'
+max_norm: 5.0
+ema_decay: 0.999

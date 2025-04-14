@@ -6,16 +6,21 @@ from torch import Tensor
 import torch
 import dac
 from diffusers import AutoencoderOobleck
+from functools import partial
+from speechbrain.lobes.models.FastSpeech2 import mel_spectogram
+from speechbrain.inference.vocoders import HIFIGAN
+from transformers import SpeechT5HifiGan
 
 class BaseEncoderDecoder(Module):
     def encode(self, x : Tensor) -> Tensor: ...    
     def decode(self, h : Tensor) -> Tensor: ...
     
 class IdentityEncoderDecoder(Module):
-    def __init__(self):
+    def __init__(self, scaling_factor : float = 1.0):
         super().__init__()
-    def encode(self, x : Tensor) -> Tensor: return x
-    def decode(self, h : Tensor) -> Tensor: return h
+        self.scaling_factor = scaling_factor
+    def encode(self, x : Tensor) -> Tensor: return x * self.scaling_factor
+    def decode(self, h : Tensor) -> Tensor: return h / self.scaling_factor
     
 class VQ(VQModel):
     def __init__(self, **kwargs):
@@ -156,7 +161,8 @@ class DACEncodec(Module):
             raise NotImplementedError(f"Not implemented for {model_type} yet.")
         dac_path = dac.utils.download(model_type=model_type)
         self.model = dac.DAC.load(dac_path)
-        self.model.eval()
+        for param in self.model.parameters():
+            param.requires_grad = False
         self.waveform_len = None
         
     def s_to_zq(self, s : Tensor) -> Tensor:
@@ -230,3 +236,90 @@ class StableAudioEncoder(Module):
             x.append(x_chunk)
         x = torch.cat(x, dim=0)
         return x
+    
+class HifiGan(Module):
+    def __init__(self):
+        super().__init__()
+        self.vocoder : SpeechT5HifiGan = SpeechT5HifiGan.from_pretrained("cvssp/audioldm2", subfolder="vocoder")
+        for param in self.vocoder.parameters():
+            param.requires_grad = False
+        self.to_mel = partial(
+            mel_spectogram,
+            sample_rate=16000,
+            hop_length=160,
+            win_length=1024,
+            n_mels=64,
+            n_fft=1024,
+            f_min=0.0,
+            f_max=8000.0,
+            power=1,
+            normalized=False,
+            min_max_energy_norm=False,
+            norm="slaney",
+            mel_scale="slaney",
+            compression=True
+        )
+        self.original_len = None
+    
+    def encode(self, x : Tensor) -> Tensor:
+        if self.original_len is None:
+            self.original_len = x.shape[2]
+        x_mel = [self.to_mel(audio = audio.squeeze())[0] for audio in x]
+        x_mel = torch.stack(x_mel, dim=0)
+        return x_mel
+    
+    def decode(self, x : Tensor) -> Tensor:
+        x = x.permute(0, 2, 1)
+        decoded : Tensor = self.vocoder(x)
+        decoded = decoded.unsqueeze(1)
+        if self.original_len is not None:
+            decoded = torch.nn.functional.pad(decoded, (0, self.original_len - decoded.size(2)), mode='constant', value=0)
+        return decoded
+
+class __HifiGan(Module):
+    def __init__(self):
+        super().__init__()
+        self.hifigan : HIFIGAN = HIFIGAN.from_hparams(source="speechbrain/tts-hifigan-libritts-16kHz", savedir="/work3/s214630/data/pretrained_models/tts-hifigan-libritts-16kHz")
+        for param in self.hifigan.parameters():
+            param.requires_grad = False
+        self.hifigan.eval()
+        self.to_mel = partial(
+            mel_spectogram,
+            sample_rate=16000,
+            hop_length=256,
+            win_length=1024,
+            n_mels=80,
+            n_fft=1024,
+            f_min=0.0,
+            f_max=8000.0,
+            power=1,
+            normalized=False,
+            min_max_energy_norm=True,
+            norm="slaney",
+            mel_scale="slaney",
+            compression=True
+        )
+        self.original_len = None
+    
+    def encode(self, x : Tensor) -> Tensor:
+        # x is audio with shape (batch_size, 1, seq_len)
+        # make x into list of tensors
+        if self.original_len is None:
+            self.original_len = x.shape[2]
+        x_list = x.split(1, dim=0)
+        x_mel = [self.to_mel(audio = x.squeeze())[0] for x in x_list]
+        x_mel = torch.stack(x_mel, dim=0)
+        # standardize
+        x_mel = x_mel + 4
+        return x_mel
+    
+    def decode(self, h : Tensor) -> Tensor:
+        h = h - 4
+        decoded = self.hifigan.decode_batch(h)
+        if self.original_len is not None:
+            decoded = torch.nn.functional.pad(decoded, (0, self.original_len - decoded.size(2)), mode='constant', value=0)
+        return decoded
+    
+    def to(self, device : torch.device):
+        self.hifigan.device = device
+        return super().to(device)

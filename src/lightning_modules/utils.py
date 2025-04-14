@@ -4,16 +4,13 @@ from typing import Any
 from collections import deque
 
 class DSBCache:
-    def __init__(self, max_size : int):
+    def __init__(self, max_size : int, batch_size : int):
         self.cache = deque(maxlen=max_size)
-        self.batch_size = None
+        self.batch_size = batch_size
         
     def add(self, sample : Tensor) -> None:
         # sample.shape (num_steps, batch_size, ...)
         batch_size = sample.size(1)
-        if self.batch_size is None:
-            self.batch_size = batch_size
-            
         for i in range(batch_size):
             self.cache.append(sample[:, i])
             
@@ -25,6 +22,9 @@ class DSBCache:
     
     def clear(self) -> None:
         self.cache.clear()
+        
+    def is_full(self) -> bool:
+        return len(self.cache) >= self.cache.maxlen
         
     def __len__(self) -> int:
         return len(self.cache)

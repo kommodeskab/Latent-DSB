@@ -2,6 +2,13 @@ import distillmos
 import torch
 from torch import Tensor
 import torchaudio
+from transformers import WhisperProcessor, WhisperForConditionalGeneration
+from torchmetrics.text import WordErrorRate
+from torchmetrics.audio import ScaleInvariantSignalDistortionRatio
+from torchmetrics.audio.pesq import PerceptualEvaluationSpeechQuality
+from torchaudio.transforms import Resample
+import re
+
 
 class MOS:
     def __init__(self, device = 'cuda'):
@@ -61,17 +68,78 @@ class KAD:
         Kxy = Kxy.sum() / (n * m)
         
         return self.alpha * (Kxx + Kyy - 2 * Kxy)
+class WER:
+    def __init__(self, original_audios : Tensor, original_sample_rate : int):
+        # initialize models for transcription
+        device = original_audios.device
+        self.processor = WhisperProcessor.from_pretrained("openai/whisper-small")
+        self.model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-small").to(device)
+        self.model.eval()
+        
+        if original_sample_rate != 16000:
+            original_audios = self.resample(original_audios, original_sample_rate, 16000)
+        
+        self.original_transcriptions = self.batch_transcribe(original_audios)
+        self.wer_metric = WordErrorRate()
     
+    @staticmethod
+    def resample(audio : Tensor, original_sample_rate : int, target_sample_rate : int) -> Tensor:
+        if original_sample_rate != target_sample_rate:
+            resampler = Resample(original_sample_rate, target_sample_rate)
+            audio = resampler(audio)
+        return audio
+    
+    @staticmethod
+    def normalize_text(s : str) -> str:
+        s = s.lower()
+        s = re.sub(r"[^\w\s]", "", s)  # remove punctuation
+        s = re.sub(r"\s+", " ", s)  # collapse multiple spaces
+        return s.strip()
+    
+    def transcribe(self, audio : Tensor):
+        # audio is a tensor of shape (1, length)
+        input_features = self.processor(audio.squeeze(), sampling_rate=16000, return_tensors="pt").input_features
+        with torch.no_grad():
+            predicted_ids = self.model.generate(input_features)
+        transcription : str = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
+        transcription = self.normalize_text(transcription)
+        return transcription
+    
+    def batch_transcribe(self, audios : Tensor):
+        transcriptions = []
+        for audio in audios:
+            transcription = self.transcribe(audio)
+            transcriptions.append(transcription)
+        return transcriptions
+    
+    def compute_wer(self, audios : Tensor, sample_rate : int) -> Tensor:
+        if sample_rate != 16000:
+            audios = self.resample(audios, sample_rate, 16000)
+            
+        transcriptions = self.batch_transcribe(audios)
+        wer = self.wer_metric(transcriptions, self.original_transcriptions)
+        return wer
+    
+class SISDR:
+    def __init__(self):
+        self.sisdr = ScaleInvariantSignalDistortionRatio()
+    
+    def evaluate(self, generated : Tensor, real : Tensor) -> float:
+        sisdr = self.sisdr(generated, real)
+        return sisdr
+
+class PESQ:
+    def __init__(self, sample_rate : int = 16000):
+        self.sample_rate = sample_rate
+        mode = 'wb' if sample_rate >= 16000 else 'nb'
+        self.pesq = PerceptualEvaluationSpeechQuality(fs=sample_rate, mode=mode)
+    
+    def evaluate(self, generated : Tensor, real : Tensor) -> float:
+        pesq = self.pesq(generated, real)
+        return pesq    
+
 if __name__ == "__main__":
     x1 = torch.randn(16, 1, 16000)
     x2 = torch.randn(16, 1, 16000)
-    x3 = x1 + 0.01 * torch.randn(16, 1, 16000)
-    
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    
-    mos = MOS(device)
-    kad = KAD()
-    
-    print(f"MOS: {mos.evaluate(x1)}")
-    print(f"KAD (high): {kad.evaluate(x1, x2)}")
-    print(f"KAD (low): {kad.evaluate(x1, x3)}")
+    metric = PESQ()
+    print(metric.evaluate(x1, x2))
