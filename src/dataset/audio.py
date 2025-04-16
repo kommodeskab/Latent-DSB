@@ -26,9 +26,18 @@ class BaseAudioDataset(Dataset):
         return file_name
 
 class EarsGender(BaseAudioDataset):
-    def __init__(self, gender : Literal['male', 'female']):
+    def __init__(
+        self, 
+        gender : Literal['male', 'female'],
+        split : Literal['train', 'test'] = 'train',
+        ):
+        # we use speakers p001 to p104 for training
+        # and p105 to p107 for testing
         super().__init__()
         assert gender in ['male', 'female']
+        assert split in ['train', 'test']
+        
+        test_speakers = ['p105', 'p106', 'p107']
         
         data_path = get_data_path()
         data_path = os.path.join(data_path, 'ears')
@@ -42,6 +51,11 @@ class EarsGender(BaseAudioDataset):
             for wav in folder.glob('*.wav'):
                 if any([b in str(wav) for b in banned]):
                     continue
+                
+                is_for_test = wav.parent.name in test_speakers
+                if (split == 'train' and is_for_test) or (split == 'test' and not is_for_test):
+                    continue
+                
                 self.file_names.append(str(wav))
     
 class VoxCeleb(BaseAudioDataset):
@@ -215,7 +229,7 @@ class SpeechNoiseDataset(Dataset):
             noisy_speech = speech.clone()
         else:
             noise = self.noise_dataset[noise_idx]
-            random_snr = torch.randint(-10, 20, (1,))
+            random_snr = torch.randint(-2, 18, (1,))
             noise_factor = self.calculate_noise_factor(speech, noise, random_snr)
             noisy_speech = speech + noise_factor * noise
 
@@ -261,11 +275,11 @@ class EarsWHAMUnpaired(SpeechNoiseDataset):
         This is used for unpaired training.
         """
         if train:
-            speech = [EarsGender('male'), EarsGender('female')]
+            speech = [EarsGender('male', 'train'), EarsGender('female', 'train')]
             noise = [WHAM('train')]
         else:
+            speech = [EarsGender('male', 'test'), EarsGender('male', 'test')]
             noise = [WHAM('test')]
-            raise NotImplementedError('Test set not implemented for Ears dataset yet.')
     
         speech_dataset = BaseConcatAudio(speech, length_seconds, sample_rate, initial_sample_rate)
         noise_dataset = BaseConcatAudio(noise, length_seconds, sample_rate, initial_sample_rate)

@@ -39,7 +39,7 @@ def get_ckpt_path(experiment_id : str, last : bool = True, filename : str | None
     ckpt_paths = glob.glob(f"{folder_to_ckpt_path}/*.ckpt")
     
     if len(ckpt_paths) == 0:
-        raise FileNotFoundError("No checkpoint found")
+        raise FileNotFoundError(f"No checkpoints found in {folder_to_ckpt_path}")
     
     if last:
         return max(ckpt_paths, key=os.path.getctime)
@@ -82,6 +82,7 @@ def what_logs_to_delete():
             if local_run_id not in run_ids:
                 # delete the folder
                 print(f"logs/{project_name}/{local_run_id}")
+                
     print("Done")
     
                 

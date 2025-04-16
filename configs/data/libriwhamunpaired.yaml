@@ -5,6 +5,7 @@ x0_dataset:
   length_seconds: 2.23
   sample_rate: 16000
   train: True
+
 x0_dataset_val:
   _target_: src.dataset.AllLibri
   length_seconds: 2.23
@@ -16,6 +17,12 @@ x1_dataset:
   length_seconds: 2.23
   sample_rate: 16000
   train: True
+
+x1_dataset_val:
+  _target_: src.dataset.EarsWHAMUnpaired
+  length_seconds: 2.23
+  sample_rate: 16000
+  train: False
 
 batch_size: 8
 num_workers: 12

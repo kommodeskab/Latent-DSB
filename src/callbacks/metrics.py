@@ -71,14 +71,15 @@ class KAD:
 class WER:
     def __init__(self, original_audios : Tensor, original_sample_rate : int):
         # initialize models for transcription
-        device = original_audios.device
+        self.device = original_audios.device
         self.processor = WhisperProcessor.from_pretrained("openai/whisper-small")
-        self.model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-small").to(device)
+        self.model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-small").to(self.device)
         self.model.eval()
         
         if original_sample_rate != 16000:
             original_audios = self.resample(original_audios, original_sample_rate, 16000)
         
+        print("Transcribing original audios...")
         self.original_transcriptions = self.batch_transcribe(original_audios)
         self.wer_metric = WordErrorRate()
     
@@ -98,9 +99,10 @@ class WER:
     
     def transcribe(self, audio : Tensor):
         # audio is a tensor of shape (1, length)
-        input_features = self.processor(audio.squeeze(), sampling_rate=16000, return_tensors="pt").input_features
+        processed = self.processor(audio.squeeze().cpu(), sampling_rate=16000, return_tensors="pt")
+        input_features = processed.input_features.to(self.device)
         with torch.no_grad():
-            predicted_ids = self.model.generate(input_features)
+            predicted_ids = self.model.generate(input_features, language='en')
         transcription : str = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
         transcription = self.normalize_text(transcription)
         return transcription
@@ -112,13 +114,14 @@ class WER:
             transcriptions.append(transcription)
         return transcriptions
     
-    def compute_wer(self, audios : Tensor, sample_rate : int) -> Tensor:
+    def compute_wer(self, audios : Tensor, sample_rate : int) -> tuple[Tensor, list[str]]:
         if sample_rate != 16000:
             audios = self.resample(audios, sample_rate, 16000)
-            
+        
+        print("Transcribing generated audios and computing WER...")
         transcriptions = self.batch_transcribe(audios)
         wer = self.wer_metric(transcriptions, self.original_transcriptions)
-        return wer
+        return wer, transcriptions
     
 class SISDR:
     def __init__(self):

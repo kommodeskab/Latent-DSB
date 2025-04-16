@@ -21,10 +21,11 @@ optimizer:
 
 effective_batch_size: 8
 num_workers: 12
-num_iterations: 100
-cache_max_size : 64
-cache_generator_batch_size: 32
-num_cache_iterations: 5
+num_iterations: 32000
+cache_max_size : 1536
+cache_generator_batch_size: 256
+num_cache_iterations: 30
+
 num_timesteps: 100
 first_iteration: 'network'
 target: 'flow'
@@ -48,3 +49,9 @@ x1_dataset:
   length_seconds: 2.23
   sample_rate: 16000
   train: True
+
+x1_dataset_val:
+  _target_: src.dataset.EarsWHAMUnpaired
+  length_seconds: 2.23
+  sample_rate: 16000
+  train: False
