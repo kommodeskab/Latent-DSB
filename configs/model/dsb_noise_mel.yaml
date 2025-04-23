@@ -16,7 +16,7 @@ encoder_decoder:
 optimizer:
   _target_: torch.optim.AdamW
   _partial_: True
-  lr: 1.e-5
+  lr: 1.e-4
   weight_decay: 0.0
 
 effective_batch_size: 8

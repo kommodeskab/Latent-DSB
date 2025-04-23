@@ -68,25 +68,25 @@ class KAD:
         Kxy = Kxy.sum() / (n * m)
         
         return self.alpha * (Kxx + Kyy - 2 * Kxy)
+    
 class WER:
-    def __init__(self, original_audios : Tensor, original_sample_rate : int):
+    def __init__(self, sample_rate : int, device : str):
         # initialize models for transcription
-        self.device = original_audios.device
+        self.device = device
+        self.sample_rate = sample_rate
+        self.target_sample_rate = 16000 # Whisper model expects 16kHz
         self.processor = WhisperProcessor.from_pretrained("openai/whisper-small")
         self.model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-small").to(self.device)
+        self.model.config.forced_decoder_ids = None
         self.model.eval()
-        
-        if original_sample_rate != 16000:
-            original_audios = self.resample(original_audios, original_sample_rate, 16000)
-        
-        print("Transcribing original audios...")
-        self.original_transcriptions = self.batch_transcribe(original_audios)
         self.wer_metric = WordErrorRate()
+        
+        self.real_transcriptions = []
+        self.generated_transcriptions = []
     
-    @staticmethod
-    def resample(audio : Tensor, original_sample_rate : int, target_sample_rate : int) -> Tensor:
-        if original_sample_rate != target_sample_rate:
-            resampler = Resample(original_sample_rate, target_sample_rate)
+    def resample(self,  audio : Tensor) -> Tensor:
+        if self.sample_rate != self.target_sample_rate:
+            resampler = Resample(self.sample_rate, self.target_sample_rate)
             audio = resampler(audio)
         return audio
     
@@ -102,7 +102,7 @@ class WER:
         processed = self.processor(audio.squeeze().cpu(), sampling_rate=16000, return_tensors="pt")
         input_features = processed.input_features.to(self.device)
         with torch.no_grad():
-            predicted_ids = self.model.generate(input_features, language='en')
+            predicted_ids = self.model.generate(input_features)
         transcription : str = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
         transcription = self.normalize_text(transcription)
         return transcription
@@ -114,14 +114,18 @@ class WER:
             transcriptions.append(transcription)
         return transcriptions
     
-    def compute_wer(self, audios : Tensor, sample_rate : int) -> tuple[Tensor, list[str]]:
-        if sample_rate != 16000:
-            audios = self.resample(audios, sample_rate, 16000)
+    def update(self, generated : Tensor, real : Tensor) -> None:
+        real = self.resample(real)
+        generated = self.resample(generated)
+        real_transcriptions = self.batch_transcribe(real)
+        generated_transcriptions = self.batch_transcribe(generated)
+        self.real_transcriptions.extend(real_transcriptions)
+        self.generated_transcriptions.extend(generated_transcriptions)
         
-        print("Transcribing generated audios and computing WER...")
-        transcriptions = self.batch_transcribe(audios)
-        wer = self.wer_metric(transcriptions, self.original_transcriptions)
-        return wer, transcriptions
+    def compute(self) -> float:
+        wer = self.wer_metric(self.generated_transcriptions, self.real_transcriptions)
+        return wer
+        
     
 class SISDR:
     def __init__(self):

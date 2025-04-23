@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
   - override /trainer: gpu
-  - override /data: librifsdpaired
+  - override /data: libriwhamunpaired
   - override /callbacks: fm_callbacks
   - override /model: fr_init_noise_stft
   - override /logger: default
@@ -9,23 +9,26 @@ defaults:
 project_name: 'flow matching'
 task_name: 'fr noise stft'
 
+length_seconds: 1.05
 data:
-  dataset:
-    sample_rate: 8000
-    length_seconds: 2.04
-  val_dataset:
-    sample_rate: 8000
-    length_seconds: 2.04
-  batch_size: 16
+  x0_dataset:
+    length_seconds: ${length_seconds}
+  x1_dataset:
+    length_seconds: ${length_seconds}
+  x0_dataset_val:
+    length_seconds: ${length_seconds}
+  x1_dataset_val:
+    length_seconds: ${length_seconds}
+  batch_size: 8
 
 trainer:
   fast_dev_run: False
   enable_checkpointing: True
-  log_every_n_steps: 20
-  reload_dataloaders_every_n_epochs: 0
+  log_every_n_steps: 50
+  reload_dataloaders_every_n_epochs: 1
   check_val_every_n_epoch: 1
   max_epochs: -1
-  max_steps: -1
+  max_steps: 300000
   gradient_clip_val: 5.0
   accumulate_grad_batches: 1
-  precision: '16-mixed'
+  precision: 'bf16-mixed'

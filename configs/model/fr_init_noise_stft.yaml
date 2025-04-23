@@ -8,8 +8,7 @@ model:
 encoder_decoder:
   _target_: src.networks.STFTEncoderDecoder
   n_fft: 510
-  hop_length: 256
-  win_length: 510
+  hop_length: 128
 
 optimizer:
   _target_: torch.optim.AdamW

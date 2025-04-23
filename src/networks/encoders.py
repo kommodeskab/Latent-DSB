@@ -107,28 +107,26 @@ class STFTEncoderDecoder(Module):
     def __init__(
         self, 
         n_fft : int = 510, 
-        hop_length : int = 256, 
-        win_length : int = 510
+        hop_length : int = 258, 
         ):
         super().__init__()
         self.n_fft = n_fft
         self.hop_length = hop_length
-        self.win_length = win_length
         self.original_length = None
         
     def encode(self, audio : Tensor) -> Tensor:
         if self.original_length is None:
             self.original_length = audio.size(2)
-            self.window = torch.hann_window(self.win_length).to(audio.device)
+            self.window = torch.hamming_window(self.n_fft, device=audio.device)
             
         audio = audio.squeeze(1)
         spec = torch.stft(
             audio,
             n_fft=self.n_fft,
             hop_length=self.hop_length,
-            win_length=self.win_length,
-            return_complex=True,
             window=self.window,
+            center=False,
+            return_complex=True,
         )
         spec = torch.view_as_real(spec).permute(0, 3, 1, 2)
         return spec
@@ -141,8 +139,8 @@ class STFTEncoderDecoder(Module):
             spec,
             n_fft=self.n_fft,
             hop_length=self.hop_length,
-            win_length=self.win_length,
             return_complex=False,
+            center=False,
             window=self.window,
         )
         audio = audio.unsqueeze(1)
@@ -193,7 +191,8 @@ class StableAudioEncoder(Module):
             'stabilityai/stable-audio-open-1.0', 
             subfolder='vae', 
             variant=None,
-            token='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'
+            token='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',
+            torch_dtype=torch.float16,
         )
         for param in self.autoencoder.parameters():
             param.requires_grad = False

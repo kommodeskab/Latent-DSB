@@ -59,13 +59,24 @@ class EarsGender(BaseAudioDataset):
                 self.file_names.append(str(wav))
     
 class VoxCeleb(BaseAudioDataset):
-    def __init__(self, gender : Literal['male', 'female']):
+    def __init__(self, gender : Literal['male', 'female'], split : Literal['train', 'test']):
         super().__init__()
+        assert gender in ['male', 'female']
+        assert split in ['train', 'test']
+        
         data_path = get_data_path()
         gender = gender + 's'
         folder_name = f'VoxCeleb_gender/{gender}'
         data_path = os.path.join(data_path, folder_name)
-        self.file_names = glob.glob(os.path.join(data_path, '*.m4a'))
+        file_names = glob.glob(os.path.join(data_path, '*.m4a'))
+        # file_names have form /datapath/VoxCeleb_gender/males/<number>.m4a
+        # if <number> is below 200, it is a test file, else it is a train file
+        ids = [int(os.path.basename(f).split('.')[0]) for f in file_names]
+        if split == 'train':
+            self.file_names = [f for f, id in zip(file_names, ids) if id >= 200]
+        else:
+            self.file_names = [f for f, id in zip(file_names, ids) if id < 200]
+            
         
 class FSDNoisy18k(BaseAudioDataset):
     def __init__(self, split : Literal['train', 'test']):
@@ -174,14 +185,22 @@ class GenderAudioDataset(BaseConcatAudio):
         gender : Literal['male', 'female'], 
         length_seconds : float = 5.1, 
         sample_rate : int = 24_000,
+        train : bool = True,
         initial_sample_rate : int | None = None,
         ):
-        datasets = [
-            EarsGender(gender),
-            VoxCeleb(gender),
-            LibriSpeech(gender, 'train-clean-100'),
-            LibriSpeech(gender, 'test-clean'),
-        ]
+        if train:  
+            datasets = [
+                EarsGender(gender, 'train'),
+                VoxCeleb(gender, 'train'),
+                LibriSpeech(gender, 'train-clean-100'),
+            ]
+        else:
+            datasets = [
+                EarsGender(gender, 'test'),
+                VoxCeleb(gender, 'test'),
+                LibriSpeech(gender, 'test-clean'),
+            ]
+                
         super().__init__(
             datasets,
             length_seconds,
@@ -269,11 +288,15 @@ class EarsWHAMUnpaired(SpeechNoiseDataset):
         sample_rate : int = 24_000,
         initial_sample_rate : int | None = None,
         train : bool = True,
+        return_pair : bool = False,
     ):
         """
         This is a noisy speech datset consisting of Ears and WHAM, but only the noisy speech is returned.
         This is used for unpaired training.
         """
+        
+        self.return_pair = return_pair
+        
         if train:
             speech = [EarsGender('male', 'train'), EarsGender('female', 'train')]
             noise = [WHAM('train')]
@@ -286,7 +309,11 @@ class EarsWHAMUnpaired(SpeechNoiseDataset):
         super().__init__(speech_dataset, noise_dataset)
         
     def __getitem__(self, idx) -> Tensor:
-        _, noisy_speech = super().__getitem__(idx)
+        speech, noisy_speech = super().__getitem__(idx)
+        
+        if self.return_pair:
+            return speech, noisy_speech
+        
         return noisy_speech
     
 class EarsClipped(BaseConcatAudio):

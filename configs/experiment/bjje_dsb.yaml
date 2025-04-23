@@ -21,8 +21,8 @@ trainer:
   precision: 'bf16-mixed'
 
 model:
-  effective_batch_size: 8
-  num_iterations: 48000
-  cache_max_size: 1536
+  effective_batch_size: 16
+  num_iterations: 38400
+  cache_max_size: 2048
   cache_generator_batch_size: 512
-  num_cache_iterations: 40
+  num_cache_iterations: 60
