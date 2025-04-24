@@ -1,30 +1,35 @@
 # @package _global_
 defaults:
   - override /trainer: gpu
-  - override /data: librifsdpaired
+  - override /data: libriwhamunpaired
   - override /callbacks: fm_callbacks
-  - override /model: fr_init_noise
+  - override /model: init
   - override /logger: default
 
 project_name: 'flow matching'
-task_name: 'fr init noise'
-#continue_from_id: ''
+task_name: 'noise mel'
 
 data:
-  batch_size: 128
+  batch_size: 8
+  flip: False
 
 model:
+  model:
+    _target_: src.networks.UNet50
+    in_channels: 1
+    out_channels: 1
+  
   encoder_decoder:
-    chunk_size: 128
+    _target_: src.networks.HifiGan
 
 trainer:
-  fast_dev_run: False  
+  fast_dev_run: False
   enable_checkpointing: True
-  log_every_n_steps: 200
+  log_every_n_steps: 100
   reload_dataloaders_every_n_epochs: 1
-  check_val_every_n_epoch: 3
+  check_val_every_n_epoch: 1
   max_epochs: -1
-  max_steps: -1
+  max_steps: 300000
   gradient_clip_val: 5.0
   accumulate_grad_batches: 1
   precision: '16-mixed'

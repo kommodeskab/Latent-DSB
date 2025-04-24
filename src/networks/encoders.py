@@ -265,9 +265,11 @@ class HifiGan(Module):
             self.original_len = x.shape[2]
         x_mel = [self.to_mel(audio = audio.squeeze())[0] for audio in x]
         x_mel = torch.stack(x_mel, dim=0)
+        x_mel = x_mel + 4 # approximately normalize between -4 and 4
         return x_mel
     
     def decode(self, x : Tensor) -> Tensor:
+        x = x - 4 # undo normalization
         x = x.permute(0, 2, 1)
         decoded : Tensor = self.vocoder(x)
         decoded = decoded.unsqueeze(1)
@@ -322,3 +324,24 @@ class __HifiGan(Module):
     def to(self, device : torch.device):
         self.hifigan.device = device
         return super().to(device)
+    
+class OpenSoundEncoder(Module):
+    def __init__(self):
+        super().__init__()
+        print("Loading OpenSound VAE...")
+        from stable_audio_tools import create_model_from_config_path
+        vae = create_model_from_config_path('open-sound-vae/config.json')
+        ckpt = torch.load("open-sound-vae/1500k.ckpt", map_location="cpu", weights_only=True)
+        state_dict = ckpt["state_dict"]
+        state_dict = {k[len('autoencoder.'):]: v for k, v in state_dict.items() if k.startswith('autoencoder.')}
+        vae.load_state_dict(state_dict, strict=True)
+        for param in vae.parameters():
+            param.requires_grad = False
+        vae.eval()
+        self.vae = vae
+        
+    def encode(self, x : Tensor) -> Tensor:
+        return self.vae.encode(x)
+    
+    def decode(self, x : Tensor) -> Tensor:
+        return self.vae.decode(x)

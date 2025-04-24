@@ -1,10 +1,10 @@
 #!/bin/sh
 
 # SET JOB NAME
-#BSUB -J init_gender
+#BSUB -J noise_mel_x0
 
 # select gpu, choose gpuv100 or gpua100 (best)
-#BSUB -q gpuv100
+#BSUB -q p1
 
 # number of GPUs to use
 #BSUB -gpu "num=1:mode=exclusive_process"
@@ -13,15 +13,17 @@
 #BSUB -n 12
 
 # gb memory per core
-#BSUB -R "rusage[mem=1GB]"
+#BSUB -R "rusage[mem=2GB]"
 # cores is on the same slot
 #BSUB -R "span[hosts=1]"
 
 # walltime
-#BSUB -W 23:59
+#BSUB -W 24:00
 #BSUB -o hpc/output_%J.out 
 #BSUB -e hpc/error_%J.err 
 
-module load python3/3.12
+module load python3/3.11
 source .venv/bin/activate
-python3 train.py +experiment=fr_init_gender
+python3 train.py +experiment=init_clipped_mel trainer.precision='bf16-mixed' data.batch_size=16
+chgrp -R s214630bjjemiri /work3/s214630/Latent-DSB/
+chmod -R 770 /work3/s214630/Latent-DSB/

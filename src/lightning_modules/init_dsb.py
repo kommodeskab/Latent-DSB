@@ -25,8 +25,6 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         ema_decay : float = 0.999,
         gamma_min : float | None = None,
         gamma_max : float | None = None,
-        update_ema_every_n : int = 1,
-        log_grad_norm : bool = False,
     ):
         super().__init__()
         self.save_hyperparameters(ignore=['model', 'encoder_decoder', 'optimizer', 'lr_scheduler'])
@@ -46,9 +44,8 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         return self.model(x, timesteps)
     
     def on_before_optimizer_step(self, optimizer):
-        if self.hparams.log_grad_norm:
-            grad_norms = grad_norm(self.model, norm_type=2)
-            self.log_dict(grad_norms)
+        grad_norms = grad_norm(self.model, norm_type=2)
+        self.log_dict(grad_norms)
         
     def common_step(self, x0 : Tensor, x1 : Tensor) -> Tensor:
         xt, timesteps, target = self.scheduler.sample_init_batch(x0, x1)
@@ -81,8 +78,7 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         return ema_state_dict
     
     def on_before_zero_grad(self, optimizer):
-        if self.global_step % self.hparams.update_ema_every_n == 0:
-            self.ema.update()
+        self.ema.update()
         
     @torch.no_grad()
     def sample(

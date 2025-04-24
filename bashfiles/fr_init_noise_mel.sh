@@ -22,6 +22,6 @@
 #BSUB -o hpc/output_%J.out 
 #BSUB -e hpc/error_%J.err 
 
-module load python3/3.12
+module load python3/3.11
 source .venv/bin/activate
 python3 train.py +experiment=fr_init_noise_mel

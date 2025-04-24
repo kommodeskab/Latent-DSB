@@ -1,19 +1,19 @@
 #!/bin/sh
 
 # SET JOB NAME
-#BSUB -J fr_dsb_celeba
+#BSUB -J clipped_vae
 
 # select gpu, choose gpuv100 or gpua100 (best)
-#BSUB -q gpua100
+#BSUB -q gpuv100
 
 # number of GPUs to use
 #BSUB -gpu "num=1:mode=exclusive_process"
 
 # number of cores to use
-#BSUB -n 4
+#BSUB -n 12
 
 # gb memory per core
-#BSUB -R "rusage[mem=6G]"
+#BSUB -R "rusage[mem=1G]"
 # cores is on the same slot
 #BSUB -R "span[hosts=1]"
 
@@ -22,6 +22,6 @@
 #BSUB -o hpc/output_%J.out 
 #BSUB -e hpc/error_%J.err 
 
-module load python3/3.12
+module load python3/3.11
 source .venv/bin/activate
-python3 train.py +experiment=fr_dsb_celeba
+python3 train.py +experiment=init_clipped_vae

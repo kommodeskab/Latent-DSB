@@ -315,36 +315,6 @@ class EarsWHAMUnpaired(SpeechNoiseDataset):
             return speech, noisy_speech
         
         return noisy_speech
-    
-class EarsClipped(BaseConcatAudio):
-    def __init__(
-        self,
-        length_seconds : float = 5.1,
-        sample_rate : int = 24_000,
-        initial_sample_rate : int | None = None,
-        train : bool = True,
-    ):
-        if not train:
-            raise NotImplementedError('Test set not implemented for Ears dataset yet.')
-        
-        datasets = [
-            EarsGender('male'),
-            EarsGender('female'),
-        ]
-        
-        super().__init__(
-            datasets,
-            length_seconds,
-            sample_rate,
-            initial_sample_rate,
-        )
-    
-    def __getitem__(self, idx) -> Tensor:
-        waveform = super().__getitem__(idx)
-        # randomly clip the waveform 
-        clip_val = torch.rand(1) * 0.1
-        waveform = torch.clamp(waveform, -clip_val, clip_val)
-        return waveform
         
 class AllLibri(BaseConcatAudio):
     def __init__(
@@ -371,3 +341,33 @@ class AllLibri(BaseConcatAudio):
             sample_rate,
             initial_sample_rate,
         )
+        
+class ClippedLibri(AllLibri):
+    def __init__(
+        self, 
+        length_seconds : float = 5.1,
+        sample_rate : int = 24_000,
+        initial_sample_rate : int | None = None,
+        train : bool = True,
+        no_clip_prob : float = 0.1,
+        gain_range : tuple[float, float] = (5, 30),
+        ):
+        super().__init__(
+            length_seconds,
+            sample_rate,
+            initial_sample_rate,
+            train,
+        )
+        self.no_clip_prob = no_clip_prob
+        self.gain_min, self.gain_max = gain_range
+    
+    def __getitem__(self, idx) -> Tensor:
+        audio = super().__getitem__(idx)
+        if random.random() < self.no_clip_prob:
+            return audio
+        gain_db = random.uniform(self.gain_min, self.gain_max)
+        gain_lim = 10 ** (gain_db / 20)
+        audio = audio * gain_lim
+        audio = audio.clamp(-1, 1)
+        audio = audio / gain_lim
+        return audio

@@ -14,5 +14,6 @@ from .audio import (
     WHAM,
     LibriFSDPaired,
     AllLibri,
-    EarsWHAMUnpaired
+    EarsWHAMUnpaired,
+    ClippedLibri,
 )

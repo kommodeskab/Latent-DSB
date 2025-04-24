@@ -144,6 +144,24 @@ class PESQ:
     def evaluate(self, generated : Tensor, real : Tensor) -> float:
         pesq = self.pesq(generated, real)
         return pesq    
+    
+def calculate_curvature_displacement(trajectories : Tensor, timeschedule : Tensor) -> tuple[Tensor, Tensor]:
+    # trajectories.shape = (trajectory_length, batch_size, ...)
+    timeschedule = timeschedule.unsqueeze(1)
+    batch_size = trajectories.shape[1]
+    C_t_list = []
+    for i in range(batch_size):
+        trajectory = trajectories[:, i]
+        x0 = trajectory[0]
+        x1 = trajectory[-1]
+        dx = trajectory[1:] - trajectory[:-1]
+        dt = timeschedule[1:] - timeschedule[:-1]
+        C_t = (x1 - x0) - dx / dt
+        C_t = C_t.norm(dim=1)
+        C_t_list.append(C_t)
+    C_t = torch.stack(C_t_list, dim=0)
+    C_t_mean, C_t_std = C_t.mean(dim=0), C_t.std(dim=0)
+    return C_t_mean, C_t_std
 
 if __name__ == "__main__":
     x1 = torch.randn(16, 1, 16000)
