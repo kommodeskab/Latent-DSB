@@ -242,6 +242,8 @@ class HifiGan(Module):
         self.vocoder : SpeechT5HifiGan = SpeechT5HifiGan.from_pretrained("cvssp/audioldm2", subfolder="vocoder")
         for param in self.vocoder.parameters():
             param.requires_grad = False
+        self.vocoder.eval()
+        
         self.to_mel = partial(
             mel_spectogram,
             sample_rate=16000,
@@ -258,18 +260,20 @@ class HifiGan(Module):
             mel_scale="slaney",
             compression=True
         )
+        
         self.original_len = None
+        self.off_set = 4 # approximately normalize between -4 and 4
     
     def encode(self, x : Tensor) -> Tensor:
         if self.original_len is None:
             self.original_len = x.shape[2]
         x_mel = [self.to_mel(audio = audio.squeeze())[0] for audio in x]
         x_mel = torch.stack(x_mel, dim=0)
-        x_mel = x_mel + 4 # approximately normalize between -4 and 4
+        x_mel = x_mel + self.off_set
         return x_mel
     
     def decode(self, x : Tensor) -> Tensor:
-        x = x - 4 # undo normalization
+        x = x - self.off_set # undo normalization
         x = x.permute(0, 2, 1)
         decoded : Tensor = self.vocoder(x)
         decoded = decoded.unsqueeze(1)

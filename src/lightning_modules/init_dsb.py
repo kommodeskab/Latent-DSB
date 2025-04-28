@@ -44,8 +44,9 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
         return self.model(x, timesteps)
     
     def on_before_optimizer_step(self, optimizer):
-        grad_norms = grad_norm(self.model, norm_type=2)
-        self.log_dict(grad_norms)
+        if self.global_step % 100 == 0:   
+            norm = grad_norm(self.model, norm_type=2).get('grad_2.0_norm_total', 0)
+            self.log("norm", norm, prog_bar=True)
         
     def common_step(self, x0 : Tensor, x1 : Tensor) -> Tensor:
         xt, timesteps, target = self.scheduler.sample_init_batch(x0, x1)

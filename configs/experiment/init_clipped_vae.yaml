@@ -19,25 +19,30 @@ data:
     length_seconds: ${length_seconds}
   x1_dataset_val:
     length_seconds: ${length_seconds}
-  batch_size: 8
+  batch_size: 128
   flip: False
 
 model:
   model:
-    _target_: src.networks.MediumUNet1D
+    _target_: src.networks.SmallUNet1D
     in_channels: 128
     out_channels: 128
-  encoder_decoder:
-    _target_: src.networks.OpenAudioEncoder
 
+  encoder_decoder:
+    _target_: src.networks.OpenSoundEncoder
+  
+  optimizer:
+    weight_decay: 0.01
+    lr: 8.e-4
+  
 trainer:
   fast_dev_run: False
   enable_checkpointing: True
-  log_every_n_steps: 50
+  log_every_n_steps: 100
   reload_dataloaders_every_n_epochs: 1
-  check_val_every_n_epoch: 1
+  check_val_every_n_epoch: 5
   max_epochs: -1
-  max_steps: 300000
+  max_steps: -1
   gradient_clip_val: 5.0
   accumulate_grad_batches: 1
   precision: '16-mixed'

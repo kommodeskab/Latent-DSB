@@ -22,6 +22,8 @@
 #BSUB -o hpc/output_%J.out 
 #BSUB -e hpc/error_%J.err   
 
-module load python3/3.11
+module load python3/3.11.9
 source .venv/bin/activate
 python3 train.py +experiment=bjje_dsb
+chgrp -R s214630bjjemiri /work3/s214630/Latent-DSB/
+chmod -R 770 /work3/s214630/Latent-DSB/

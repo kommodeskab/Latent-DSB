@@ -2,8 +2,7 @@ from omegaconf import DictConfig
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
 from omegaconf import OmegaConf
-from src.utils import instantiate_callbacks, get_current_time, get_ckpt_path
-from src.networks.basetorchmodule import model_config_from_id
+from src.utils import instantiate_callbacks, get_current_time, get_ckpt_path, model_config_from_id
 import pytorch_lightning as pl
 import os, hydra, torch
 from pytorch_lightning import LightningDataModule, LightningModule, Callback

@@ -18,7 +18,7 @@
 #BSUB -R "span[hosts=1]"
 
 # walltime
-#BSUB -W 24:00
+#BSUB -W 71:59
 #BSUB -o hpc/output_%J.out 
 #BSUB -e hpc/error_%J.err 
 

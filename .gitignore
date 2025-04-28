@@ -5,14 +5,10 @@
 /.vscode
 inception-2015-12-05.pt
 /hpc
-playground.py
-playground2.py
-/stable-diffusion-vae
-/latent_means
-/people_images
 /gifs
 /open-sound-vae
 make_gifs.py
+/test_results
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

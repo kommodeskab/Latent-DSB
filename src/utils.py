@@ -109,19 +109,6 @@ def model_config_from_id(experiment_id : str, model_keyword : str) -> dict:
         new_id = config['model'][model_keyword]['experiment_id']
         return model_config_from_id(new_id, model_keyword)
     return config['model'][model_keyword]
-                
-from src.lightning_modules.dsb import DSB
-def load_dsb_model(experiment_id : str, dsb_iteration : int) -> DSB:
-    from hydra.utils import instantiate
-    
-    config = config_from_id(experiment_id)
-    model_config = config['model']
-    forward_model = instantiate(model_config['forward_model'])
-    backward_model = instantiate(model_config['backward_model'])
-    encoder_decoder = instantiate(model_config['encoder_decoder'])
-    ckpt_path = get_ckpt_path(experiment_id, last=False, filename=f"DSB_iteration_{dsb_iteration}.ckpt")
-    model = DSB.load_from_checkpoint(ckpt_path, forward_model=forward_model, backward_model=backward_model, encoder_decoder=encoder_decoder)
-    return model    
             
 if __name__ == "__main__":
     what_logs_to_delete()

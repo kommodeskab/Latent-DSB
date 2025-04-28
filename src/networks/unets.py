@@ -84,7 +84,6 @@ class UNet50(UNet2D):
         args = {
             "in_channels": 4,
             "out_channels": 4,
-            "sample_size": 8,
             "down_block_types": ["DownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D"],
             "up_block_types": ["AttnUpBlock2D", "AttnUpBlock2D", "AttnUpBlock2D", "UpBlock2D"],
             "block_out_channels": [128, 192, 256, 384],
@@ -122,6 +121,18 @@ class MediumUNet1D(UNet1D):
         args.update(kwargs)
         super().__init__(**args)
         
+        
+class UNet1D50(UNet1D):
+    def __init__(self, **kwargs):
+        args = {
+            "block_out_channels": [256, 320, 384, 384],
+            "extra_in_channels": 16,
+            "down_block_types": ["DownBlock1DNoSkip", "DownBlock1D", "AttnDownBlock1D", "AttnDownBlock1D"],
+            "up_block_types": ["AttnUpBlock1D", "AttnUpBlock1D", "UpBlock1D", "UpBlock1DNoSkip"],
+        }
+        args.update(kwargs)
+        super().__init__(**args)
+        
     
 class LargeUNet1D(UNet1D):
     def __init__(self, **kwargs):
@@ -133,3 +144,9 @@ class LargeUNet1D(UNet1D):
         }
         args.update(kwargs)
         super().__init__(**args)
+        
+if __name__ == "__main__":
+    model = UNet1D50()
+    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Number of trainable parameters: {num_params}")
+    

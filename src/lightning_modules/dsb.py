@@ -66,6 +66,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         target : TARGETS = "terminal",
         max_norm : float = 5.0,
         ema_decay : float = 0.999,
+        max_DSB_iterations : int = float('inf'),
         pretrained_target : TARGETS | None = None,
         x0_dataset : Dataset | None = None,
         x1_dataset : Dataset | None = None,
@@ -109,6 +110,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         self.num_iterations = num_iterations
         self.cache_max_size = cache_max_size
         self.num_cache_iterations = num_cache_iterations
+        self.max_DSB_iterations = max_DSB_iterations
         
         self.max_norm = max_norm
         
@@ -213,7 +215,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
     def on_train_batch_start(self, batch : Tensor, batch_idx : int) -> None:
         self.curr_num_iters += 1
         
-        if self.curr_num_iters >= self.num_iterations:
+        if self.curr_num_iters >= self.num_iterations or self.DSB_iteration > self.max_DSB_iterations:
             print(f"Max iteration reached for DSB iteration {self.DSB_iteration} | training backward: {self.training_backward}.")
 
             self.curr_num_iters = 0
@@ -231,11 +233,18 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
                 self.DSB_iteration += 1
                 
             return -1
+        
+    def save_checkpoint(self, dsb_iteration : int) -> None:
+        save_dir = f"logs/{self.logger.name}/{self.logger.version}/checkpoints/DSB_iteration_{dsb_iteration}.ckpt"
+        self.trainer.save_checkpoint(save_dir)
                 
     def on_validation_end(self):
         # save checkpoint under "logs/project/version/checkpoints"
-        save_dir = f"logs/{self.logger.name}/{self.logger.version}/checkpoints/DSB_iteration_{self.DSB_iteration}.ckpt"
-        self.trainer.save_checkpoint(save_dir)
+        self.save_checkpoint(self.DSB_iteration)
+        
+    def on_train_start(self):
+        # this checkpoint can be used for validating the "initial" model
+        self.save_checkpoint(0)
         
     def on_save_checkpoint(self, checkpoint):
         checkpoint['DSB_iteration'] = self.DSB_iteration
@@ -305,6 +314,19 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         
         return self._sample(x_start, self.scheduler, forward, return_trajectory, show_progress, noise)
     
+    def chunk_sample(self, x_start : Tensor, forward : bool, chunk_size : int, return_trajectory : bool = False, show_progress : bool = False, noise : NOISE_TYPES = 'inference') -> Tensor:
+        # split x_start into chunks of size chunk_size
+        chunks = torch.split(x_start, chunk_size)
+        outputs = []
+        for chunk in chunks:
+            output = self.sample(chunk, forward, return_trajectory, show_progress, noise)
+            outputs.append(output)
+            
+        if return_trajectory:
+            return torch.cat(outputs, dim=1)
+        else:
+            return torch.cat(outputs, dim=0)
+        
     def get_model(self, backward : bool) -> Tuple[Module, ExponentialMovingAverage]:
         model = self.backward_model if backward else self.forward_model
         ema = self.backward_ema if backward else self.forward_ema
@@ -335,7 +357,6 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         optimizer.zero_grad()
         self.manual_backward(loss)
         # clip the gradients. first, save the norm for later logging
-        norm = grad_norm(model, norm_type=2).get('grad_2.0_norm_total', 0)
         self.clip_gradients(optimizer, self.max_norm, "norm")
         optimizer.step()
         ema.update()
@@ -345,9 +366,13 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
             "curr_num_iters": self.curr_num_iters,
             "DSB_iteration": self.DSB_iteration,
             "training_backward": self.training_backward,
-            f"{'backward' if self.training_backward else 'forward'}_norm": norm,
         }, on_step=True, prog_bar=True, sync_dist=True)
-
+        
+    def on_before_optimizer_step(self, optimizer):
+        model, _ = self.get_model(backward=self.training_backward)
+        if self.global_step % 100 == 0: # only log the norm rarely, it is time consuming
+            norm = grad_norm(model, norm_type=2).get('grad_2.0_norm_total', 0)
+            self.log(f"{'backward' if self.training_backward else 'forward'}_norm", norm, prog_bar=True)
 
     @torch.no_grad()
     def validation_step(self, batch : Tensor, batch_idx : int) -> None:
@@ -374,3 +399,29 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         backward_opt : Optimizer = self.partial_optimizer(self.backward_model.parameters())
         forward_opt : Optimizer = self.partial_optimizer(self.forward_model.parameters())
         return backward_opt, forward_opt
+
+from src.utils import config_from_id, get_ckpt_path
+import hydra
+
+def load_dsb_model(experiment_id : str, dsb_iteration : int) -> DSB:
+    config = config_from_id(experiment_id)
+    model_config = config['model']
+    forward_model = hydra.utils.instantiate(model_config['forward_model'])
+    backward_model = hydra.utils.instantiate(model_config['backward_model'])
+    encoder_decoder = hydra.utils.instantiate(model_config['encoder_decoder'])
+    ckpt_path = get_ckpt_path(experiment_id, last=False, filename=f"DSB_iteration_{dsb_iteration}.ckpt")
+    model = DSB.load_from_checkpoint(ckpt_path, forward_model=forward_model, backward_model=backward_model, encoder_decoder=encoder_decoder)
+    return model
+
+def load_dsb_datasets(experiment_id : str, dsb_iteration : int) -> Tuple[Dataset, Dataset]:
+    config = config_from_id(experiment_id)
+    model_config = config['model']
+    # return the validation datasets
+    x0_config = model_config['x0_dataset_val']
+    x1_config = model_config['x1_dataset_val']
+    x0_dataset = hydra.utils.instantiate(x0_config)
+    x1_dataset = hydra.utils.instantiate(x1_config)
+    return x0_dataset, x1_dataset
+    
+class PretrainedDSBModel:
+    def __new__(cls, experiment_id : str, dsb_iteration : int) -> DSB: return load_dsb_model(experiment_id, dsb_iteration)

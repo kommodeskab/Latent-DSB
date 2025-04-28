@@ -264,7 +264,6 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
             # self.kad = KAD()            
             
         plt.close('all')
-        return
         if isinstance(pl_module, DSB):
             # it is a good idea to check the quality of the initial samples
             # therefore, we momentarily set the model to "training forward" in order to sample from the forward model
@@ -288,13 +287,13 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
             
             if isinstance(pl_module, InitDSB):
                 x1_encoded = self.x1_encoded.to(device)
-                trajectory = pl_module.sample(x1_encoded, return_trajectory=True)
+                trajectory = pl_module.sample(x1_encoded, return_trajectory=True, show_progress=True)
                 caption = "x0 Samples"
             else:
                 backward = pl_module.training_backward
                 x_start = self.x1_encoded if backward else self.x0_encoded
                 x_start = x_start.to(device)
-                trajectory = pl_module.sample(x_start, forward=not backward, return_trajectory=True)
+                trajectory = pl_module.sample(x_start, forward=not backward, return_trajectory=True, show_progress=True)
                 iteration = pl_module.DSB_iteration
                 backward_str = "x0 samples" if backward else "x1 samples"
                 caption = f"iteration_{iteration}/{backward_str}"
