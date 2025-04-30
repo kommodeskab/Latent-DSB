@@ -1,7 +1,6 @@
-from src.lightning_modules.dsb import load_dsb_model, load_dsb_datasets
+from src.lightning_modules.dsb import load_dsb_model, load_dsb_datasets, get_dsb_iterations
 from src.dataset import ClippedLibri, EarsWHAMUnpaired
 import torch
-from torch import Tensor
 from argparse import ArgumentParser
 from src.callbacks.utils import get_batch_from_dataset
 
@@ -20,65 +19,81 @@ num_samples = args.num_samples
 batch_size = args.batch_size
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f"Using device: {device}")
+
+def adjust_dataset_length(dataset : ClippedLibri | EarsWHAMUnpaired, length_seconds : float) -> ClippedLibri | EarsWHAMUnpaired:
+    import math
+    # adjust the length of the dataset to be atleast length_seconds long
+    curr_length = dataset.length_seconds
+    length_mult = math.ceil(length_seconds / curr_length)
+    print(f"Adjusting dataset length from {curr_length} to {length_mult * curr_length}")
+    dataset.length_seconds = length_mult * curr_length
+    return dataset
 
 if experiment_name == 'noise_variance':
-    dsb_iteration = 10
+    dsb_iteration = max(get_dsb_iterations(experiment_id))
+    print(f"Found latest DSB iteration:", dsb_iteration)
     
     dsb = load_dsb_model(experiment_id, dsb_iteration)
-    x0_dataset, x1_dataset = load_dsb_datasets(experiment_id, dsb_iteration)
+    x0_dataset, x1_dataset = load_dsb_datasets(experiment_id)
+    x1_dataset : EarsWHAMUnpaired | ClippedLibri
     
-    if experiment_id == '180425125453':
-        dsb.encoder_decoder.off_set = 0
+    x1_dataset = adjust_dataset_length(x1_dataset, 5.0)
+    x1_dataset.return_pair = False
+    min_noise, max_noise = x1_dataset.noise_range
+    noise_levels = torch.linspace(min_noise, max_noise, 10, dtype=torch.int16).tolist()
+    print(f"Noise levels: {' '.join([str(i) for i in noise_levels])}")
+    data_dict = dict()
     
-    x1_dataset : EarsWHAMUnpaired
-    snr_levels = torch.linspace(-2, 18, 10, dtype=torch.int16).tolist()
-    batches : list[Tensor] = []
-    for snr in snr_levels:
-        sample = x1_dataset.get_item(0, snr)[1]
-        batch = sample.repeat(num_samples, 1, 1)
-        batches.append(batch)
-    
-    data_dict = {}
-    
-    for snr, batch in zip(snr_levels, batches):
+    for noise_level in noise_levels:
+        print("Current noise level:", noise_level)
+        noisy_sample = x1_dataset.get_item(0, noise_level)
+        batch = noisy_sample.repeat(num_samples, 1, 1)
+
         batch = batch.to(device)
         with torch.autocast(device_type=device.type, dtype=torch.float16):
             batch_encoded = dsb.encode(batch)
-            x0_hat_encoded = dsb.chunk_sample(batch_encoded, forward=False, chunk_size=batch_size, show_progress=True, noise='inference')
+            x0_hat = dsb.chunk_sample(batch_encoded, forward=False, chunk_size=batch_size, show_progress=True, noise='inference')
+            # x0_hat.shape = (batch_size, ...)
+            x0_hat_flat = x0_hat.cpu().reshape(x0_hat.shape[0], -1)
+            avg_stdev = x0_hat_flat.std(dim=0).mean()
             
-        data_dict[snr] = x0_hat_encoded.cpu()
+            if noise_level == noise_levels[0]:
+                sanity_check_sample = dsb.decode(x0_hat)[0]
+                data_dict['sanity_check_sample'] = sanity_check_sample.cpu()
+            
+        data_dict[noise_level] = avg_stdev.item()
     
-    torch.save(data_dict, f"test_results/noise_variance.pt")
+    torch.save(data_dict, f"test_results/noise_variance_{experiment_id}.pt")
 
 elif experiment_name == 'trajectory_curvature':
-    import os
-    dsb_iterations = []
-    for i in range(1, 15):
-        if os.path.exists(f'logs/dsb/{experiment_id}/checkpoints/DSB_iteration_{i}.ckpt'):
-            dsb_iterations.append(i)
-            
+    from src.callbacks.metrics import calculate_curvature_displacement
+    
+    dsb_iterations = get_dsb_iterations(experiment_id)
     print(f"Found DSB iterations:", ", ".join([str(i) for i in dsb_iterations]))
     
     data_dict = dict()
-    x0_dataset, x1_dataset = load_dsb_datasets(experiment_id, 1)
+    _, x1_dataset = load_dsb_datasets(experiment_id)
     x1_dataset : EarsWHAMUnpaired | ClippedLibri
+    
+    x1_dataset = adjust_dataset_length(x1_dataset, 5.0)
+    x1_dataset.return_pair = False
     x1_batch = get_batch_from_dataset(x1_dataset, num_samples, shuffle=True)
     x1_batch = x1_batch.to(device)
     
     for dsb_iteration in dsb_iterations:
+        print("Current DSB iteration:", dsb_iteration)
         dsb = load_dsb_model(experiment_id, dsb_iteration)
-        
-        if experiment_id == '180425125453':
-            dsb.encoder_decoder.off_set = 0
         
         if dsb_iteration == dsb_iterations[0]:
             timeschedule = dsb.scheduler.gammas_bar
-            data_dict['timeschedule'] = timeschedule.cpu()
+            data_dict['timeschedule'] = timeschedule
             
         with torch.autocast(device_type=device.type, dtype=torch.float16):
             x1_encoded = dsb.encode(x1_batch)
-            x0_hat_encoded = dsb.chunk_sample(x1_encoded, forward=False, chunk_size=batch_size, return_trajectory=True, show_progress=True, noise='none')
+            trajectory = dsb.chunk_sample(x1_encoded, forward=False, chunk_size=batch_size, return_trajectory=True, show_progress=True, noise='none').cpu()
+            C_t = calculate_curvature_displacement(trajectory, timeschedule)
             
-        data_dict[dsb_iteration] = x0_hat_encoded.cpu()
+        data_dict[dsb_iteration] = C_t
         
-    torch.save(data_dict, f"test_results/trajectory_curvature.pt")
+    torch.save(data_dict, f"test_results/trajectory_curvature_{experiment_id}.pt")

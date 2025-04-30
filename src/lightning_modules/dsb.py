@@ -15,6 +15,7 @@ from torch.utils.data import Dataset, DataLoader
 from src.data_modules.base_dm import split_dataset
 import math
 import gc
+import os
 
 class DSBCacheDataset(Dataset):
     def __init__(self, max_size : int, num_cache_iterations : int):
@@ -411,9 +412,12 @@ def load_dsb_model(experiment_id : str, dsb_iteration : int) -> DSB:
     encoder_decoder = hydra.utils.instantiate(model_config['encoder_decoder'])
     ckpt_path = get_ckpt_path(experiment_id, last=False, filename=f"DSB_iteration_{dsb_iteration}.ckpt")
     model = DSB.load_from_checkpoint(ckpt_path, forward_model=forward_model, backward_model=backward_model, encoder_decoder=encoder_decoder)
+    if experiment_id == '180425125453':
+        model.encoder_decoder.off_set = 0
+    model = model.eval()
     return model
 
-def load_dsb_datasets(experiment_id : str, dsb_iteration : int) -> Tuple[Dataset, Dataset]:
+def load_dsb_datasets(experiment_id : str) -> Tuple[Dataset, Dataset]:
     config = config_from_id(experiment_id)
     model_config = config['model']
     # return the validation datasets
@@ -422,6 +426,17 @@ def load_dsb_datasets(experiment_id : str, dsb_iteration : int) -> Tuple[Dataset
     x0_dataset = hydra.utils.instantiate(x0_config)
     x1_dataset = hydra.utils.instantiate(x1_config)
     return x0_dataset, x1_dataset
+
+def get_dsb_iterations(experiment_id : str) -> list[int]:
+    """
+    Given a list of DSB iterations, return the list of DSB iterations that exist in the logs.
+    """
+    dsb_iterations = []
+    # no need to check more than 20 iterations, cause we don't have that many
+    for i in range(0, 20):
+        if os.path.exists(f"logs/dsb/{experiment_id}/checkpoints/DSB_iteration_{i}.ckpt"):
+            dsb_iterations.append(i)
+    return dsb_iterations
     
 class PretrainedDSBModel:
     def __new__(cls, experiment_id : str, dsb_iteration : int) -> DSB: return load_dsb_model(experiment_id, dsb_iteration)

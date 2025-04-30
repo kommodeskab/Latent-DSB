@@ -19,12 +19,12 @@ data:
     length_seconds: ${length_seconds}
   x1_dataset_val:
     length_seconds: ${length_seconds}
-  batch_size: 128
-  flip: False
+  batch_size: 32
+  flip: True
 
 model:
   model:
-    _target_: src.networks.SmallUNet1D
+    _target_: src.networks.UNet1D50
     in_channels: 128
     out_channels: 128
 
@@ -33,8 +33,8 @@ model:
   
   optimizer:
     weight_decay: 0.01
-    lr: 8.e-4
-  
+    lr: 5.e-4
+
 trainer:
   fast_dev_run: False
   enable_checkpointing: True
@@ -42,7 +42,7 @@ trainer:
   reload_dataloaders_every_n_epochs: 1
   check_val_every_n_epoch: 5
   max_epochs: -1
-  max_steps: -1
+  max_steps: 300000
   gradient_clip_val: 5.0
   accumulate_grad_batches: 1
   precision: '16-mixed'

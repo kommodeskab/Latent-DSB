@@ -1,10 +1,10 @@
 #!/bin/sh
 
 # SET JOB NAME
-#BSUB -J noise_var_test
+#BSUB -J variance_test
 
 # select gpu, choose gpuv100 or gpua100 (best)
-#BSUB -q gpua100
+#BSUB -q gpuv100
 
 # number of GPUs to use
 #BSUB -gpu "num=1:mode=exclusive_process"
@@ -13,15 +13,15 @@
 #BSUB -n 4
 
 # gb memory per core
-#BSUB -R "rusage[mem=1G]"
+#BSUB -R "rusage[mem=2G]"
 # cores is on the same slot
 #BSUB -R "span[hosts=1]"
 
 # walltime
-#BSUB -W 1:00
+#BSUB -W 3:00
 #BSUB -o hpc/output_%J.out 
 #BSUB -e hpc/error_%J.err 
 
 module load python3/3.11.9
 source .venv/bin/activate
-python3 inference.py --experiment_id=180425125453 --dsb_iteration=10 --experiment_name=noise_variance
+python3 inference.py --experiment_name=noise_variance --experiment_id=180425125453 --num_samples=256 --batch_size=128

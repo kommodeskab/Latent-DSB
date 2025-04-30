@@ -16,4 +16,5 @@ from .audio import (
     AllLibri,
     EarsWHAMUnpaired,
     ClippedLibri,
+    AllVCTK
 )

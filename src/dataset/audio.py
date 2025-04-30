@@ -85,6 +85,23 @@ class FSDNoisy18k(BaseAudioDataset):
         data_path = os.path.join(data_path, f'FSDNoisy18k/FSDnoisy18k.audio_{split}')
         self.file_names = glob.glob(os.path.join(data_path, '*.wav'))
         
+class VCTK(BaseAudioDataset):
+    def __init__(self, split : Literal['train', 'test']):
+        super().__init__()
+        assert split in ['train', 'test']
+        data_path = get_data_path()
+        data_path = os.path.join(data_path, f'VCTK/wav48_silence_trimmed/')
+        test_speakers = ['p225', 'p226', 'p227', 'p228', 'p229', 'p230']
+        # find all .flac files in the folder
+        # else it is a train file
+        file_names = glob.glob(os.path.join(data_path, '**', '*.flac'), recursive=True)
+        self.file_names = []
+        for file_name in file_names:
+            is_for_test = any([s in file_name for s in test_speakers])
+            if (split == 'train' and is_for_test) or (split == 'test' and not is_for_test):
+                continue
+            self.file_names.append(file_name)
+        
 class WHAM(BaseAudioDataset):
     def __init__(self, split : Literal['train', 'validation', 'test']):
         super().__init__()
@@ -213,11 +230,12 @@ class SpeechNoiseDataset(Dataset):
         self, 
         speech_dataset : BaseConcatAudio,
         noise_dataset : BaseConcatAudio,
-        flip : bool = False,
+        return_pair : bool = False,
+        **kwargs,
         ):
         self.speech_dataset = speech_dataset
         self.noise_dataset = noise_dataset
-        self.flip = flip
+        self.return_pair = return_pair
         
         assert speech_dataset.length_seconds == noise_dataset.length_seconds
         assert speech_dataset.sample_rate == noise_dataset.sample_rate
@@ -225,10 +243,16 @@ class SpeechNoiseDataset(Dataset):
         self.length_seconds = speech_dataset.length_seconds
         self.sample_rate = speech_dataset.sample_rate
         
+        self.min_snr, self.max_snr = -2, 18
+        
         super().__init__()
         
     def __len__(self) -> int:
         return len(self.speech_dataset)
+    
+    @property
+    def noise_range(self) -> tuple[float, float]:
+        return self.min_snr, self.max_snr
     
     @staticmethod
     def calculate_noise_factor(x : Tensor, noise : Tensor, snr : int) -> int:
@@ -241,21 +265,21 @@ class SpeechNoiseDataset(Dataset):
         
         return a
     
-    def get_item(self, idx, snr : int | None = None) -> tuple[Tensor, Tensor]:
+    def get_item(self, idx, snr : int | None = None) -> tuple[Tensor, Tensor] | Tensor:
         speech = self.speech_dataset[idx]
         if torch.rand(1) < 0.05 and snr is None:
             noisy_speech = speech.clone()
         else:
             noise_idx = torch.randint(0, len(self.noise_dataset), (1,))
             noise = self.noise_dataset[noise_idx]
-            random_snr = torch.randint(-2, 18, (1,)) if snr is None else snr
+            random_snr = torch.randint(self.min_snr, self.max_snr, (1,)) if snr is None else snr
             noise_factor = self.calculate_noise_factor(speech, noise, random_snr)
             noisy_speech = speech + noise_factor * noise
         
-        if not self.flip:
+        if self.return_pair:
             return speech, noisy_speech
-        else:
-            return noisy_speech, speech
+        
+        return noisy_speech
     
     def __getitem__(self, idx) -> tuple[Tensor, Tensor]:
         return self.get_item(idx)
@@ -267,11 +291,13 @@ class LibriFSDPaired(SpeechNoiseDataset):
         sample_rate : int = 24_000,
         initial_sample_rate : int | None = None,
         train : bool = True,
-        flip : bool = False,
+        return_pair : bool = False,
     ):
         """
         Returns only the noisy sample. Can be used for unpaired training.        
         """
+        self.return_pair = return_pair
+        
         if train:
             speech = [LibriSpeech('male', 'train-clean-100'), LibriSpeech('female', 'train-clean-100')]
             noise = [FSDNoisy18k('train')]
@@ -281,7 +307,7 @@ class LibriFSDPaired(SpeechNoiseDataset):
             
         speech_dataset = BaseConcatAudio(speech, length_seconds, sample_rate, initial_sample_rate)
         noise_dataset = BaseConcatAudio(noise, length_seconds, sample_rate, initial_sample_rate)
-        super().__init__(speech_dataset, noise_dataset, flip)
+        super().__init__(speech_dataset, noise_dataset, return_pair)
         
 class EarsWHAMUnpaired(SpeechNoiseDataset):
     def __init__(
@@ -291,6 +317,7 @@ class EarsWHAMUnpaired(SpeechNoiseDataset):
         initial_sample_rate : int | None = None,
         train : bool = True,
         return_pair : bool = False,
+        **kwargs,
     ):
         """
         This is a noisy speech datset consisting of Ears and WHAM, but only the noisy speech is returned.
@@ -308,15 +335,7 @@ class EarsWHAMUnpaired(SpeechNoiseDataset):
     
         speech_dataset = BaseConcatAudio(speech, length_seconds, sample_rate, initial_sample_rate)
         noise_dataset = BaseConcatAudio(noise, length_seconds, sample_rate, initial_sample_rate)
-        super().__init__(speech_dataset, noise_dataset)
-        
-    def __getitem__(self, idx) -> Tensor:
-        speech, noisy_speech = super().__getitem__(idx)
-        
-        if self.return_pair:
-            return speech, noisy_speech
-        
-        return noisy_speech
+        super().__init__(speech_dataset, noise_dataset, return_pair)
         
 class AllLibri(BaseConcatAudio):
     def __init__(
@@ -325,6 +344,7 @@ class AllLibri(BaseConcatAudio):
         sample_rate : int = 24_000,
         initial_sample_rate : int | None = None,
         train : bool = True,
+        **kwargs,
         ):
         if train:
             datasets = [
@@ -343,33 +363,85 @@ class AllLibri(BaseConcatAudio):
             sample_rate,
             initial_sample_rate,
         )
-        
-class ClippedLibri(AllLibri):
+
+class AllVCTK(BaseConcatAudio):
     def __init__(
-        self, 
+        self,
         length_seconds : float = 5.1,
         sample_rate : int = 24_000,
         initial_sample_rate : int | None = None,
         train : bool = True,
-        no_clip_prob : float = 0.1,
-        gain_range : tuple[float, float] = (5, 30),
+        **kwargs,
         ):
+        if train:
+            datasets = [VCTK('train'),]
+        else:
+            datasets = [VCTK('test')]
+        
         super().__init__(
+            datasets,
             length_seconds,
             sample_rate,
             initial_sample_rate,
-            train,
         )
+        
+class ClippedDataset(Dataset):
+    def __init__(
+        self,
+        dataset : BaseConcatAudio,
+        gain_range : tuple[float, float] = (5, 30),
+        return_pair : bool = False,
+        no_clip_prob : float = 0.1,
+        **kwargs,
+    ):
         self.no_clip_prob = no_clip_prob
         self.gain_min, self.gain_max = gain_range
+        self.dataset = dataset
+        self.return_pair = return_pair
+        self.sample_rate = dataset.sample_rate
     
-    def __getitem__(self, idx) -> Tensor:
-        audio = super().__getitem__(idx)
-        if random.random() < self.no_clip_prob:
-            return audio
-        gain_db = random.uniform(self.gain_min, self.gain_max)
-        gain_lim = 10 ** (gain_db / 20)
-        audio = audio * gain_lim
-        audio = audio.clamp(-1, 1)
-        audio = audio / gain_lim
-        return audio
+    def __len__(self) -> int:
+        return len(self.dataset)
+    
+    @property
+    def noise_range(self) -> tuple[float, float]:
+        return self.gain_min, self.gain_max
+        
+    def get_item(self, idx : int, gain_db : float | None = None) -> tuple[Tensor, Tensor]:
+        original : Tensor = self.dataset[idx]
+        if random.random() < self.no_clip_prob and gain_db is None:
+            clipped = original.clone()
+        else:
+            clipped = original.clone()
+            gain_db = random.uniform(self.gain_min, self.gain_max) if gain_db is None else gain_db
+            gain_lim = 10 ** (gain_db / 20)
+            clipped = clipped * gain_lim
+            clipped = clipped.clamp(-1, 1)
+            clipped = clipped / gain_lim
+            
+        if self.return_pair:
+            return original, clipped
+        
+        return clipped
+    
+    def __getitem__(self, index : int) -> Tensor | tuple[Tensor, Tensor]:
+        return self.get_item(index)
+    
+class ClippedLibri(ClippedDataset):
+    def __init__(
+        self,
+        length_seconds : float = 5.1,
+        sample_rate : int = 16_000,
+        train : bool = True,
+        gain_range : tuple[float, float] = (5, 30),
+        return_pair : bool = False,
+        no_clip_prob : float = 0.1,
+    ):
+        self.sample_rate = sample_rate
+        dataset = AllLibri(length_seconds, sample_rate, train=train)
+        super().__init__(
+            dataset,
+            gain_range=gain_range,
+            return_pair=return_pair,
+            no_clip_prob=no_clip_prob,
+        )
