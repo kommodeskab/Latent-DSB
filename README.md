@@ -34,3 +34,11 @@ bsub < bashfiles/experiment.sh
 ```
 where `experiment.sh` is the filename containing the experiment bashfile.
 
+## Project TODO List
+
+- [ ] Compare with Gaussian Flow Bridge (https://arxiv.org/pdf/2405.19497v1)
+- [ ] Compare with SPADE (https://spade.inria.fr/)
+- [x] Implement VCTK Gender datasets
+- [ ] Make STFT experiment (not a good idea imo)
+- [ ] Find out how to quantify curvature when using stochastic process?
+- [ ] Find out what metrics to use? In my opinion: MOS, WER, SR-CS, maybe KAD/FAD

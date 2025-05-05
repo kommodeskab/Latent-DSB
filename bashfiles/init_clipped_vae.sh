@@ -4,7 +4,7 @@
 #BSUB -J clipped_vae
 
 # select gpu, choose gpuv100 or gpua100 (best)
-#BSUB -q gpua100
+#BSUB -q gpuv100
 
 # number of GPUs to use
 #BSUB -gpu "num=1:mode=exclusive_process"
@@ -24,4 +24,4 @@
 
 module load python3/3.11.9
 source .venv/bin/activate
-python3 train.py +experiment=init_clipped_vae trainer.precision=bf16-mixed
+python3 train.py +experiment=init_clipped_vae

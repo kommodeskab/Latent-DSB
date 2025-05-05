@@ -12,6 +12,18 @@ from torch.nn.functional import pad
 import glob
 import torch
 
+def compute_average_snr(clean: torch.Tensor, noisy: torch.Tensor) -> float:
+    clean = clean.squeeze(1)
+    noisy = noisy.squeeze(1)
+
+    signal_power = torch.sum(clean ** 2, dim=1)
+    noise_power = torch.sum((clean - noisy) ** 2, dim=1)
+
+    eps = 1e-8
+    snr = 10 * torch.log10((signal_power + eps) / (noise_power + eps))
+
+    return snr.mean().item()
+
 class BaseAudioDataset(Dataset):
     file_names : list[str]
     
@@ -86,22 +98,43 @@ class FSDNoisy18k(BaseAudioDataset):
         self.file_names = glob.glob(os.path.join(data_path, '*.wav'))
         
 class VCTK(BaseAudioDataset):
-    def __init__(self, split : Literal['train', 'test']):
+    def __init__(self, split : Literal['train', 'test'], gender : Literal['male', 'female'] = None):
         super().__init__()
         assert split in ['train', 'test']
+        assert gender in [None, 'male', 'female']
+        
+        if gender is not None:
+            gender = 'M' if gender == 'male' else 'F'
         data_path = get_data_path()
-        data_path = os.path.join(data_path, f'VCTK/wav48_silence_trimmed/')
+        wavs_path = os.path.join(data_path, f'VCTK/wav48_silence_trimmed/')
+        # randomly chosen speakers for test set
         test_speakers = ['p225', 'p226', 'p227', 'p228', 'p229', 'p230']
-        # find all .flac files in the folder
-        # else it is a train file
-        file_names = glob.glob(os.path.join(data_path, '**', '*.flac'), recursive=True)
+ 
+        speaker_info = os.path.join(data_path, 'VCTK/speaker-info.txt')
+        with open(speaker_info, 'r') as f:
+            lines = f.readlines()
+        
+        lines = lines[1:]
+        lines = [line.strip() for line in lines]
+        lines = [line.split(' ') for line in lines]
+        lines = [[char for char in line if char] for line in lines]
+        self.gender_dict = {line[0] : line[2] for line in lines}
+        
+        all_file_names = glob.glob(os.path.join(wavs_path, '**', '*.flac'), recursive=True)
         self.file_names = []
-        for file_name in file_names:
-            is_for_test = any([s in file_name for s in test_speakers])
+        for file_name in all_file_names:
+            speaker_id = file_name.split("/")[-2]
+            is_for_test = speaker_id in test_speakers
+            
             if (split == 'train' and is_for_test) or (split == 'test' and not is_for_test):
                 continue
-            self.file_names.append(file_name)
-        
+            
+            if gender is not None:
+                speaker_gender = self.gender_dict[speaker_id]
+                if speaker_gender != gender:
+                    continue
+                
+            self.file_names.append(file_name)        
 class WHAM(BaseAudioDataset):
     def __init__(self, split : Literal['train', 'validation', 'test']):
         super().__init__()
@@ -201,7 +234,7 @@ class GenderAudioDataset(BaseConcatAudio):
         self, 
         gender : Literal['male', 'female'], 
         length_seconds : float = 5.1, 
-        sample_rate : int = 24_000,
+        sample_rate : int = 16_000,
         train : bool = True,
         initial_sample_rate : int | None = None,
         ):
@@ -210,12 +243,14 @@ class GenderAudioDataset(BaseConcatAudio):
                 EarsGender(gender, 'train'),
                 VoxCeleb(gender, 'train'),
                 LibriSpeech(gender, 'train-clean-100'),
+                VCTK('train', gender),
             ]
         else:
             datasets = [
                 EarsGender(gender, 'test'),
                 VoxCeleb(gender, 'test'),
                 LibriSpeech(gender, 'test-clean'),
+                VCTK('test', gender),
             ]
                 
         super().__init__(
@@ -240,9 +275,6 @@ class SpeechNoiseDataset(Dataset):
         assert speech_dataset.length_seconds == noise_dataset.length_seconds
         assert speech_dataset.sample_rate == noise_dataset.sample_rate
         
-        self.length_seconds = speech_dataset.length_seconds
-        self.sample_rate = speech_dataset.sample_rate
-        
         self.min_snr, self.max_snr = -2, 18
         
         super().__init__()
@@ -250,9 +282,26 @@ class SpeechNoiseDataset(Dataset):
     def __len__(self) -> int:
         return len(self.speech_dataset)
     
+    def set_length(self, length_seconds : float) -> None:
+        self.speech_dataset.length_seconds = length_seconds
+        self.noise_dataset.length_seconds = length_seconds
+        
+    @property
+    def length_seconds(self) -> float:
+        return self.speech_dataset.length_seconds
+    
+    @property
+    def sample_rate(self) -> int:
+        return self.speech_dataset.sample_rate
+    
     @property
     def noise_range(self) -> tuple[float, float]:
         return self.min_snr, self.max_snr
+    
+    @noise_range.setter
+    def noise_range(self, value : tuple[float, float]) -> None:
+        self.min_snr, self.max_snr = value
+        assert self.min_snr <= self.max_snr, "min_snr must be less than or equal max_snr"
     
     @staticmethod
     def calculate_noise_factor(x : Tensor, noise : Tensor, snr : int) -> int:
@@ -288,7 +337,7 @@ class LibriFSDPaired(SpeechNoiseDataset):
     def __init__(
         self,
         length_seconds : float = 5.1,
-        sample_rate : int = 24_000,
+        sample_rate : int = 16_000,
         initial_sample_rate : int | None = None,
         train : bool = True,
         return_pair : bool = False,
@@ -313,7 +362,7 @@ class EarsWHAMUnpaired(SpeechNoiseDataset):
     def __init__(
         self,
         length_seconds : float = 5.1,
-        sample_rate : int = 24_000,
+        sample_rate : int = 16_000,
         initial_sample_rate : int | None = None,
         train : bool = True,
         return_pair : bool = False,
@@ -341,7 +390,7 @@ class AllLibri(BaseConcatAudio):
     def __init__(
         self,
         length_seconds : float = 5.1,
-        sample_rate : int = 24_000,
+        sample_rate : int = 16_000,
         initial_sample_rate : int | None = None,
         train : bool = True,
         **kwargs,
@@ -368,15 +417,16 @@ class AllVCTK(BaseConcatAudio):
     def __init__(
         self,
         length_seconds : float = 5.1,
-        sample_rate : int = 24_000,
+        sample_rate : int = 16_000,
         initial_sample_rate : int | None = None,
         train : bool = True,
+        gender = None,
         **kwargs,
         ):
         if train:
-            datasets = [VCTK('train'),]
+            datasets = [VCTK('train', gender),]
         else:
-            datasets = [VCTK('test')]
+            datasets = [VCTK('test', gender)]
         
         super().__init__(
             datasets,
@@ -391,21 +441,57 @@ class ClippedDataset(Dataset):
         dataset : BaseConcatAudio,
         gain_range : tuple[float, float] = (5, 30),
         return_pair : bool = False,
-        no_clip_prob : float = 0.1,
+        no_clip_prob : float = 0.0,
         **kwargs,
     ):
         self.no_clip_prob = no_clip_prob
         self.gain_min, self.gain_max = gain_range
         self.dataset = dataset
         self.return_pair = return_pair
-        self.sample_rate = dataset.sample_rate
     
     def __len__(self) -> int:
         return len(self.dataset)
     
+    def set_length(self, length_seconds : float) -> None:
+        self.dataset.length_seconds = length_seconds
+        
+    @property
+    def length_seconds(self) -> float:
+        return self.dataset.length_seconds
+    
+    @property
+    def sample_rate(self) -> int:
+        return self.dataset.sample_rate
+    
+    def what_db_for_snr(self, target_snr : float) -> float:
+        """
+        given some desired SNR level, find the gain db in the noise range which gives that SNR.
+        Uses binary search.
+        """
+        old_return_pair = self.return_pair
+        self.return_pair = True
+        low, high = self.gain_min, self.gain_max
+        while abs(high - low) > 0.01:
+            mid = (low + high) / 2
+            clean, noisy = self.get_item(0, mid)
+            clean, noisy = clean.unsqueeze(0), noisy.unsqueeze(0)
+            snr = compute_average_snr(clean, noisy)
+            if snr < target_snr:
+                high = mid
+            else:
+                low = mid
+                
+        self.return_pair = old_return_pair
+        return low
+    
     @property
     def noise_range(self) -> tuple[float, float]:
         return self.gain_min, self.gain_max
+    
+    @noise_range.setter
+    def noise_range(self, value : tuple[float, float]) -> None:
+        self.gain_min, self.gain_max = value
+        assert self.gain_min <= self.gain_max, "gain_min must be less than or equal gain_max"
         
     def get_item(self, idx : int, gain_db : float | None = None) -> tuple[Tensor, Tensor]:
         original : Tensor = self.dataset[idx]
@@ -435,10 +521,27 @@ class ClippedLibri(ClippedDataset):
         train : bool = True,
         gain_range : tuple[float, float] = (5, 30),
         return_pair : bool = False,
-        no_clip_prob : float = 0.1,
+        no_clip_prob : float = 0.0,
     ):
-        self.sample_rate = sample_rate
         dataset = AllLibri(length_seconds, sample_rate, train=train)
+        super().__init__(
+            dataset,
+            gain_range=gain_range,
+            return_pair=return_pair,
+            no_clip_prob=no_clip_prob,
+        )
+
+class ClippedVCTK(ClippedDataset):
+    def __init__(
+        self,
+        length_seconds : float = 5.1,
+        sample_rate : int = 16_000,
+        train : bool = True,
+        gain_range : tuple[float, float] = (5, 30),
+        return_pair : bool = False,
+        no_clip_prob : float = 0.0,
+    ):
+        dataset = AllVCTK(length_seconds, sample_rate, train=train)
         super().__init__(
             dataset,
             gain_range=gain_range,

@@ -263,7 +263,6 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
             self.mos = MOS(pl_module.device)
             # self.kad = KAD()            
             
-        plt.close('all')
         if isinstance(pl_module, DSB):
             # it is a good idea to check the quality of the initial samples
             # therefore, we momentarily set the model to "training forward" in order to sample from the forward model
@@ -278,6 +277,8 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
                 self.on_validation_end(trainer, pl_module)
                 pl_module.training_backward = True
                 pl_module.DSB_iteration = 1
+        
+        plt.close('all')
         
     def on_validation_end(self, trainer : Trainer, pl_module : DSB | InitDSB):
         # we fix the validation seed to fairly compare samples and metrics across epochs
@@ -355,7 +356,7 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
                         'curr_num_iters': pl_module.curr_num_iters,
                     }, step=pl_module.global_step)
             
-            plt.close('all')
+        plt.close('all')
 
 class DSBCB(Callback, DiffusionCBMixin):
     def __init__(self):

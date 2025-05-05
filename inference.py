@@ -18,17 +18,10 @@ experiment_id = args.experiment_id
 num_samples = args.num_samples
 batch_size = args.batch_size
 
+length_seconds = 2.23
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {device}")
-
-def adjust_dataset_length(dataset : ClippedLibri | EarsWHAMUnpaired, length_seconds : float) -> ClippedLibri | EarsWHAMUnpaired:
-    import math
-    # adjust the length of the dataset to be atleast length_seconds long
-    curr_length = dataset.length_seconds
-    length_mult = math.ceil(length_seconds / curr_length)
-    print(f"Adjusting dataset length from {curr_length} to {length_mult * curr_length}")
-    dataset.length_seconds = length_mult * curr_length
-    return dataset
 
 if experiment_name == 'noise_variance':
     dsb_iteration = max(get_dsb_iterations(experiment_id))
@@ -38,7 +31,7 @@ if experiment_name == 'noise_variance':
     x0_dataset, x1_dataset = load_dsb_datasets(experiment_id)
     x1_dataset : EarsWHAMUnpaired | ClippedLibri
     
-    x1_dataset = adjust_dataset_length(x1_dataset, 5.0)
+    x1_dataset.set_length(length_seconds)
     x1_dataset.return_pair = False
     min_noise, max_noise = x1_dataset.noise_range
     noise_levels = torch.linspace(min_noise, max_noise, 10, dtype=torch.int16).tolist()
@@ -76,7 +69,7 @@ elif experiment_name == 'trajectory_curvature':
     _, x1_dataset = load_dsb_datasets(experiment_id)
     x1_dataset : EarsWHAMUnpaired | ClippedLibri
     
-    x1_dataset = adjust_dataset_length(x1_dataset, 5.0)
+    x1_dataset = x1_dataset.set_length(length_seconds)
     x1_dataset.return_pair = False
     x1_batch = get_batch_from_dataset(x1_dataset, num_samples, shuffle=True)
     x1_batch = x1_batch.to(device)

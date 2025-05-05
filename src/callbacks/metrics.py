@@ -102,7 +102,7 @@ class WER:
         processed = self.processor(audio.squeeze().cpu(), sampling_rate=16000, return_tensors="pt")
         input_features = processed.input_features.to(self.device)
         with torch.no_grad():
-            predicted_ids = self.model.generate(input_features)
+            predicted_ids = self.model.generate(input_features, language="en")
         transcription : str = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
         transcription = self.normalize_text(transcription)
         return transcription
@@ -143,7 +143,33 @@ class PESQ:
     
     def evaluate(self, generated : Tensor, real : Tensor) -> float:
         pesq = self.pesq(generated, real)
-        return pesq    
+        return pesq
+    
+class SRCS:
+    def __init__(self, sample_rate : int, device : str):
+        assert sample_rate == 16000, "SRCS model only supports 16kHz sample rate"
+        from nemo.collections.asr.models import EncDecSpeakerLabelModel
+        self.model : EncDecSpeakerLabelModel = EncDecSpeakerLabelModel.from_pretrained("nvidia/speakerverification_en_titanet_large")
+        self.model = self.model.to(device)
+        self.model.freeze()
+        self.avg_cos_sims = []
+    
+    @torch.no_grad()
+    def get_embedding(self, audio : Tensor) -> Tensor:
+        audio_len = torch.tensor([audio.shape[1]] * audio.shape[0]).to(audio.device)
+        _, emb = self.model.forward(input_signal=audio, input_signal_length=audio_len)
+        return emb
+    
+    def update(self, generated : Tensor, real : Tensor):
+        assert real.shape == generated.shape
+        real_emb = self.get_embedding(real) # shape = (batch_size, 192)
+        generated_emb = self.get_embedding(generated) # shape = (batch_size, 192)
+        # find the average cosine similarity between the paired embeddings
+        avg_cosine_similarity = torch.nn.functional.cosine_similarity(real_emb, generated_emb).mean().item()
+        self.avg_cos_sims.append(avg_cosine_similarity)
+        
+    def compute(self) -> float:
+        return sum(self.avg_cos_sims) / len(self.avg_cos_sims)
     
 def calculate_curvature_displacement(trajectories : Tensor, timeschedule : Tensor) -> Tensor:
     # trajectories.shape = (trajectory_length, batch_size, ...)

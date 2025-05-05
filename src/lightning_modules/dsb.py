@@ -73,6 +73,8 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         x1_dataset : Dataset | None = None,
         x0_dataset_val : Dataset | None = None,
         x1_dataset_val : Dataset | None = None,
+        num_iterations_mult : int = 1,
+        minimum_num_iterations : int = 0,
     ):
         super().__init__()
         assert first_iteration in ["network", "network-straight", "noise", "pretrained"], "Invalid first_iteration"
@@ -105,6 +107,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
             self.x0_dataset, self.x0_dataset_val = split_dataset(x0_dataset, x0_dataset_val, 0.95)
             self.x1_dataset, self.x1_dataset_val = split_dataset(x1_dataset, x1_dataset_val, 0.95)
         
+        self.max_norm = max_norm
         self.effective_batch_size = effective_batch_size
         self.cache_generator_batch_size = cache_generator_batch_size
         self.num_workers = num_workers
@@ -112,8 +115,14 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         self.cache_max_size = cache_max_size
         self.num_cache_iterations = num_cache_iterations
         self.max_DSB_iterations = max_DSB_iterations
-        
-        self.max_norm = max_norm
+        self.num_iterations_mult = num_iterations_mult
+        self.minimum_num_iterations = minimum_num_iterations 
+            
+    def num_allowed_iterations(self, dsb_iteration : int) -> int:
+        # returns the allowed number of training iterations for the given DSB iteration
+        allowed_iterations = self.num_iterations * self.num_iterations_mult ** (dsb_iteration - 1)
+        allowed_iterations = max(allowed_iterations, self.minimum_num_iterations)
+        return allowed_iterations
         
     def fill_up_cache(self, cache : DSBCacheDataset, sample_forward : bool, mode : Literal['training', 'validation']) -> Dataset:    
         if mode == 'training':
@@ -201,6 +210,12 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         raise ValueError(f"Unknown precision {dtype_str}. Please use 'bf16-mixed' or '16-mixed'.")
         
     def on_fit_start(self) -> None:
+        # for good measure, print the amount of allowed training iterations for each DSB iteration
+        print(f"Allowed training iterations for each DSB iteration:")
+        for i in range(1, self.max_DSB_iterations + 1):
+            allowed_iterations = self.num_allowed_iterations(i)
+            print(f"DSB iteration {i}: {allowed_iterations} iterations")
+        
         self.forward_ema.to(self.device)
         self.backward_ema.to(self.device)
         self.encoder_decoder.to(self.device)
@@ -216,9 +231,11 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
     def on_train_batch_start(self, batch : Tensor, batch_idx : int) -> None:
         self.curr_num_iters += 1
         
-        if self.curr_num_iters >= self.num_iterations or self.DSB_iteration > self.max_DSB_iterations:
-            print(f"Max iteration reached for DSB iteration {self.DSB_iteration} | training backward: {self.training_backward}.")
-
+        # calculate how many training iterations we are allowed to do for this DSB iteration
+        allowed_iterations = self.num_allowed_iterations(self.DSB_iteration)
+        is_done = self.curr_num_iters >= allowed_iterations or self.DSB_iteration > self.max_DSB_iterations
+        
+        if self.curr_num_iters >= allowed_iterations:
             self.curr_num_iters = 0
             self.training_backward = not self.training_backward
             
@@ -232,6 +249,11 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
             if self.training_backward: 
                 self._reset_optimizers()
                 self.DSB_iteration += 1
+                
+            if self.DSB_iteration > self.max_DSB_iterations:
+                # stop training
+                print(f"Stopping training at DSB iteration {self.DSB_iteration}.")
+                self.trainer.should_stop = True
                 
             return -1
         

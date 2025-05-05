@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
   - override /trainer: gpu
-  - override /data: clippedlibri
+  - override /data: clippedvctk
   - override /callbacks: fm_callbacks
   - override /model: init
   - override /logger: default
@@ -19,8 +19,8 @@ data:
     length_seconds: ${length_seconds}
   x1_dataset_val:
     length_seconds: ${length_seconds}
-  batch_size: 32
-  flip: True
+  batch_size: 128
+  flip: False
 
 model:
   model:
@@ -43,6 +43,6 @@ trainer:
   check_val_every_n_epoch: 5
   max_epochs: -1
   max_steps: 300000
-  gradient_clip_val: 5.0
+  gradient_clip_val: 1.0
   accumulate_grad_batches: 1
   precision: '16-mixed'

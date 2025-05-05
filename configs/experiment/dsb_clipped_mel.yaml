@@ -11,58 +11,59 @@ task_name: 'dsb clipped mel'
 
 model:
   forward_model:
-    _target_: src.networks.UNet50
-    in_channels: 1
-    out_channels: 1
+    _target_: src.networks.PretrainedModel
+    experiment_id: '030525151107'
+    model_keyword: 'model'
 
   backward_model:
-    _target_: src.networks.UNet50
-    in_channels: 1
-    out_channels: 1
-
+    _target_: src.networks.PretrainedModel
+    experiment_id: '020525232149'
+    model_keyword: 'model'
+  
   encoder_decoder:
     _target_: src.networks.HifiGan
 
   num_timesteps: 100
   first_iteration: 'network'
   target: 'flow'
-  max_norm: 5.0
+  max_norm: 1.0
   ema_decay: 0.999
-  gamma_min: 0.01
-  gamma_max: 0.01
 
-  effective_batch_size: 8
-  num_iterations: 38400
-  cache_max_size: 1536
+  effective_batch_size: 128
+  cache_max_size: 1024
   cache_generator_batch_size: 128
+  num_iterations: 72000
   num_cache_iterations: 50
+  max_DSB_iterations: 8
+  num_iterations_mult: 0.5
+  minimum_num_iterations: 18000
 
   x0_dataset:
-    _target_: src.dataset.AllLibri
+    _target_: src.dataset.AllVCTK
     length_seconds: 2.23
     sample_rate: 16000
     train: True
 
   x0_dataset_val:
-    _target_: src.dataset.AllLibri
+    _target_: src.dataset.AllVCTK
     length_seconds: 2.23
     sample_rate: 16000
     train: False
 
   x1_dataset:
-    _target_: src.dataset.ClippedLibri
+    _target_: src.dataset.ClippedVCTK
     length_seconds: 2.23
     sample_rate: 16000
     train: True
-    no_clip_prob: 0.1
+    no_clip_prob: 0.0
     gain_range: [5, 30]
 
   x1_dataset_val:
-    _target_: src.dataset.ClippedLibri
+    _target_: src.dataset.ClippedVCTK
     length_seconds: 2.23
     sample_rate: 16000
     train: False
-    no_clip_prob: 0.1
+    no_clip_prob: 0.0
     gain_range: [5, 30]
 
 trainer:

@@ -1,7 +1,4 @@
-from src.dataset import AllVCTK
+from src.dataset import VCTK
 
-dataset = AllVCTK(train=True)
-print(len(dataset))
-
-dataset = AllVCTK(train=False)
+dataset = VCTK('test', None)
 print(len(dataset))

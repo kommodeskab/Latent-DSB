@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SET JOB NAME
-#BSUB -J evaluate
+#BSUB -J dsb_vae
 
 # select gpu, choose gpuv100 or gpua100 (best)
 #BSUB -q gpua100
@@ -13,15 +13,15 @@
 #BSUB -n 12
 
 # gb memory per core
-#BSUB -R "rusage[mem=2GB]"
+#BSUB -R "rusage[mem=3GB]"
 # cores is on the same slot
 #BSUB -R "span[hosts=1]"
 
 # walltime
-#BSUB -W 00:30
+#BSUB -W 24:00
 #BSUB -o hpc/output_%J.out 
 #BSUB -e hpc/error_%J.err 
 
-module load python3/3.11
+module load python3/3.11.9
 source .venv/bin/activate
-python3 evaluate.py
+python3 train.py +experiment=dsb_clipped_vae

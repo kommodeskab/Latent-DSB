@@ -24,4 +24,4 @@
 
 module load python3/3.11
 source .venv/bin/activate
-python3 train.py +experiment=init_clipped_mel data.batch_size=4
+python3 train.py +experiment=init_clipped_mel
