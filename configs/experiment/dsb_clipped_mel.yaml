@@ -29,10 +29,12 @@ model:
   max_norm: 1.0
   ema_decay: 0.999
 
+  num_workers: 0
+
   effective_batch_size: 128
-  cache_max_size: 1024
+  cache_max_size: 1536
   cache_generator_batch_size: 128
-  num_iterations: 72000
+  num_iterations: 60000
   num_cache_iterations: 50
   max_DSB_iterations: 8
   num_iterations_mult: 0.5

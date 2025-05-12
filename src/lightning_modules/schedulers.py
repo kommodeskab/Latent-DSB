@@ -48,7 +48,15 @@ class DSBScheduler:
         sampling_var = torch.cat([torch.tensor([0.]), sampling_var], 0)
         var = 2 * gammas
         
-        timesteps = torch.arange(1, num_timesteps + 1)
+        if not hasattr(self, 'timesteps'):
+            timesteps = torch.arange(1, num_timesteps + 1)
+            self.k_to_index = lambda k: k
+        else:
+            old_gammas_bar = self.gammas_bar[1:]
+            new_gammas_bar = gammas_bar[1:]
+            distance_matrix = (old_gammas_bar.unsqueeze(0) - new_gammas_bar.unsqueeze(1)).abs()
+            timesteps = distance_matrix.argmin(dim=1) + 1
+            self.k_to_index = lambda k: torch.where(timesteps == k)[0][0] + 1
         
         self.timesteps = timesteps
         self.gammas = gammas
@@ -64,7 +72,7 @@ class DSBScheduler:
                 pseudo_model_output = x_end
                 
             elif self.target == 'flow':
-                gammas_bar = self.gammas_bar[k]
+                gammas_bar = self.gammas_bar[self.k_to_index(k)]
                 pseudo_model_output = (xk - x_end) / gammas_bar
                 
             elif self.target == 'semi-flow':
@@ -75,13 +83,6 @@ class DSBScheduler:
         
         trajectory = torch.stack(trajectory, dim=0)
         return trajectory if return_trajectory else trajectory[-1]
-        
-    def forward_process(self, x0 : Tensor, x1 : Tensor, timesteps : IntTensor | int) -> Tuple[Tensor, Tensor]:
-        trajectory = self.deterministic_sample(x0, x1, return_trajectory=True, noise='training')
-        all_batches = torch.arange(trajectory.size(1)).to(trajectory.device)
-        xt = trajectory[timesteps, all_batches]
-
-        return xt, ...
     
     def sample_batch(self, batch : Tensor, timesteps : Tensor | None = None) -> tuple[Tensor, Tensor, Tensor]:
         # batch.shape = (num_steps, batch_size, ...)
@@ -107,12 +108,17 @@ class DSBScheduler:
         return xt, timesteps, target
     
     def sample_init_batch(self, x0 : Tensor, x1 : Tensor) -> Tuple[Tensor, IntTensor, Tensor]:
+        # used for the DSB-pretraining
+        # we interpolate between x0 and x1 using the DSB scheduler
+        # i.e. the flow is calculated as a vector poiting from xk to x1, starting from xk = x0
         trajectory = self.deterministic_sample(x0, x1, return_trajectory=True, noise='training')
         xk, timesteps, target = self.sample_batch(trajectory)
         
         return xk, timesteps, target
     
     def step(self, xk_plus_1 : Tensor, k_plus_one : int, model_output : Tensor, noise : NOISE_TYPES) -> Tensor:
+        k_plus_one = self.k_to_index(k_plus_one)
+        
         dim = xk_plus_1.dim()
         device = xk_plus_1.device
         gammas = self.to_dim(self.gammas, dim).to(device=device, dtype=xk_plus_1.dtype)

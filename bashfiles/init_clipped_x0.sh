@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SET JOB NAME
-#BSUB -J init_noise
+#BSUB -J clipped_mel_x0
 
 # select gpu, choose gpuv100 or gpua100 (best)
 #BSUB -q gpua100
@@ -13,7 +13,7 @@
 #BSUB -n 12
 
 # gb memory per core
-#BSUB -R "rusage[mem=2GB]"
+#BSUB -R "rusage[mem=1G]"
 # cores is on the same slot
 #BSUB -R "span[hosts=1]"
 
@@ -22,6 +22,6 @@
 #BSUB -o hpc/output_%J.out 
 #BSUB -e hpc/error_%J.err 
 
-module load python3/3.11
+module load python3/3.11.9
 source .venv/bin/activate
-python3 train.py +experiment=fr_init_noise_mel
+python3 train.py +experiment=init_clipped

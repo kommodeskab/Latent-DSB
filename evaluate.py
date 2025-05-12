@@ -28,6 +28,9 @@ dummy = args.dummy
 length_seconds = args.length
 snr = args.snr
 
+for arg, value in vars(args).items():
+    print(f"{arg}: {value}")
+
 print("Evaluating ...")
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'

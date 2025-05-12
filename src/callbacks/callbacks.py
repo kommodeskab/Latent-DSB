@@ -238,28 +238,8 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
         
     def on_train_start(self, trainer : Trainer, pl_module : DSB | InitDSB):        
         self.visualize_data(trainer, pl_module)
-        x0_encoded = self.x0_encoded[:5]
-        x1_encoded = self.x1_encoded[:5]
-        
-        if self.data_type == "image":
-            tensor_for_fig = torch.zeros(5, *x0_encoded.shape)
-            indices = torch.linspace(0, pl_module.scheduler.timesteps.max(), 5, dtype=torch.int64)
-            for i, t in enumerate(indices):
-                if i == 0:
-                    tensor_for_fig[i] = x0_encoded
-                    continue
-                xt, _ = pl_module.scheduler.forward_process(x0_encoded, x1_encoded, t)
-                tensor_for_fig[i] = xt
-            
-            tensor_for_fig = tensor_for_fig.flatten(0, 1).to(pl_module.device)
-            decoded = pl_module.decode(tensor_for_fig).cpu()
-            fig = plot_images(decoded)
-            pl_module.logger.log_image(
-                key = "Initial trajectory",
-                images = [wandb.Image(fig)],
-            )
-        
-        elif self.data_type == "audio":
+
+        if self.data_type == "audio":
             self.mos = MOS(pl_module.device)
             # self.kad = KAD()            
             

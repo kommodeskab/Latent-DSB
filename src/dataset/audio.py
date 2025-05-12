@@ -134,7 +134,9 @@ class VCTK(BaseAudioDataset):
                 if speaker_gender != gender:
                     continue
                 
-            self.file_names.append(file_name)        
+            self.file_names.append(file_name)    
+            
+                
 class WHAM(BaseAudioDataset):
     def __init__(self, split : Literal['train', 'validation', 'test']):
         super().__init__()

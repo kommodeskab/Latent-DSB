@@ -154,7 +154,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
             print(f"Generating batch {i} / {num_batches} for DSB iteration {self.DSB_iteration} | batch_size: {batch_size} | sampling forward: {sample_forward} | dtype: {dtype}.")
             x_start : Tensor
             x_start = x_start.to(self.device)
-            with torch.autocast(device_type=self.device.type, dtype=dtype):
+            with torch.autocast(device_type=self.device.type, dtype=dtype, cache_enabled=False): # disable cache to save memory
                 x_start = self.encode(x_start)
                 trajectory = self.sample(x_start, forward=sample_forward, return_trajectory=True, noise='training', show_progress=True)
                 cache.add(trajectory.cpu())
@@ -222,18 +222,18 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         
         world_size = self.trainer.world_size
         train_cache_size = self.cache_max_size // world_size
+        # fix validation cache size to be 32 samples
         val_cache_size = self.cache_generator_batch_size // world_size
         print(f"World size: {world_size}, cache size per GPU: {train_cache_size} (training) {val_cache_size} (validation).")
         
         self.train_cache = [DSBCacheDataset(train_cache_size, self.num_cache_iterations) for _ in range(world_size)]
-        self.val_cache = [DSBCacheDataset(val_cache_size, 1) for _ in range(world_size)]
+        self.val_cache = [DSBCacheDataset(val_cache_size, 10) for _ in range(world_size)]
         
     def on_train_batch_start(self, batch : Tensor, batch_idx : int) -> None:
         self.curr_num_iters += 1
         
         # calculate how many training iterations we are allowed to do for this DSB iteration
         allowed_iterations = self.num_allowed_iterations(self.DSB_iteration)
-        is_done = self.curr_num_iters >= allowed_iterations or self.DSB_iteration > self.max_DSB_iterations
         
         if self.curr_num_iters >= allowed_iterations:
             self.curr_num_iters = 0
