@@ -12,17 +12,40 @@ from torch.nn.functional import pad
 import glob
 import torch
 
-def compute_average_snr(clean: torch.Tensor, noisy: torch.Tensor) -> float:
-    clean = clean.squeeze(1)
-    noisy = noisy.squeeze(1)
-
-    signal_power = torch.sum(clean ** 2, dim=1)
-    noise_power = torch.sum((clean - noisy) ** 2, dim=1)
-
-    eps = 1e-8
-    snr = 10 * torch.log10((signal_power + eps) / (noise_power + eps))
-
-    return snr.mean().item()
+def compute_average_sdr(clean: torch.Tensor, processed: torch.Tensor) -> float:
+    """
+    Compute Signal-to-Distortion Ratio
+    
+    Args:
+        clean: Clean reference signal [B, 1, T] or [B, T]
+        processed: Processed/estimated signal [B, 1, T] or [B, T]
+        
+    Returns:
+        SDR value in dB (higher is better)
+    """
+    # Ensure proper dimensions
+    if clean.dim() == 3:
+        clean = clean.squeeze(1)
+    if processed.dim() == 3:
+        processed = processed.squeeze(1)
+        
+    # Calculate scaling factor for optimal alignment
+    # (projection of processed signal onto clean signal)
+    scalar = torch.sum(clean * processed, dim=1) / (torch.sum(clean ** 2, dim=1) + 1e-8)
+    
+    # Calculate scaled processed signal
+    s_target = scalar.unsqueeze(1) * clean
+    
+    # Calculate distortion
+    e_distortion = s_target - processed
+    
+    # Calculate SDR
+    sdr = 10 * torch.log10(
+        (torch.sum(s_target ** 2, dim=1) + 1e-8) / 
+        (torch.sum(e_distortion ** 2, dim=1) + 1e-8)
+    )
+    
+    return sdr.mean().item()
 
 class BaseAudioDataset(Dataset):
     file_names : list[str]
@@ -465,26 +488,26 @@ class ClippedDataset(Dataset):
     def sample_rate(self) -> int:
         return self.dataset.sample_rate
     
-    def what_db_for_snr(self, target_snr : float) -> float:
+    def what_db_for_sdr(self, target_snr : float) -> float:
         """
-        given some desired SNR level, find the gain db in the noise range which gives that SNR.
+        given some desired SDR level, find the gain db in the noise range which gives that SDR.
         Uses binary search.
         """
         old_return_pair = self.return_pair
         self.return_pair = True
-        low, high = self.gain_min, self.gain_max
+        low, high = -10, 50 # start with arbitrary low/high values for the binary search
         while abs(high - low) > 0.01:
             mid = (low + high) / 2
             clean, noisy = self.get_item(0, mid)
             clean, noisy = clean.unsqueeze(0), noisy.unsqueeze(0)
-            snr = compute_average_snr(clean, noisy)
-            if snr < target_snr:
+            sdr = compute_average_sdr(clean, noisy)
+            if sdr < target_snr:
                 high = mid
             else:
                 low = mid
                 
         self.return_pair = old_return_pair
-        return low
+        return mid
     
     @property
     def noise_range(self) -> tuple[float, float]:

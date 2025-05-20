@@ -3,3 +3,4 @@ from src.networks.unets import UNet1D, UNet2D, PretrainedUNet2D, EMNISTUNet, Cel
 from src.networks.basetorchmodule import PretrainedModel
 from src.networks.encoders import VQ, IdentityEncoderDecoder, PretrainedVAE, PretrainedMimi, CelebAVQ, BaseEncoderDecoder, AudioLDMEncoder, STFTEncoderDecoder, StableDiffusionXL, PretrainedMimi, StableAudioEncoder, DACEncodec, Autoencoder, HifiGan, OpenSoundEncoder
 from src.networks.from_paper import DhariwalUNetFromPaper
+from src.networks.gfb import STFTbackbone

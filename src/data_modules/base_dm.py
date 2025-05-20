@@ -69,7 +69,7 @@ class RandomPairDataset(Dataset):
         return x0_sample, x1_sample
 
 class FlowMatchingDM(BaseDM):
-    dataset : RandomPairDataset
+    train_dataset : RandomPairDataset
     
     def __init__(self, x0_dataset : Dataset, x1_dataset : Dataset, x0_dataset_val : Dataset | None = None, x1_dataset_val : Dataset | None = None, train_val_split : float = 0.95, flip : bool = False, **kwargs):
         if flip:

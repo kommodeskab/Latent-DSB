@@ -74,7 +74,7 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
     
     def state_dict(self):
         with self.ema.average_parameters():
-            ema_state_dict = super().state_dict().copy()
+            ema_state_dict = super().state_dict()
             
         return ema_state_dict
     
@@ -91,14 +91,16 @@ class InitDSB(BaseLightningModule, EncoderDecoderMixin):
     ) -> Tensor:
         self.model.eval()
         batch_size = x_start.size(0)
-        xt = x_start.clone()
-        trajectory = [xt]
-        for k in tqdm(reversed(self.scheduler.timesteps), desc='Sampling', disable=not show_progress, leave=False):
-            timesteps = torch.full((batch_size,), k, dtype=torch.int64, device=xt.device)
+        xk = x_start.clone()
+        trajectory = [xk]
+        
+        generator = reversed(list(enumerate(self.scheduler.timesteps, start=1)))
+        for k, t in tqdm(generator, desc='Sampling', disable=not show_progress, leave=False, total=len(self.scheduler.timesteps)):
+            ts = torch.full((batch_size,), t, dtype=torch.int64, device=xk.device)
             with self.ema.average_parameters():
-                model_output = self(xt, timesteps)
-            xt = self.scheduler.step(xt, k, model_output, noise)
-            trajectory.append(xt)
+                model_output = self(xk, ts)
+            xk = self.scheduler.step(xk, k, model_output, noise)
+            trajectory.append(xk)
             
         trajectory = torch.stack(trajectory, dim=0)
         return trajectory if return_trajectory else trajectory[-1]

@@ -12,6 +12,10 @@ import yaml
 os.environ["HYDRA_FULL_ERROR"] = "1"
 
 def update_dict(d : dict | list):
+    """
+    Recursively update the dictionary to replace the model config with the one from the experiment id.
+    Why? Because otherwise if the the same model is finetuned multiple times, the initialization process will be a mess since it will load all previous configs.
+    """
     if isinstance(d, dict):
         if d.get('_target_', None) == "src.networks.PretrainedModel":
             model_keyword = d['model_keyword']

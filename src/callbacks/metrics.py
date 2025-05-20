@@ -169,7 +169,8 @@ class SRCS:
         self.avg_cos_sims.append(avg_cosine_similarity)
         
     def compute(self) -> float:
-        return sum(self.avg_cos_sims) / len(self.avg_cos_sims)
+        mean, std = torch.tensor(self.avg_cos_sims).mean(), torch.tensor(self.avg_cos_sims).std()
+        return mean.item(), std.item()
     
 def calculate_curvature_displacement(trajectories : Tensor, timeschedule : Tensor) -> Tensor:
     # trajectories.shape = (trajectory_length, batch_size, ...)

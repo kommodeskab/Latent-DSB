@@ -10,10 +10,10 @@
 #BSUB -gpu "num=1:mode=exclusive_process"
 
 # number of cores to use
-#BSUB -n 12
+#BSUB -n 64
 
 # gb memory per core
-#BSUB -R "rusage[mem=4GB]"
+#BSUB -R "rusage[mem=2GB]"
 # cores is on the same slot
 #BSUB -R "span[hosts=1]"
 

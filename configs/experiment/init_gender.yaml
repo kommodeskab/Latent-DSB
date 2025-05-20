@@ -1,0 +1,46 @@
+# @package _global_
+defaults:
+  - override /trainer: gpu
+  - override /data: gender
+  - override /callbacks: fm_callbacks
+  - override /model: init
+  - override /logger: default
+
+project_name: 'flow matching'
+task_name: 'gender'
+
+length_seconds: 2.23
+data:
+  x0_dataset:
+    length_seconds: ${length_seconds}
+  x1_dataset:
+    length_seconds: ${length_seconds}
+  x0_dataset_val:
+    length_seconds: ${length_seconds}
+  x1_dataset_val:
+    length_seconds: ${length_seconds}
+  batch_size: 128
+  flip: False
+  num_workers: 12
+
+model:
+  model:
+    _target_: src.networks.UNet1D50
+    in_channels: 64
+    out_channels: 64
+  
+  encoder_decoder:
+    _target_: src.networks.HifiGan
+
+trainer:
+  fast_dev_run: False
+  enable_checkpointing: True
+  log_every_n_steps: 100
+  reload_dataloaders_every_n_epochs: 1
+  val_check_interval: 3000
+  check_val_every_n_epoch: !!null
+  max_epochs: -1
+  max_steps: 200000
+  gradient_clip_val: 1.0
+  accumulate_grad_batches: 1
+  precision: '16-mixed'

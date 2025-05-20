@@ -26,6 +26,7 @@ class DSBScheduler:
         assert num_timesteps > 0, "Number of timesteps must be positive"
         self.target = target
         self.set_timesteps(num_timesteps, gamma_min, gamma_max)
+        self.original_gammas_bar = self.gammas_bar.clone()
         
     @staticmethod
     def to_dim(x : Tensor, dim : int) -> Tensor:
@@ -38,6 +39,10 @@ class DSBScheduler:
         return self.timesteps[random_indices]
     
     def set_timesteps(self, num_timesteps : int, gamma_min : float | None = None, gamma_max : float | None = None) -> None:
+        # (gamma_min + gamma_max) / 2 * num_timesteps = T
+        # => gamma_min + gamma_max = 2 * T / num_timesteps
+        # => gamma_min = 2 * T / num_timesteps - gamma_max
+        
         if gamma_min is None and gamma_max is None:
             gamma_min = gamma_max = 1 / num_timesteps
         
@@ -50,13 +55,11 @@ class DSBScheduler:
         
         if not hasattr(self, 'timesteps'):
             timesteps = torch.arange(1, num_timesteps + 1)
-            self.k_to_index = lambda k: k
         else:
-            old_gammas_bar = self.gammas_bar[1:]
+            old_gammas_bar = self.original_gammas_bar[1:]
             new_gammas_bar = gammas_bar[1:]
             distance_matrix = (old_gammas_bar.unsqueeze(0) - new_gammas_bar.unsqueeze(1)).abs()
             timesteps = distance_matrix.argmin(dim=1) + 1
-            self.k_to_index = lambda k: torch.where(timesteps == k)[0][0] + 1
         
         self.timesteps = timesteps
         self.gammas = gammas
@@ -64,21 +67,21 @@ class DSBScheduler:
         self.sampling_var = sampling_var
         self.var = var
         
-    def deterministic_sample(self, x_start : Tensor, x_end : Tensor, return_trajectory : bool = False, noise : NOISE_TYPES = 'training') -> Tensor:
+    def deterministic_sample(self, x_start : Tensor, x_end : Tensor, return_trajectory : bool = False, noise : NOISE_TYPES = 'training', noise_factor : float = 1.0) -> Tensor:
         xk = x_start
         trajectory = [xk]
-        for k in reversed(self.timesteps):
+        for k, _ in reversed(list(enumerate(self.timesteps, start=1))):
             if self.target == 'terminal':
                 pseudo_model_output = x_end
                 
             elif self.target == 'flow':
-                gammas_bar = self.gammas_bar[self.k_to_index(k)]
+                gammas_bar = self.gammas_bar[k]
                 pseudo_model_output = (xk - x_end) / gammas_bar
                 
             elif self.target == 'semi-flow':
                 pseudo_model_output = xk - x_end
                 
-            xk = self.step(xk, k, pseudo_model_output, noise)
+            xk = self.step(xk, k, pseudo_model_output, noise, noise_factor)
             trajectory.append(xk)
         
         trajectory = torch.stack(trajectory, dim=0)
@@ -116,9 +119,7 @@ class DSBScheduler:
         
         return xk, timesteps, target
     
-    def step(self, xk_plus_1 : Tensor, k_plus_one : int, model_output : Tensor, noise : NOISE_TYPES) -> Tensor:
-        k_plus_one = self.k_to_index(k_plus_one)
-        
+    def step(self, xk_plus_1 : Tensor, k_plus_one : int, model_output : Tensor, noise : NOISE_TYPES, noise_factor : float = 1) -> Tensor:        
         dim = xk_plus_1.dim()
         device = xk_plus_1.device
         gammas = self.to_dim(self.gammas, dim).to(device=device, dtype=xk_plus_1.dtype)
@@ -143,7 +144,7 @@ class DSBScheduler:
             direction = model_output / gammas_bar[k_plus_one]
         
         mu = xk_plus_1 - step_size * direction
-        noise = torch.randn_like(xk_plus_1) * std
+        noise = torch.randn_like(xk_plus_1) * std * noise_factor
         return mu + noise
 
 if __name__ == "__main__":

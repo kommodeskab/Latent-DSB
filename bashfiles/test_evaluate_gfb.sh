@@ -24,4 +24,4 @@
 
 module load python3/3.11.9
 source .venv/bin/activate
-python3 evaluate.py --experiment_id=280425110650 --num_samples=128 --batch_size=4 --length=4.47 --sdr=10
+python3 evaluate.py --experiment_id=GFB --num_samples=4 --batch_size=4 --sdr=2

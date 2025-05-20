@@ -115,6 +115,7 @@ class DiffusionCBMixin:
             images = [wandb.Image(f) for f in [gammas_fig, gammas_bar_fig, variance_fig, sampling_variance_fig]],
             caption = ["gammas", "gammas_bar", "variance", "sampling_variance"],
         )
+        del gammas_fig, gammas_bar_fig, variance_fig, sampling_variance_fig
         plt.close('all')
     
     def visualize_data(self, trainer : Trainer, pl_module : DSB | InitDSB):
@@ -212,6 +213,8 @@ class DiffusionCBMixin:
             self.visualize_latent_space(logger, self.x0_encoded, "x0")
             self.visualize_latent_space(logger, self.x1_encoded, "x1")
             
+            del audios, decoded_audio, x0_decoded_audio, x1_decoded_audio
+            
         original_size = x0.flatten(1).size(1)
         latent_size = self.x0_encoded.flatten(1).size(1)
         logger.log_metrics({
@@ -286,21 +289,23 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
             initial_decoded = pl_module.decode(initial_samples).cpu()
             
             if self.data_type == 'image':
-                fig = plot_images(final_decoded)
+                fig1 = plot_images(final_decoded)
                 logger.log_image(
                     key = caption,
-                    images = [wandb.Image(fig)],
+                    images = [wandb.Image(fig1)],
                     step = pl_module.global_step,
                 )
                 selected_idxs = torch.linspace(0, trajectory.size(0) - 1, 5).round().to(torch.int64)
                 trajectory = trajectory[selected_idxs, :5].flatten(0, 1)
                 trajectory = pl_module.decode(trajectory).cpu()
-                fig = plot_images(trajectory)
+                fig2 = plot_images(trajectory)
                 logger.log_image(
                     key = "Trajectory",
-                    images = [wandb.Image(fig)],
+                    images = [wandb.Image(fig2)],
                     step = pl_module.global_step,
                 )
+                plt.close(fig1)
+                plt.close(fig2)
             
             elif self.data_type == "points":
                 fig = plot_points([trajectory.cpu(), final_decoded, initial_decoded], keys=["trajectory", "x0_hat", "x1"], colors=['b', 'r', 'g'])
@@ -309,6 +314,7 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
                     images = [wandb.Image(fig)],
                     step = pl_module.global_step,
                 )
+                plt.close(fig)
                 
             elif self.data_type == "audio":
                 audios = [audio.flatten().numpy() for audio in final_decoded]
@@ -335,103 +341,12 @@ class FlowMatchingCB(Callback, DiffusionCBMixin):
                         mos_caption: mos,
                         'curr_num_iters': pl_module.curr_num_iters,
                     }, step=pl_module.global_step)
+                    
+                del audios
+                    
+            # delete the trajectory to save memory
+            del trajectory
+            
             
         plt.close('all')
-
-class DSBCB(Callback, DiffusionCBMixin):
-    def __init__(self):
-        super().__init__()
-        
-    def sample_from_trajectory(self, trajectory : Tensor, n_timesteps: int, n_samples : int) -> Tensor:
-        # trajectory shape: (num_steps, batch_size, ...)
-        # get sample of shape (num_samples * batch_size, ...)
-        num_steps = trajectory.size(0)
-        indices = torch.linspace(0, num_steps - 1, n_timesteps).round().to(torch.int64)
-        samples = trajectory[indices, :n_samples]
-        samples = samples.flatten(0, 1)
-        return samples
-        
-    def on_train_start(self, trainer : Trainer, pl_module : DSB):
-        device = pl_module.device
-        self.visualize_data(trainer, pl_module)
-        x0 = self.x0_encoded.to(device)
-        trajectory = pl_module.sample(x0, forward=True, return_trajectory=True, show_progress=True, noise='inference')
-        sampled_trajectory = self.sample_from_trajectory(trajectory, 5, 5)
-        sampled_trajectory = pl_module.decode(sampled_trajectory)
-        # sampled.trajectory shape: (25, ...)
-        
-        if self.data_type == "image":
-            sampled_trajectory_fig = plot_images(sampled_trajectory.cpu())
-            pl_module.logger.log_image(
-                key = "Initial trajectory",
-                images = [wandb.Image(sampled_trajectory_fig)],
-            )
-        
-        elif self.data_type == "audio":
-            shape = sampled_trajectory.size()
-            sampled_trajectory = sampled_trajectory.view(5, 5, *shape[1:])
-            for i in range(5):
-                sample = sampled_trajectory[:, i] # shape (5, channels, time)
-                audios = [sample.flatten().numpy()]
-                pl_module.logger.log_audio(
-                    key = f"Initial trajectory/{i}",
-                    audios = audios,
-                    sample_rate = [self.sample_rate],
-                )
-            
-            self.mos = MOS(pl_module.device)
-            
-        plt.close('all')
-        
-    def on_validation_end(self, trainer : Trainer, pl_module : DSB):
-        device      = pl_module.device
-        logger      = pl_module.logger
-        is_backward = pl_module.training_backward
-        iteration   = pl_module.DSB_iteration
-        
-        x_start = self.x1_encoded if is_backward else self.x0_encoded
-        x_start = x_start.to(device)
-        
-        # samples shape (num_steps, 16, c, h, w)
-        samples = pl_module.sample(
-            x_start = x_start,
-            forward = not is_backward,
-            return_trajectory = True,
-        )
-        final_samples = samples[-1]
-        final_samples = pl_module.decode(final_samples) # shape: (16, ...)
-        sampled_trajectory = self.sample_from_trajectory(samples, 5, 5)
-        sampled_trajectory = pl_module.decode(sampled_trajectory)
-        
-        if self.data_type == "image":
-            sampled_trajectory_fig = plot_images(sampled_trajectory.cpu())
-            samples_fig = plot_images(final_samples.cpu())
-
-            caption = "forward" if not is_backward else "backward"
-            logger.log_image(
-                key = f"iteration_{iteration}/{caption}_samples",
-                images = [wandb.Image(samples_fig)],
-                step = pl_module.global_step,
-            )
-            
-            logger.log_image(
-                key = f"iteration_{iteration}/{caption}_trajectory",
-                images = [wandb.Image(sampled_trajectory_fig)],
-                step = pl_module.global_step,
-            )
-            
-        elif self.data_type == "audio":
-            audios = [audio.flatten().numpy() for audio in final_samples]
-            logger.log_audio(
-                key = f"iteration_{iteration}/samples",
-                audios = audios,
-                sample_rate = [self.sample_rate] * len(audios),
-                step = pl_module.global_step,
-            )
-            
-            mos = self.mos.evaluate(final_samples)
-            logger.log_metrics({
-                "MOS": mos,
-            }, step=pl_module.global_step)
-            
-        plt.close('all')
+        torch.cuda.empty_cache()

@@ -23,6 +23,7 @@ def instantiate_callbacks(callback_cfg : DictConfig | None) -> list:
     return callbacks
 
 def get_project_from_id(experiment_id : str) -> str:
+    experiment_id = str(experiment_id)
     project_names = wandb.Api().projects()
     project_names = [project.name for project in project_names]
     for project_name in project_names:
@@ -42,7 +43,9 @@ def get_ckpt_path(experiment_id : str, last : bool = True, filename : str | None
         raise FileNotFoundError(f"No checkpoints found in {folder_to_ckpt_path}")
     
     if last:
-        return max(ckpt_paths, key=os.path.getctime)
+        # return the last checkpoint
+        ckpt_paths.sort(key=os.path.getmtime, reverse=True)
+        return ckpt_paths[0]
     
     filename = filename if filename is not None else "best.ckpt"
     path = os.path.join(folder_to_ckpt_path, filename)
