@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SET JOB NAME
-#BSUB -J gender_x0
+#BSUB -J gender_x1
 
 # select gpu, choose gpuv100 or gpua100 (best)
 #BSUB -q gpua100
@@ -24,4 +24,4 @@
 
 module load python3/3.11.9
 source .venv/bin/activate
-python3 train.py +experiment=init_clipped data.flip=True
+python3 train.py +experiment=init_gender data.flip=True continue_from_id=290525014350

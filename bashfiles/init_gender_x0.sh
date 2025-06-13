@@ -24,4 +24,4 @@
 
 module load python3/3.11.9
 source .venv/bin/activate
-python3 train.py +experiment=init_clipped
+python3 train.py +experiment=init_gender continue_from_id=280525104922

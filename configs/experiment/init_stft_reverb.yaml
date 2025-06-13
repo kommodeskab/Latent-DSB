@@ -1,13 +1,13 @@
 # @package _global_
 defaults:
   - override /trainer: gpu
-  - override /data: clippedvctk
+  - override /data: reverbvctk
   - override /callbacks: fm_callbacks
   - override /model: init
   - override /logger: default
 
 project_name: 'flow matching'
-task_name: 'stft backbone'
+task_name: 'reverb stft'
 
 length_seconds: 4.096
 data:

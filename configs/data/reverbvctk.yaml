@@ -1,26 +1,26 @@
 _target_: src.data_modules.FlowMatchingDM
 
 x0_dataset:
-  _target_: src.dataset.AllLibri
-  length_seconds: 2.23
+  _target_: src.dataset.AllVCTK
+  length_seconds: 4.47
   sample_rate: 16000
   train: True
 
 x0_dataset_val:
-  _target_: src.dataset.AllLibri
-  length_seconds: 2.23
+  _target_: src.dataset.AllVCTK
+  length_seconds: 4.47
   sample_rate: 16000
   train: False
 
 x1_dataset:
-  _target_: src.dataset.EarsWHAMUnpaired
-  length_seconds: 2.23
+  _target_: src.dataset.VCTKRIR
+  length_seconds: 4.47
   sample_rate: 16000
   train: True
 
 x1_dataset_val:
-  _target_: src.dataset.EarsWHAMUnpaired
-  length_seconds: 2.23
+  _target_: src.dataset.VCTKRIR
+  length_seconds: 4.47
   sample_rate: 16000
   train: False
 

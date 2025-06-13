@@ -11,6 +11,7 @@ make_gifs.py
 /test_results
 GFB.py
 checkpoint_299999_speech_clipping_IndepCoupling.pt
+checkpoint_299999_speech_reverb_IndepCoupling.pt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

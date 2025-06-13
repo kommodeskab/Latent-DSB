@@ -7,17 +7,17 @@ defaults:
   - override /logger: default
 
 project_name: 'dsb'
-task_name: 'dsb clipped mel'
+task_name: 'dsb gender'
 
 model:
   forward_model:
     _target_: src.networks.PretrainedModel
-    experiment_id: '100525122336'
+    experiment_id: '290525014350'
     model_keyword: 'model'
 
   backward_model:
     _target_: src.networks.PretrainedModel
-    experiment_id: '110525113436'
+    experiment_id: '280525104922'
     model_keyword: 'model'
 
   encoder_decoder:
@@ -26,7 +26,7 @@ model:
   num_timesteps: 100
   first_iteration: 'network'
   target: 'flow'
-  max_norm: 1.0
+  max_norm: 5.0
   ema_decay: 0.999
   gamma_min: 0.01
   gamma_max: 0.01
@@ -41,35 +41,35 @@ model:
   max_DSB_iterations: 8
 
   num_iterations_mult: 0.7
-  minimum_num_iterations: 16000
+  minimum_num_iterations: 19200
 
   x0_dataset:
-    _target_: src.dataset.AllLibri
+    _target_: src.dataset.GenderAudioDataset
+    gender: 'male'
     length_seconds: 4.47
     sample_rate: 16000
     train: True
 
   x0_dataset_val:
-    _target_: src.dataset.AllLibri
+    _target_: src.dataset.GenderAudioDataset
+    gender: 'male'
     length_seconds: 4.47
     sample_rate: 16000
     train: False
 
   x1_dataset:
-    _target_: src.dataset.ClippedLibri
+    _target_: src.dataset.GenderAudioDataset
+    gender: 'female'
     length_seconds: 4.47
     sample_rate: 16000
     train: True
-    no_clip_prob: 0.1
-    gain_range: [5, 30]
 
   x1_dataset_val:
-    _target_: src.dataset.ClippedLibri
+    _target_: src.dataset.GenderAudioDataset
+    gender: 'female'
     length_seconds: 4.47
     sample_rate: 16000
     train: False
-    no_clip_prob: 0.1
-    gain_range: [5, 30]
 
 trainer:
   fast_dev_run: False

@@ -7,17 +7,17 @@ defaults:
   - override /logger: default
 
 project_name: 'dsb'
-task_name: 'dsb clipped mel'
+task_name: 'dsb noise'
 
 model:
   forward_model:
     _target_: src.networks.PretrainedModel
-    experiment_id: '100525122336'
+    experiment_id: '040625203904'
     model_keyword: 'model'
 
   backward_model:
     _target_: src.networks.PretrainedModel
-    experiment_id: '110525113436'
+    experiment_id: '040625184918'
     model_keyword: 'model'
 
   encoder_decoder:
@@ -44,37 +44,33 @@ model:
   minimum_num_iterations: 16000
 
   x0_dataset:
-    _target_: src.dataset.AllLibri
+    _target_: src.dataset.AllVCTK
     length_seconds: 4.47
     sample_rate: 16000
     train: True
 
   x0_dataset_val:
-    _target_: src.dataset.AllLibri
+    _target_: src.dataset.AllVCTK
     length_seconds: 4.47
     sample_rate: 16000
     train: False
 
   x1_dataset:
-    _target_: src.dataset.ClippedLibri
+    _target_: src.dataset.VCTKWHAM
     length_seconds: 4.47
     sample_rate: 16000
     train: True
-    no_clip_prob: 0.1
-    gain_range: [5, 30]
 
   x1_dataset_val:
-    _target_: src.dataset.ClippedLibri
+    _target_: src.dataset.VCTKWHAM
     length_seconds: 4.47
     sample_rate: 16000
     train: False
-    no_clip_prob: 0.1
-    gain_range: [5, 30]
 
 trainer:
   fast_dev_run: False
   enable_checkpointing: False
-  log_every_n_steps: 100
+  log_every_n_steps: 200
   reload_dataloaders_every_n_epochs: 1
   val_check_interval: 3000
   check_val_every_n_epoch: !!null

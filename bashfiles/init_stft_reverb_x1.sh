@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SET JOB NAME
-#BSUB -J stft_x0
+#BSUB -J stft_reverb_x1
 
 # select gpu, choose gpuv100 or gpua100 (best)
 #BSUB -q gpuv100
@@ -24,4 +24,4 @@
 
 module load python3/3.11.9
 source .venv/bin/activate
-python3 train.py +experiment=init_stft task_name=stft_x0
+python3 train.py +experiment=init_stft_reverb data.flip=True task_name=stft_reverb_x1

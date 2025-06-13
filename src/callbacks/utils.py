@@ -8,6 +8,8 @@ def get_batch_from_dataset(dataset : Dataset, batch_size : int, shuffle : bool =
     return next(iter(dataloader))
 
 def get_batches(trainer : pl.Trainer, batch_size : int, shuffle : bool = False) -> tuple[Tensor, Tensor]:
+    # very bad naming, but this works for datamodules that have start_dataset_val and end_dataset_val
+    # i.e. flow matching datamdules
     start_dataset = trainer.datamodule.start_dataset_val
     end_dataset = trainer.datamodule.end_dataset_val
     

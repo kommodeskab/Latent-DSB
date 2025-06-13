@@ -1,10 +1,10 @@
 #!/bin/sh
 
 # SET JOB NAME
-#BSUB -J stft_x0
+#BSUB -J dsb_stft
 
 # select gpu, choose gpuv100 or gpua100 (best)
-#BSUB -q gpuv100
+#BSUB -q p1
 
 # number of GPUs to use
 #BSUB -gpu "num=1:mode=exclusive_process"
@@ -13,15 +13,17 @@
 #BSUB -n 12
 
 # gb memory per core
-#BSUB -R "rusage[mem=1G]"
+#BSUB -R "rusage[mem=6GB]"
 # cores is on the same slot
 #BSUB -R "span[hosts=1]"
 
 # walltime
-#BSUB -W 24:00
+#BSUB -W 71:59
 #BSUB -o hpc/output_%J.out 
-#BSUB -e hpc/error_%J.err 
+#BSUB -e hpc/error_%J.err   
 
 module load python3/3.11.9
 source .venv/bin/activate
-python3 train.py +experiment=init_stft task_name=stft_x0
+python3 train.py +experiment=dsb_stft
+chgrp -R s214630bjjemiri /work3/s214630/Latent-DSB/
+chmod -R 770 /work3/s214630/Latent-DSB/

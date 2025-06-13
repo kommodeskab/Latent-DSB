@@ -1,10 +1,6 @@
-from .emnist import EMNIST, EMNISTNoLabel, FilteredMNIST
-from .celeba import CelebADataset, CelebA
-from .basedataset import BaseDataset, ImageDataset
-from .afhq import AFHQDataset
-from .points import Points
 from .audio import (
     EarsGender, 
+    VCTK,
     VoxCeleb, 
     GenderAudioDataset, 
     LibriSpeech, 
@@ -18,5 +14,7 @@ from .audio import (
     ClippedLibri,
     AllVCTK,
     ClippedVCTK,
-    VCTK,
+    VCTKWHAM,
+    VCTKRIR,
+    LibriRIR,
 )

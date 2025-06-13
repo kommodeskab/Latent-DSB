@@ -101,8 +101,8 @@ def config_from_id(experiment_id : str) -> dict:
             run = api.run(f"{name}/{project_name}/{experiment_id}")
             print(f"Found experiment {experiment_id} in {name}.")
             return run.config
-        except wandb.errors.CommError:
-            print(f"Failed to get config from wandb for {experiment_id} in {name}. Trying next.")
+        except:
+            pass
         
     raise ValueError(f"Could not find experiment {experiment_id} in any of the projects: {possible_names}.")
 

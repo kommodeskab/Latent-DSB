@@ -58,6 +58,7 @@ class DSBScheduler:
         else:
             old_gammas_bar = self.original_gammas_bar[1:]
             new_gammas_bar = gammas_bar[1:]
+            assert old_gammas_bar[-1] == new_gammas_bar[-1], f"Gammas must sum to the same value, got {old_gammas_bar[-1] = } and {new_gammas_bar[-1] = }"
             distance_matrix = (old_gammas_bar.unsqueeze(0) - new_gammas_bar.unsqueeze(1)).abs()
             timesteps = distance_matrix.argmin(dim=1) + 1
         
@@ -133,6 +134,8 @@ class DSBScheduler:
             std = 0
         elif noise == 'training-inference':
             std = 0 if k_plus_one == 1 else self.var[k_plus_one] ** 0.5
+        else:
+            raise ValueError(f"Unknown noise type: {noise}")
                 
         step_size = gammas[k_plus_one]
         

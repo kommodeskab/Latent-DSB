@@ -11,6 +11,9 @@ from torchaudio.transforms import Resample
 from torch.nn.functional import pad
 import glob
 import torch
+import torch.nn.functional as F
+from torchaudio.functional import fftconvolve
+
 
 def compute_average_sdr(clean: torch.Tensor, processed: torch.Tensor) -> float:
     """
@@ -383,6 +386,28 @@ class LibriFSDPaired(SpeechNoiseDataset):
         noise_dataset = BaseConcatAudio(noise, length_seconds, sample_rate, initial_sample_rate)
         super().__init__(speech_dataset, noise_dataset, return_pair)
         
+class VCTKWHAM(SpeechNoiseDataset):
+    def __init__(
+        self,
+        length_seconds : float,
+        sample_rate : int = 16_000,
+        train : bool = True,
+        return_pair : bool = False,
+        **kwargs,
+    ):
+        self.return_pair = return_pair
+        
+        if train:
+            speech = [VCTK('train', gender=None)]
+            noise = [WHAM('train')]
+        else:
+            speech = [VCTK('test', gender=None)]
+            noise = [WHAM('test')]
+        
+        speech_dataset = BaseConcatAudio(speech, length_seconds, sample_rate)
+        noise_dataset = BaseConcatAudio(noise, length_seconds, sample_rate)
+        super().__init__(speech_dataset, noise_dataset, return_pair)
+        
 class EarsWHAMUnpaired(SpeechNoiseDataset):
     def __init__(
         self,
@@ -573,3 +598,127 @@ class ClippedVCTK(ClippedDataset):
             return_pair=return_pair,
             no_clip_prob=no_clip_prob,
         )
+class RIRS(BaseAudioDataset):
+    def __init__(self, train : bool = True):
+        super().__init__()
+        
+        data_path = get_data_path()
+        if train:
+            rirs_paths = [
+                "BUT_ReverbDB",
+                "OPENAIR",
+                "RWCP_REVERB_AACHEN",
+                "C4DM",
+            ]
+        else:
+            rirs_paths = [
+                "MIT_Survey",
+            ]
+        
+        rirs_paths = [os.path.join(data_path, p) for p in rirs_paths]
+        
+        self.file_names = []
+        for path in rirs_paths:
+            wav_files = glob.glob(os.path.join(path, '**', '*.wav'), recursive=True)
+            self.file_names.extend(wav_files)
+
+class RIRDataset(Dataset):
+    def __init__(
+        self,
+        audio_dataset : BaseConcatAudio,
+        train : bool = True,
+        return_pair : bool = False,
+    ):
+        self.audio_dataset = audio_dataset
+        self.rir_dataset = BaseConcatAudio(
+            [RIRS(train)],
+            length_seconds=5.0,
+            sample_rate=audio_dataset.sample_rate,
+        )
+        self.return_pair = return_pair
+        self.sample_rate = audio_dataset.sample_rate
+        super().__init__()
+        
+    def __len__(self) -> int:
+        return len(self.audio_dataset)
+    
+    @staticmethod
+    def estimate_rir_delay(rir: torch.Tensor, threshold_db: float = -20.0) -> int:
+        rir = rir.squeeze()
+        energy = rir.abs()
+        max_energy = energy.max()
+
+        # Convert dB threshold to linear scale
+        threshold = max_energy * (10 ** (threshold_db / 20.0))
+
+        # Find the first sample exceeding the threshold
+        delay_idx = (energy >= threshold).nonzero(as_tuple=False)
+        
+        if delay_idx.numel() == 0:
+            return 0  # fallback if RIR is silent
+        return delay_idx[0].item()
+    
+    def apply_rir(self, audio : Tensor, rir : Tensor) -> Tensor:
+        delay = self.estimate_rir_delay(rir)
+        
+        start = max(0, delay + int(0.01 * self.sample_rate))
+        duration = int(0.3 * self.sample_rate)
+        end = start + duration
+        
+        rir = rir[:, start : end]
+        rir = rir / torch.norm(rir, p=2)
+        
+        augmented = fftconvolve(audio, rir, mode='same')
+        # normalize the augmented audio since it can be louder than the original audio
+        rms = torch.sqrt(torch.mean(augmented**2) + 1e-8)
+        scale = 0.1 / rms
+        augmented = scale * augmented
+        
+        return augmented
+    
+    def get_item(self, index : int):
+        # used for compatibility with ClippedDataset
+        return self.__getitem__(index)
+    
+    def __getitem__(self, index: int):
+        audio = self.audio_dataset[index]
+        rand_idx = torch.randint(0, len(self.rir_dataset), (1,)).item()
+        rir = self.rir_dataset[rand_idx]
+        
+        augmented = self.apply_rir(audio, rir)
+        if self.return_pair:
+            return audio, augmented
+        
+        return augmented
+    
+class VCTKRIR(RIRDataset):
+    def __init__(
+        self,
+        length_seconds : float = 5.1,
+        sample_rate : int = 16_000,
+        train : bool = True,
+        return_pair : bool = False,
+    ):
+        audio_dataset = AllVCTK(
+            length_seconds=length_seconds,
+            sample_rate=sample_rate,
+            train=train,
+        )
+        
+        super().__init__(audio_dataset, train, return_pair)
+
+class LibriRIR(RIRDataset):
+    def __init__(
+        self,
+        length_seconds : float = 5.1,
+        sample_rate : int = 16_000,
+        train : bool = True,
+        return_pair : bool = False,
+    ):
+        audio_dataset = AllLibri(
+            length_seconds=length_seconds,
+            sample_rate=sample_rate,
+            train=train,
+        )
+        
+        super().__init__(audio_dataset, train, return_pair)

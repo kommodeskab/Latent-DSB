@@ -4,7 +4,7 @@
 #BSUB -J dsb_clipped
 
 # select gpu, choose gpuv100 or gpua100 (best)
-#BSUB -q gpua100
+#BSUB -q p1
 
 # number of GPUs to use
 #BSUB -gpu "num=1:mode=exclusive_process"
@@ -13,12 +13,12 @@
 #BSUB -n 12
 
 # gb memory per core
-#BSUB -R "rusage[mem=4GB]"
+#BSUB -R "rusage[mem=6GB]"
 # cores is on the same slot
 #BSUB -R "span[hosts=1]"
 
 # walltime
-#BSUB -W 23:59
+#BSUB -W 71:59
 #BSUB -o hpc/output_%J.out 
 #BSUB -e hpc/error_%J.err   
 

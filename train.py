@@ -43,7 +43,7 @@ def my_app(cfg : DictConfig) -> None:
         **cfg.logger,
         project = project_name, 
         name = task_name, 
-        id = get_current_time() if not id else id, 
+        id = get_current_time() if not id else str(id), 
         config = config
         )
     

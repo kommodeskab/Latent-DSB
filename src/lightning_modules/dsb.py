@@ -46,6 +46,7 @@ class DSBCacheDataset(Dataset):
     def __getitem__(self, idx : int) -> Tensor:
         idx = idx % len(self.cache)
         return self.cache[idx]
+        
 
 class DSB(BaseLightningModule, EncoderDecoderMixin):
     def __init__(
@@ -156,7 +157,8 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
             with torch.autocast(device_type=self.device.type, dtype=dtype): # disable cache to save memory
                 x_start = self.encode(x_start)
                 trajectory = self.sample(x_start, forward=sample_forward, return_trajectory=True, noise='training', show_progress=True)
-                cache.add(trajectory.cpu().half()) # encode as float16 to save memory
+                trajectory = trajectory.cpu().to(dtype=dtype)
+                cache.add(trajectory)
             
             if i >= num_batches:
                 break
@@ -311,6 +313,7 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         return_trajectory : bool = False, 
         show_progress : bool = False,
         noise : NOISE_TYPES = 'inference',
+        noise_factor : float = 1.0,
     ) -> Tensor:
         model, ema = self.get_model(backward = not forward)
         model.eval()
@@ -320,10 +323,10 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         
         generator = reversed(list(enumerate(scheduler.timesteps, start=1)))
         for k, t in tqdm(generator, desc='Sampling', disable=not show_progress, leave=False, total=len(scheduler.timesteps)):
-            ts = torch.full((batch_size,), t, dtype=torch.int64, device=xk.device)
+            ts = torch.full((batch_size,), t, dtype=torch.int16, device=xk.device)
             with ema.average_parameters():
                 model_output = model(xk, ts)
-            xk = scheduler.step(xk, k, model_output, noise)
+            xk = scheduler.step(xk, k, model_output, noise, noise_factor)
             trajectory.append(xk)
             
         trajectory = torch.stack(trajectory, dim=0)
@@ -337,20 +340,21 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
         return_trajectory : bool = False, 
         show_progress : bool = False,
         noise : NOISE_TYPES = 'inference',
+        noise_factor : float = 1.0,
     ) -> Tensor:
         if (self.training_backward and self.DSB_iteration == 1 and forward): # when sampling forward in the first iteration
             if self.first_iteration == 'noise':
                 x_end = torch.randn_like(x_start)
-                return self.scheduler.deterministic_sample(x_start, x_end, return_trajectory, noise=noise)
+                return self.scheduler.deterministic_sample(x_start, x_end, return_trajectory, noise, noise_factor)
             
             elif self.first_iteration == 'pretrained':
-                return self._sample(x_start, self.first_iteration_scheduler, forward, return_trajectory, show_progress, noise)
+                return self._sample(x_start, self.first_iteration_scheduler, forward, return_trajectory, show_progress, noise, noise_factor)
         
         if self.first_iteration == 'network-straight':
-            x_end = self._sample(x_start, self.scheduler, forward, False, show_progress, 'inference')
-            return self.scheduler.deterministic_sample(x_start, x_end, return_trajectory, noise=noise)
+            x_end = self._sample(x_start, self.scheduler, forward, False, show_progress, 'inference', noise_factor)
+            return self.scheduler.deterministic_sample(x_start, x_end, return_trajectory, noise, noise_factor)
         
-        return self._sample(x_start, self.scheduler, forward, return_trajectory, show_progress, noise)
+        return self._sample(x_start, self.scheduler, forward, return_trajectory, show_progress, noise, noise_factor)
     
     def chunk_sample(self, x_start : Tensor, forward : bool, chunk_size : int, return_trajectory : bool = False, show_progress : bool = False, noise : NOISE_TYPES = 'inference') -> Tensor:
         # split x_start into chunks of size chunk_size
@@ -448,7 +452,7 @@ def load_dsb_model(experiment_id : str, dsb_iteration : int) -> DSB:
     backward_model = hydra.utils.instantiate(model_config['backward_model'])
     encoder_decoder = hydra.utils.instantiate(model_config['encoder_decoder'])
     ckpt_path = get_ckpt_path(experiment_id, last=False, filename=f"DSB_iteration_{dsb_iteration}.ckpt")
-    model = DSB.load_from_checkpoint(ckpt_path, forward_model=forward_model, backward_model=backward_model, encoder_decoder=encoder_decoder)
+    model = DSB.load_from_checkpoint(ckpt_path, forward_model=forward_model, backward_model=backward_model, encoder_decoder=encoder_decoder, x0_dataset=None, x1_dataset=None, x0_dataset_val=None, x1_dataset_val=None)
     if experiment_id == '180425125453':
         model.encoder_decoder.off_set = 0
     model = model.eval()

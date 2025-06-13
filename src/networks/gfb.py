@@ -10,7 +10,7 @@ import numpy as np
 
 From https://github.com/microsoft/GFB-audio-control
 
-This code is used for comparing my method with gaussian flow brides
+This code is used for comparing my method with gaussian flow brides (GFB)
 
 """
 
@@ -391,7 +391,6 @@ class STFTbackbone(nn.Module):
 
     def __init__(
         self,
-        stft_args=SimpleNamespace(win_length=510, hop_length=128),
         depth=7,
         emb_dim=256,
         use_norm=True,
@@ -412,9 +411,6 @@ class STFTbackbone(nn.Module):
             device: torch device ("cuda" or "cpu")
         """
         super(STFTbackbone, self).__init__()
-        self.stft_args = stft_args
-        self.win_size = stft_args.win_length
-        self.hop_size = stft_args.hop_length
 
         self.time_conditional = time_conditional
         self.param_conditional = param_conditional
@@ -623,69 +619,6 @@ class STFTbackbone(nn.Module):
 
         return X
 
-    def do_stft(self, x):
-        """
-        x shape: (batch, C, time)
-        """
-        window = torch.hamming_window(window_length=self.win_size, device=x.device)
-
-        x = torch.cat(
-            (
-                x,
-                torch.zeros(
-                    (x.shape[0], x.shape[1], self.win_size - 1), device=x.device
-                ),
-            ),
-            -1,
-        )
-        B, C, T = x.shape
-        x = x.view(-1, x.shape[-1])
-        stft_signal = torch.stft(
-            x,
-            self.win_size,
-            hop_length=self.hop_size,
-            window=window,
-            center=False,
-            return_complex=True,
-        )
-        stft_signal = torch.view_as_real(stft_signal)
-
-        stft_signal = stft_signal.view(B, C, *stft_signal.shape[1:])
-        # shape (batch, C, freq, time, 2)
-
-        return stft_signal
-
-    def do_istft(self, x):
-        """
-        x shape: (batch, C, freq, time, 2)
-        """
-        B, C, F, T, _ = x.shape
-        x = torch.view_as_complex(x)
-        window = torch.hamming_window(
-            window_length=self.win_size, device=x.device
-        )  # this is slow! consider optimizing
-        x = einops.rearrange(x, "b c f t -> (b c) f t ")
-        pred_time = torch.istft(
-            x,
-            self.win_size,
-            hop_length=self.hop_size,
-            window=window,
-            center=False,
-            return_complex=False,
-        )
-        pred_time = einops.rearrange(pred_time, "(b c) t -> b c t", b=B)
-        return pred_time
-
     def forward(self, x, time_cond=None, cond=None):
-        B, C, T = x.shape
-        # apply stft
-        x = self.do_stft(x)
-
-        x = einops.rearrange(x, "b c f t ri -> b (c ri) f t")
         x = self.forward_backbone(x, time_cond, cond)
-        # apply istft
-        x = einops.rearrange(x, " b (c ri) f t -> b c f t ri", ri=2)
-        x = x.contiguous()
-        x = self.do_istft(x)
-        x = x[:, :, :T]
         return x

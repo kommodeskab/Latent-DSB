@@ -36,9 +36,13 @@ where `experiment.sh` is the filename containing the experiment bashfile.
 
 ## Project TODO List
 
-- [ ] Compare with Gaussian Flow Bridge (https://arxiv.org/pdf/2405.19497v1)
-- [ ] Compare with SPADE (https://spade.inria.fr/)
-- [x] Implement VCTK Gender datasets
-- [ ] Make STFT experiment (not a good idea imo)
-- [ ] Find out how to quantify curvature when using stochastic process?
-- [ ] Find out what metrics to use? In my opinion: MOS, WER, SR-CS, maybe KAD/FAD
+- [ ] Make plot of "uncertainty" in generated sample vs. SDR. What do we expect?
+- [ ] Compare GFB with DSB (STFT version).
+   - How do they compare on key metrics?
+   - Compare curvature displacement and total length of trajectories.
+   - Compare both models to baseline model (i.e. no sampling)
+- [x] Make plot of key metrics vs. noise factor. What is the best value for the noise factor?
+- [x] Make plot of key metrics vs. number of steps.
+- [ ] Make plot of key metrics vs. number of steps with deterministic sampling. 
+- [ ] Make plot of key metrics vs. DSB iteration. 
+- [x] Make plot of curvature displacement vs DSB iteration

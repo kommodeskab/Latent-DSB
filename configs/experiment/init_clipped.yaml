@@ -9,7 +9,7 @@ defaults:
 project_name: 'flow matching'
 task_name: 'clipped mel'
 
-length_seconds: 2.23
+length_seconds: 4.47
 data:
   x0_dataset:
     length_seconds: ${length_seconds}
@@ -19,7 +19,7 @@ data:
     length_seconds: ${length_seconds}
   x1_dataset_val:
     length_seconds: ${length_seconds}
-  batch_size: 128
+  batch_size: 64
   flip: False
 
 model:
