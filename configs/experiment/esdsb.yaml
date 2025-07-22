@@ -1,0 +1,91 @@
+# @package _global_
+defaults:
+  - override /trainer: gpu
+  - override /data: esdsb
+  - override /callbacks: esdsb
+  - override /model: esdsb
+  - override /logger: default
+
+project_name: 'esdsb'
+task_name: 'esdsb afhq'
+
+callbacks:
+  esdsb_callback:
+    _target_: src.callbacks.ESDSBCallback
+    cache_size: 10240
+    cache_batch_size: 512
+    steps_before_cache: 30000
+    refresh_every_n_steps: 10000
+    num_steps: 30
+    scheduler_type: 'cosine'
+    plot_every_n_steps: 5000
+
+data:
+  x0_dataset:
+    _target_: src.dataset.AFHQDataset
+    split: cat
+    train: True
+    img_size: 32
+
+  x1_dataset:
+    _target_: src.dataset.AFHQDataset
+    split: dog
+    train: True
+    img_size: 32
+
+  x0_valset:
+    _target_: src.dataset.AFHQDataset
+    split: cat
+    train: False
+    img_size: 32
+
+  x1_valset:
+    _target_: src.dataset.AFHQDataset
+    split: dog
+    train: False
+    img_size: 32
+
+  num_workers: 16
+  batch_size: 128
+
+model:
+  deterministic: False
+
+  model:
+    _target_: src.networks.UNet2D
+    block_out_channels: [64, 64, 128]
+    down_block_types: ['DownBlock2D', 'AttnDownBlock2D', 'AttnDownBlock2D']
+    up_block_types: ['AttnUpBlock2D', 'AttnUpBlock2D', 'UpBlock2D']
+    num_class_embeds: 2
+    in_channels: 3
+    out_channels: 3
+    dropout: 0.1
+
+  optimizer:
+    _target_: torch.optim.AdamW
+    _partial_: True
+    lr: 1.e-4
+    weight_decay: 0.0
+
+  lr_scheduler:
+    scheduler:
+      _target_: torch.optim.lr_scheduler.ConstantLR
+      _partial_: True
+      factor: 1.0
+      total_iters: 1
+    monitor: 'val_loss'
+    interval: 'step'
+    frequency: 1
+
+trainer:
+  fast_dev_run: False
+  enable_checkpointing: False
+  log_every_n_steps: 1
+  reload_dataloaders_every_n_epochs: 1
+  val_check_interval: 3000
+  check_val_every_n_epoch: !!null
+  gradient_clip_val: 5.0
+  max_epochs: -1
+  max_steps: -1
+  precision: '16-mixed'
+  limit_val_batches: 10

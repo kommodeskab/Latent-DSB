@@ -5,15 +5,12 @@ from GFB import GFB
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import os
+from src.dataset import ClippedLibri, LibriRIR
 from src.callbacks.metrics import WER, SRCS, DNSMOS, KAD
 import random
 import numpy as np
 from torch import Tensor
 from src.lightning_modules import DSB
-import torchaudio
-from torch.utils.data import Dataset
-import glob
-from torch.utils.data import Subset
 
 gfb_schedule_type = 'cosine'
 sample_rate = 16000
@@ -33,7 +30,7 @@ parser.add_argument('--batch_size', type=int, default=128)
 parser.add_argument('--num_steps', type=int, default=None)
 parser.add_argument('--noise_factor', type=float, default=1.0)
 parser.add_argument('--dsb_iteration', type=int, default=None)
-parser.add_argument('--what_test', type=str, default='declip') # declip or dereverb
+parser.add_argument('--what_test', type=str, required=True) # clip or rir
 parser.add_argument('--folder_name', type=str, required=True)
 
 args = parser.parse_args()
@@ -51,18 +48,15 @@ dsb_iteration : int = args.dsb_iteration
 what_test : str = args.what_test
 folder_name : str = args.folder_name
 
+assert what_test in ['rir', 'clip'], "what_test must be either 'rir' or 'clip'"
 
 folder_name = f"test_results/{folder_name}"
 os.makedirs(folder_name, exist_ok=True)
 
-use_gfb = 'GFB' in experiment_id
-use_baseline = 'baseline' in experiment_id
-
-if use_gfb:
+if experiment_id == 'GFB':
     assert dsb_iteration is None, "DSB iteration is not supported for GFB"
     assert num_steps > 1, "GFB cant do one-step inference"
     
-    experiment_id = experiment_id.split('_')[1]
     length_seconds = 4.096
     
     dsb = GFB(device, what_test=what_test, schedule_type=gfb_schedule_type)
@@ -73,7 +67,7 @@ if use_gfb:
     
     timeschedule = dsb.diff.get_schedule(dsb.Tsteps, end_t=1.0, type=gfb_schedule_type)
     
-elif use_baseline:
+elif experiment_id == 'baseline':
     assert dsb_iteration is None, "DSB iteration is not supported for baseline"
     print("Using baseline model")
     
@@ -119,30 +113,16 @@ else:
 
 dsb.to(device)
 
-class TestDataset(Dataset):
-    def __init__(self, path : str):
-        super().__init__()
-        self.path = path
-    
-    def __len__(self) -> int:
-        num_files = len(glob.glob(os.path.join(self.path, '*.wav')))
-        return num_files
-    
-    def __getitem__(self, idx) -> tuple[Tensor, Tensor]:
-        x0_filename = self.path + f'/x0_{idx}.wav'
-        x1_filename = self.path + f'/x1_{idx}.wav'
-        
-        x0 = torchaudio.load(x0_filename)[0]
-        x1 = torchaudio.load(x1_filename)[0]
-        
-        return x0, x1
-    
-if what_test == 'declip':
-    dataset = TestDataset('/work3/s214630/data/clipped_libri_test/')
+if what_test == 'clip':
+    dataset = ClippedLibri(length_seconds=5.0, sample_rate=sample_rate, train=False, return_pair=True)
+    gain_db = dataset.what_db_for_sdr(target_snr=2.0)
+    dataset = [dataset.get_item(i, gain_db=gain_db) for i in range(num_samples)]
+elif what_test == 'rir':
+    dataset = LibriRIR(length_seconds=5.0, sample_rate=sample_rate, train=False, return_pair=True)
+    dataset = [dataset.get_item(i) for i in range(num_samples)]
 else:
-    dataset = TestDataset('/work3/s214630/data/reverberated_libri_test/')
+    raise ValueError(f"Unknown test type: {what_test}")
     
-dataset = Subset(dataset, range(num_samples))
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=1)
 
 wer = WER(sample_rate, device)
@@ -154,7 +134,7 @@ def encoding_to_waveform(trajectory : Tensor, dsb : DSB) -> Tensor:
     # convert the latent trajectory to waveform trajectory
     traj_len, batch_size, *sample_shape = trajectory.shape
     trajectory = trajectory.reshape(traj_len * batch_size, *sample_shape)
-    waveform = dsb.decode(trajectory)
+    waveform = dsb.chunk_decode(trajectory, chunk_size=32)
     waveform_shape = waveform.shape[1:]
     waveform = waveform.reshape(traj_len, batch_size, *waveform_shape)
     return waveform
@@ -181,6 +161,7 @@ for i, batch in enumerate(tqdm(dataloader, desc="Loading batches")):
     # squeeze and make sure that length is no longer than 2**16 for fair comparison
     x0_recon = x0_recon.squeeze(1)[:, :2**16]
     x0 = x0.squeeze(1)[:, :2**16]
+    trajectory = trajectory[:, :, :, :2**16] # shape = (Tsteps + 1, batch_size, 1, seq_len)
     
     wer.update(x0_recon, x0)
     srcs.update(x0_recon, x0)

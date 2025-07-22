@@ -19,6 +19,17 @@ class EncoderDecoderMixin:
             x = self.encoder_decoder.decode(x)
         return x
     
+    def chunk_encode(self, x : Tensor, chunk_size : int) -> Tensor:
+        chunked_x = torch.split(x, chunk_size, dim=0)
+        encoded_chunks = [self.encode(chunk) for chunk in chunked_x]
+        return torch.cat(encoded_chunks, dim=0)
+    
+    def chunk_decode(self, x : Tensor, chunk_size : int) -> Tensor:
+        chunked_x = torch.split(x, chunk_size, dim=0)
+        decoded_chunks = [self.decode(chunk) for chunk in chunked_x]
+        return torch.cat(decoded_chunks, dim=0)
+    
+    
     def encode_batch(self, batch : Tensor) -> Tensor:
         x0, x1 = batch
         xs_stacked = torch.cat([x0, x1], dim=0)

@@ -25,12 +25,10 @@ data:
 
 model:
   model:
-    _target_: src.networks.STFTbackbone
+    _target_: src.networks.AltSTFTbackbone
   
   encoder_decoder:
-    _target_: src.networks.STFTEncoderDecoder
-    n_fft: 510
-    hop_length: 128
+    _target_: src.networks.IdentityEncoderDecoder
 
 trainer:
   fast_dev_run: False
@@ -43,4 +41,4 @@ trainer:
   max_steps: 200000
   gradient_clip_val: 1.0
   accumulate_grad_batches: 1
-  precision: '16-mixed'
+  precision: '32'

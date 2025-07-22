@@ -1,16 +1,17 @@
 from diffusers import UNet2DModel, UNet1DModel
 import torch
 from torch import Tensor
+from torch.nn import Embedding
 
 class UNet2D(UNet2DModel):
     def __init__(self, **kwargs,):
         super().__init__(**kwargs)
 
-    def forward(self, x : Tensor, time_step : Tensor): 
-        if x.dim() == 3:
-            x = x.unsqueeze(1)
-            return super().forward(x, time_step).sample.squeeze(1)
-        return super().forward(x, time_step).sample
+    def forward(self, x : Tensor, timestep : Tensor, class_labels : Tensor = None) -> Tensor: 
+        if torch.is_floating_point(timestep):
+            timestep = (timestep * 1000).int()
+                
+        return super().forward(x, timestep, class_labels).sample
 
 class UNet1D(UNet1DModel):
     def __init__(self, **kwargs):

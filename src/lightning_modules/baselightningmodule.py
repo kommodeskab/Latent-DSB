@@ -4,6 +4,8 @@ from torch import nn
 import torch.nn.init as init
 import torch
 from contextlib import contextmanager
+import random
+import numpy as np
 
 class BaseLightningModule(pl.LightningModule):
     def __init__(self):
@@ -25,15 +27,21 @@ class BaseLightningModule(pl.LightningModule):
         cuda = self.device.type == 'cuda'
         
         cpu_rng_state = torch.get_rng_state()
+        random_rng_state = random.getstate()
+        np_rng_state = np.random.get_state()
         if cuda:
             cuda_rng_state = torch.cuda.get_rng_state()
             
         torch.manual_seed(0)
         torch.cuda.manual_seed(0)
+        random.seed(0)
+        np.random.seed(0)
         
         yield
         
         torch.set_rng_state(cpu_rng_state)
+        random.setstate(random_rng_state)
+        np.random.set_state(np_rng_state)
         if cuda:
             torch.cuda.set_rng_state(cuda_rng_state)
     

@@ -403,7 +403,8 @@ class STFTbackbone(nn.Module):
         time_conditional=True,
         param_conditional=False,
         num_cond_params=1,
-        output_channels=1,
+        output_channels=2,
+        input_channels=2,
     ):
         """
         Args:
@@ -411,6 +412,254 @@ class STFTbackbone(nn.Module):
             device: torch device ("cuda" or "cpu")
         """
         super(STFTbackbone, self).__init__()
+
+        self.time_conditional = time_conditional
+        self.param_conditional = param_conditional
+        self.num_cond_params = num_cond_params
+        self.depth = depth
+
+        init = dict(init_mode="kaiming_uniform", init_weight=np.sqrt(1 / 3))
+        init_zero = dict(init_mode="kaiming_uniform", init_weight=1e-7)
+
+        self.emb_dim = emb_dim
+        self.total_emb_dim = 0
+        if self.time_conditional:
+            self.embedding = RFF_MLP_Block(emb_dim=emb_dim, inputs=1, init=init)
+            self.total_emb_dim += emb_dim
+        if self.param_conditional:
+            self.embedding_param = RFF_MLP_Block(
+                emb_dim=emb_dim, inputs=num_cond_params, init=init
+            )
+            self.total_emb_dim += emb_dim
+
+        self.use_norm = use_norm
+
+        self.device = device
+
+        Nin = input_channels
+        Nout = output_channels
+
+        # Encoder
+        self.Ns = Ns
+        self.Ss = Ss
+
+        self.num_dils = num_dils
+
+        self.downsamplerT = UpDownResample(down=True, mode_resample="T")
+        self.downsamplerF = UpDownResample(down=True, mode_resample="F")
+        self.upsamplerT = UpDownResample(up=True, mode_resample="T")
+        self.upsamplerF = UpDownResample(up=True, mode_resample="F")
+
+        self.downs = nn.ModuleList([])
+        self.middle = nn.ModuleList([])
+        self.ups = nn.ModuleList([])
+
+        self.init_block = ResnetBlock(
+            Nin,
+            self.Ns[0],
+            self.use_norm,
+            num_dils=1,
+            bias=False,
+            kernel_size=(1, 1),
+            emb_dim=self.total_emb_dim,
+            init=init,
+            init_zero=init_zero,
+        )
+        self.out_block = ResnetBlock(
+            self.Ns[0],
+            Nout,
+            use_norm=self.use_norm,
+            num_dils=1,
+            bias=False,
+            kernel_size=(1, 1),
+            proj_place="after",
+            emb_dim=self.total_emb_dim,
+            init=init,
+            init_zero=init_zero,
+        )
+
+        for i in range(self.depth):
+            if i == 0:
+                dim_in = self.Ns[i]
+                dim_out = self.Ns[i]
+            else:
+                dim_in = self.Ns[i - 1]
+                dim_out = self.Ns[i]
+
+            self.downs.append(
+                nn.ModuleList(
+                    [
+                        ResnetBlock(
+                            dim_in,
+                            dim_out,
+                            self.use_norm,
+                            num_dils=self.num_dils[i],
+                            bias=False,
+                            emb_dim=self.total_emb_dim,
+                            init=init,
+                            init_zero=init_zero,
+                        ),
+                    ]
+                )
+            )
+
+        self.bottleneck_type = bottleneck_type
+        self.num_bottleneck_layers = num_bottleneck_layers
+        if self.bottleneck_type == "res_dil_convs":
+            for i in range(self.num_bottleneck_layers):
+
+                self.middle.append(
+                    nn.ModuleList(
+                        [
+                            ResnetBlock(
+                                self.Ns[-1],
+                                self.Ns[-1],
+                                self.use_norm,
+                                num_dils=self.num_dils[-1],
+                                bias=False,
+                                emb_dim=self.total_emb_dim,
+                                init=init,
+                                init_zero=init_zero,
+                            )
+                        ]
+                    )
+                )
+        else:
+            raise NotImplementedError("bottleneck type not implemented")
+
+        for i in range(self.depth - 1, -1, -1):
+
+            if i == 0:
+                dim_in = self.Ns[i] * 2
+                dim_out = self.Ns[i]
+            else:
+                dim_in = self.Ns[i] * 2
+                dim_out = self.Ns[i - 1]
+
+            self.ups.append(
+                nn.ModuleList(
+                    [
+                        ResnetBlock(
+                            dim_in,
+                            dim_out,
+                            use_norm=self.use_norm,
+                            num_dils=self.num_dils[i],
+                            bias=False,
+                            emb_dim=self.total_emb_dim,
+                            init=init,
+                            init_zero=init_zero,
+                        ),
+                    ]
+                )
+            )
+
+    def forward_backbone(self, inputs, time_cond=None, param_cond=None):
+        """
+        Args:
+            inputs (Tensor):  Input signal in frequency-domsin, shape (B,C,F,T)
+            sigma (Tensor): noise levels,  shape (B,1)
+        Returns:
+            pred (Tensor): predicted signal in time-domain, shape (B,C,F,T)
+        """
+        # apply RFF embedding+MLP of the noise level
+        emb = None
+        if self.time_conditional:
+
+            time_cond = time_cond.unsqueeze(-1)
+            time_cond = self.embedding(time_cond)
+            if not self.param_conditional:
+                emb = time_cond
+
+        if self.param_conditional:
+            if param_cond.dim() == 1:
+                # if param_cond is a vector, we need to add a dimension
+                param_cond = param_cond.unsqueeze(1)
+            param_cond = param_cond
+            param_cond = self.embedding_param(param_cond)
+            if not self.time_conditional:
+                emb = param_cond
+            else:
+                emb = torch.cat((time_cond, param_cond), dim=1)
+
+        hs = []
+
+        X = self.init_block(inputs, emb)
+
+        for i, modules in enumerate(self.downs):
+            (ResBlock,) = modules
+
+            X = ResBlock(X, emb)
+            hs.append(X)
+
+            # downsample the main signal path
+            # we do not need to downsample in the inner layer
+            if i < len(self.downs) - 1:
+                # no downsampling in the last layer
+                X = self.downsamplerT(X)
+                X = self.downsamplerF(X)
+
+        # middle layers
+        if self.bottleneck_type == "res_dil_convs":
+            for i in range(self.num_bottleneck_layers):
+                (ResBlock,) = self.middle[i]
+                X = ResBlock(X, emb)
+
+        for i, modules in enumerate(self.ups):
+            j = len(self.ups) - i - 1
+
+            (ResBlock,) = modules
+
+            skip = hs.pop()
+            # print("skip", skip.shape)
+            X = torch.cat((X, skip), dim=1)
+            X = ResBlock(X, emb)
+            if j > 0:
+                # no upsampling in the first layer
+                X = self.upsamplerT(X)  # call contiguous() here?
+                X = self.upsamplerF(X)  # call contiguous() here?
+
+        X = self.out_block(X, emb)
+
+        return X
+
+    def forward(self, x, time_cond=None, cond=None):
+        x = self.forward_backbone(x, time_cond, cond)
+        return x
+    
+class AltSTFTbackbone(nn.Module):
+    """
+    Main U-Net model based on the STFT
+    """
+
+    def __init__(
+        self,
+        stft_args=SimpleNamespace(
+            win_length=510,
+            hop_length=128,
+        ),
+        depth=7,
+        emb_dim=256,
+        use_norm=True,
+        Ns=[64, 128, 256, 512, 512, 512, 512],
+        Ss=[2, 2, 2, 2, 2, 2, 2],
+        num_dils= [1, 1, 1, 1, 1, 1, 1],
+        bottleneck_type= "res_dil_convs",
+        num_bottleneck_layers= 1,
+        device="cuda",
+        time_conditional=True,
+        param_conditional=False,
+        num_cond_params=1,
+        output_channels=1,
+    ):
+        """
+        Args:
+            args (dictionary): hydra dictionary
+            device: torch device ("cuda" or "cpu")
+        """
+        super().__init__()
+        self.stft_args = stft_args
+        self.win_size = stft_args.win_length
+        self.hop_size = stft_args.hop_length
 
         self.time_conditional = time_conditional
         self.param_conditional = param_conditional
@@ -619,6 +868,69 @@ class STFTbackbone(nn.Module):
 
         return X
 
+    def do_stft(self, x):
+        """
+        x shape: (batch, C, time)
+        """
+        window = torch.hamming_window(window_length=self.win_size, device=x.device)
+
+        x = torch.cat(
+            (
+                x,
+                torch.zeros(
+                    (x.shape[0], x.shape[1], self.win_size - 1), device=x.device
+                ),
+            ),
+            -1,
+        )
+        B, C, T = x.shape
+        x = x.view(-1, x.shape[-1])
+        stft_signal = torch.stft(
+            x,
+            self.win_size,
+            hop_length=self.hop_size,
+            window=window,
+            center=False,
+            return_complex=True,
+        )
+        stft_signal = torch.view_as_real(stft_signal)
+
+        stft_signal = stft_signal.view(B, C, *stft_signal.shape[1:])
+        # shape (batch, C, freq, time, 2)
+
+        return stft_signal
+
+    def do_istft(self, x):
+        """
+        x shape: (batch, C, freq, time, 2)
+        """
+        B, C, F, T, _ = x.shape
+        x = torch.view_as_complex(x)
+        window = torch.hamming_window(
+            window_length=self.win_size, device=x.device
+        )  # this is slow! consider optimizing
+        x = einops.rearrange(x, "b c f t -> (b c) f t ")
+        pred_time = torch.istft(
+            x,
+            self.win_size,
+            hop_length=self.hop_size,
+            window=window,
+            center=False,
+            return_complex=False,
+        )
+        pred_time = einops.rearrange(pred_time, "(b c) t -> b c t", b=B)
+        return pred_time
+
     def forward(self, x, time_cond=None, cond=None):
+        B, C, T = x.shape
+        # apply stft
+        x = self.do_stft(x)
+
+        x = einops.rearrange(x, "b c f t ri -> b (c ri) f t")
         x = self.forward_backbone(x, time_cond, cond)
+        # apply istft
+        x = einops.rearrange(x, " b (c ri) f t -> b c f t ri", ri=2)
+        x = x.contiguous()
+        x = self.do_istft(x)
+        x = x[:, :, :T]
         return x
