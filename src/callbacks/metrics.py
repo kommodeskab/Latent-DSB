@@ -241,7 +241,7 @@ def calculate_curvature_displacement(trajectories : Tensor, timeschedule : Tenso
         C_t = (x1 - x0) - dx / dt
         C_t = C_t.norm(dim = 1) / (x1 - x0).norm(dim = 0)
         C_ts.append(C_t)
-        
+
     C_ts = torch.stack(C_ts, dim=0)
     return C_ts
 

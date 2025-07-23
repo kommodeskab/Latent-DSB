@@ -9,12 +9,14 @@ defaults:
 project_name: 'esdsb'
 task_name: 'esdsb afhq'
 
+IMAGE_SIZE: 64
+
 callbacks:
   esdsb_callback:
     _target_: src.callbacks.ESDSBCallback
     cache_size: 10240
     cache_batch_size: 512
-    steps_before_cache: 30000
+    steps_before_cache: 100000
     refresh_every_n_steps: 10000
     num_steps: 30
     scheduler_type: 'cosine'
@@ -25,41 +27,52 @@ data:
     _target_: src.dataset.AFHQDataset
     split: cat
     train: True
-    img_size: 32
+    img_size: ${IMAGE_SIZE}
 
   x1_dataset:
     _target_: src.dataset.AFHQDataset
     split: dog
     train: True
-    img_size: 32
+    img_size: ${IMAGE_SIZE}
 
   x0_valset:
     _target_: src.dataset.AFHQDataset
     split: cat
     train: False
-    img_size: 32
+    img_size: ${IMAGE_SIZE}
 
   x1_valset:
     _target_: src.dataset.AFHQDataset
     split: dog
     train: False
-    img_size: 32
+    img_size: ${IMAGE_SIZE}
 
-  num_workers: 16
-  batch_size: 128
+  num_workers: 24
+  batch_size: 192
 
 model:
   deterministic: False
 
   model:
-    _target_: src.networks.UNet2D
-    block_out_channels: [64, 64, 128]
-    down_block_types: ['DownBlock2D', 'AttnDownBlock2D', 'AttnDownBlock2D']
-    up_block_types: ['AttnUpBlock2D', 'AttnUpBlock2D', 'UpBlock2D']
-    num_class_embeds: 2
+    # _target_: src.networks.UNet2D
+    # block_out_channels: [64, 64, 128, 256]
+    # down_block_types: ['DownBlock2D', 'AttnDownBlock2D', 'AttnDownBlock2D', 'AttnDownBlock2D']
+    # up_block_types: ['AttnUpBlock2D', 'AttnUpBlock2D', 'AttnUpBlock2D', 'UpBlock2D']
+    # num_class_embeds: 2
+    # in_channels: 3
+    # out_channels: 3
+    # dropout: 0.1
+
+    _target_: src.networks.dhariwal.UNetModel
+    image_size: 64
     in_channels: 3
     out_channels: 3
+    model_channels: 64
+    num_res_blocks: 2
+    attention_resolutions: [16, 8]
     dropout: 0.1
+    channel_mult: [1, 2, 4, 4]
+    num_classes: 2
 
   optimizer:
     _target_: torch.optim.AdamW

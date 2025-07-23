@@ -30,7 +30,8 @@ class ImageDataset(BaseDataset):
         super().__init__()
         self.dataset = dataset        
         self.transform = transforms.Compose([
-            transforms.Resize((img_size, img_size)),
+            transforms.RandomResizedCrop(img_size, scale=(0.8, 1.0)),
+            transforms.RandomHorizontalFlip(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
             ])
         
