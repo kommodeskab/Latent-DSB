@@ -16,7 +16,7 @@ callbacks:
     _target_: src.callbacks.ESDSBCallback
     cache_size: 10240
     cache_batch_size: 512
-    steps_before_cache: 100000
+    steps_before_cache: 70000
     refresh_every_n_steps: 10000
     num_steps: 30
     scheduler_type: 'cosine'
@@ -54,15 +54,6 @@ model:
   deterministic: False
 
   model:
-    # _target_: src.networks.UNet2D
-    # block_out_channels: [64, 64, 128, 256]
-    # down_block_types: ['DownBlock2D', 'AttnDownBlock2D', 'AttnDownBlock2D', 'AttnDownBlock2D']
-    # up_block_types: ['AttnUpBlock2D', 'AttnUpBlock2D', 'AttnUpBlock2D', 'UpBlock2D']
-    # num_class_embeds: 2
-    # in_channels: 3
-    # out_channels: 3
-    # dropout: 0.1
-
     _target_: src.networks.dhariwal.UNetModel
     image_size: 64
     in_channels: 3
@@ -71,13 +62,13 @@ model:
     num_res_blocks: 2
     attention_resolutions: [16, 8]
     dropout: 0.1
-    channel_mult: [1, 2, 4, 4]
+    channel_mult: [1, 2, 4, 8]
     num_classes: 2
 
   optimizer:
     _target_: torch.optim.AdamW
     _partial_: True
-    lr: 1.e-4
+    lr: 5.e-5
     weight_decay: 0.0
 
   lr_scheduler:
