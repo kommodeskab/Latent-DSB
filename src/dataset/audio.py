@@ -513,9 +513,9 @@ class ClippedDataset(Dataset):
     def sample_rate(self) -> int:
         return self.dataset.sample_rate
     
-    def what_db_for_sdr(self, target_snr : float) -> float:
+    def what_db_for_snr(self, target_snr : float) -> float:
         """
-        given some desired SDR level, find the gain db in the noise range which gives that SDR.
+        given some desired SNR level, find the gain db in the noise range which gives that SNR.
         Uses binary search.
         """
         old_return_pair = self.return_pair
