@@ -772,6 +772,10 @@ class UNetModel(nn.Module):
         :param y: an [N] Tensor of labels, if class-conditional.
         :return: an [N x C x ...] Tensor of outputs.
         """
+        orig_dim = x.dim()
+        if orig_dim == 3:
+            x = x.unsqueeze(1)
+            
         assert (y is not None) == (
             self.num_classes is not None
         ), "must specify y if and only if the model is class-conditional"
@@ -793,8 +797,13 @@ class UNetModel(nn.Module):
             h = th.cat([h, hs.pop()], dim=1)
             h = module(h, emb)
         h = h.type(x.dtype)
-        return self.out(h)
+        
+        out = self.out(h)
 
+        if orig_dim == 3:
+            out = out.squeeze(1)
+
+        return out
 
 class SuperResModel(UNetModel):
     """

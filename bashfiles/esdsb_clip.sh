@@ -1,10 +1,10 @@
 #!/bin/sh
 
 # SET JOB NAME
-#BSUB -J esdsb
+#BSUB -J esdsb_clip
 
 # select gpu, choose gpuv100, gpua100 or p1 (h100)
-#BSUB -q gpua100
+#BSUB -q p1
 
 # number of GPUs to use
 #BSUB -gpu "num=1:mode=exclusive_process"
@@ -18,10 +18,10 @@
 #BSUB -R "span[hosts=1]"
 
 # walltime
-#BSUB -W 4:00
+#BSUB -W 71:59
 #BSUB -o hpc/output_%J.out 
 #BSUB -e hpc/error_%J.err 
 
 module load python3/3.11.9
 source .venv/bin/activate
-python3 train.py +experiment=esdsb trainer.log_every_n_steps=200
+python3 train.py +experiment=esdsb_clip trainer.log_every_n_steps=200

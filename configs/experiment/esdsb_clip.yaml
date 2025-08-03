@@ -7,60 +7,63 @@ defaults:
   - override /logger: default
 
 project_name: 'esdsb'
-task_name: 'esdsb afhq'
-
-IMAGE_SIZE: 128
+task_name: 'esdsb clip'
 
 callbacks:
   esdsb_callback:
     _target_: src.callbacks.ESDSBCallback
-    cache_size: 10240
+    cache_size: 20480
     validation_cache_size: 256
-    cache_batch_size: 256
-    steps_before_cache: 5000
-    refresh_every_n_steps: 2500
+    cache_batch_size: 512
+    steps_before_cache: 150000
+    refresh_every_n_steps: 5000
     num_steps: 100
     cache_num_steps: 30
     scheduler_type: 'cosine'
-    plot_every_n_steps: 3000
-    enable_checkpointing: False
+    plot_every_n_steps: 5000
+    enable_checkpointing: True
+    what_media: 'audio'
 
 data:
   x0_dataset:
-    _target_: src.dataset.AFHQDataset
-    split: cat
+    _target_: src.dataset.AllVCTK
+    length_seconds: 2.23
+    sample_rate: 16000
     train: True
-    img_size: ${IMAGE_SIZE}
-
-  x1_dataset:
-    _target_: src.dataset.AFHQDataset
-    split: dog
-    train: True
-    img_size: ${IMAGE_SIZE}
 
   x0_valset:
-    _target_: src.dataset.AFHQDataset
-    split: cat
+    _target_: src.dataset.AllVCTK
+    length_seconds: 2.23
+    sample_rate: 16000
     train: False
-    img_size: ${IMAGE_SIZE}
+
+  x1_dataset:
+    _target_: src.dataset.ClippedVCTK
+    length_seconds: 2.23
+    sample_rate: 16000
+    train: True
+    no_clip_prob: 0.0
+    gain_range: [5, 30]
 
   x1_valset:
-    _target_: src.dataset.AFHQDataset
-    split: dog
+    _target_: src.dataset.ClippedVCTK
+    length_seconds: 2.23
+    sample_rate: 16000
     train: False
-    img_size: ${IMAGE_SIZE}
+    no_clip_prob: 0.0
+    gain_range: [5, 30]
 
   num_workers: 24
-  batch_size: 128
+  batch_size: 64
 
 model:
   deterministic: False
 
   model:
     _target_: src.networks.dhariwal.UNetModel
-    image_size: 16
-    in_channels: 4
-    out_channels: 4
+    image_size: 32
+    in_channels: 1
+    out_channels: 1
     model_channels: 64
     num_res_blocks: 2
     attention_resolutions: [16, 8]
@@ -70,7 +73,7 @@ model:
     num_heads: 4
 
   encoder_decoder: 
-    _target_: src.networks.StableDiffusionXL
+    _target_: src.networks.HifiGan
 
   optimizer:
     _target_: torch.optim.AdamW

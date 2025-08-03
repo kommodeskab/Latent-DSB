@@ -6,6 +6,7 @@ import dac
 from functools import partial
 from speechbrain.lobes.models.FastSpeech2 import mel_spectogram
 from transformers import SpeechT5HifiGan
+from diffusers import AutoencoderKL
 
 class BaseEncoderDecoder(Module):
     def encode(self, x : Tensor) -> Tensor: ...    
@@ -17,6 +18,24 @@ class IdentityEncoderDecoder(Module):
         self.scaling_factor = scaling_factor
     def encode(self, x : Tensor) -> Tensor: return x * self.scaling_factor
     def decode(self, h : Tensor) -> Tensor: return h / self.scaling_factor
+    
+class Autoencoder(AutoencoderKL):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+    def encode(self, x : Tensor) -> Tensor: return super().encode(x).latent_dist.sample() * self.config.scaling_factor
+    def decode(self, h : Tensor) -> Tensor: return super().decode(h / self.config.scaling_factor).sample
+    
+class PretrainedVAE:
+    def __new__(cls, model_id : str, **kwargs) -> Autoencoder:
+        dummy_model = AutoencoderKL.from_pretrained(model_id, **kwargs)
+        print("Loaded VAE model", model_id)
+        dummy_model.__class__ = Autoencoder
+        return dummy_model
+    
+class StableDiffusionXL:
+    def __new__(cls):
+        encoder = PretrainedVAE("stabilityai/stable-diffusion-xl-base-1.0", subfolder="vae", revision=None, variant=None)
+        return encoder
 
 def normalize(x : Tensor, old_range : tuple, new_range : tuple) -> Tensor:
     old_min, old_max = old_range

@@ -12,7 +12,7 @@ import numpy as np
 from torch import Tensor
 from src.lightning_modules import DSB
 
-gfb_schedule_type = 'cosine'
+gfb_schedule_type = 'linear'
 sample_rate = 16000
 seed = 42
 torch.manual_seed(seed)
@@ -32,6 +32,7 @@ parser.add_argument('--noise_factor', type=float, default=1.0)
 parser.add_argument('--dsb_iteration', type=int, default=None)
 parser.add_argument('--what_test', type=str, required=True) # clip or rir
 parser.add_argument('--folder_name', type=str, required=True)
+parser.add_argument('--save_trajectory', default=False, help="Whether to save the trajectory or not")
 
 args = parser.parse_args()
 params = {}
@@ -47,6 +48,7 @@ noise_factor : float = args.noise_factor
 dsb_iteration : int = args.dsb_iteration
 what_test : str = args.what_test
 folder_name : str = args.folder_name
+save_trajectory : bool = args.save_trajectory
 
 assert what_test in ['rir', 'clip'], "what_test must be either 'rir' or 'clip'"
 
@@ -115,7 +117,7 @@ dsb.to(device)
 
 if what_test == 'clip':
     dataset = ClippedLibri(length_seconds=5.0, sample_rate=sample_rate, train=False, return_pair=True)
-    gain_db = dataset.what_db_for_sdr(target_snr=2.0)
+    gain_db = dataset.what_db_for_snr(target_snr=2.0)
     dataset = [dataset.get_item(i, gain_db=gain_db) for i in range(num_samples)]
 elif what_test == 'rir':
     dataset = LibriRIR(length_seconds=5.0, sample_rate=sample_rate, train=False, return_pair=True)
@@ -138,7 +140,6 @@ def encoding_to_waveform(trajectory : Tensor, dsb : DSB) -> Tensor:
     waveform_shape = waveform.shape[1:]
     waveform = waveform.reshape(traj_len, batch_size, *waveform_shape)
     return waveform
-    
 
 for i, batch in enumerate(tqdm(dataloader, desc="Loading batches")):
     x0, x1 = batch
@@ -181,6 +182,11 @@ for i, batch in enumerate(tqdm(dataloader, desc="Loading batches")):
         print("x1 shape:", x1.shape)
         print("x0_recon shape:", x0_recon.shape)
         print("trajectory shape:", trajectory.shape)
+    
+    if not save_trajectory:
+        # to save space
+        print("Skipping saving trajectory as per user request...")
+        trajectory = None
     
     torch.save(
         {
