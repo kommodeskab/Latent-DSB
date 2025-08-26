@@ -17,6 +17,8 @@ from .audio import (
     VCTKWHAM,
     VCTKRIR,
     LibriRIR,
+    RIRS,
+    LibriWHAM
 )
 from .emnist import EMNISTNoLabel
 from .afhq import AFHQDataset

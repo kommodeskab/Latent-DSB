@@ -19,21 +19,18 @@
 
 # walltime
 #BSUB -W 4:00
-#BSUB -o hpc/output_%J.out 
-#BSUB -e hpc/error_%J.err 
+#BSUB -o hpc/noise_factor.out 
+#BSUB -e hpc/noise_factor.err 
 
 module load python3/3.11.9
 source .venv/bin/activate
 
-LENGTH_SECONDS=4.47
 NUM_SAMPLES=256
-BATCH_SIZE=64
-EXPERIMENT_ID=020625101550
-USE_CLIPPED_LIBRI=True
+BATCH_SIZE=16
 
-for NOISE_FACTOR in 1.0 0.9 0.8 0.7 0.6 0.5 0.4 0.3 0.2 0.1 0.0
+for NOISE_FACTOR in 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0
 do
-  python inference.py --experiment_id=$EXPERIMENT_ID --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --length_seconds=$LENGTH_SECONDS --noise_factor=$NOISE_FACTOR --use_clipped_libri=$USE_CLIPPED_LIBRI --folder_name=noise_factor
+  python inference.py --experiment_id=ESDSB_130825172731 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --noise_factor=$NOISE_FACTOR --num_steps=30 --folder_name=test_noise_factor/esdsb_sto_$NOISE_FACTOR --what_test=noise 
 done
 
 chgrp -R s214630bjjemiri /work3/s214630/Latent-DSB/

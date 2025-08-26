@@ -24,4 +24,4 @@
 
 module load python3/3.11.9
 source .venv/bin/activate
-python3 train.py +experiment=esdsb_clip trainer.log_every_n_steps=200
+python3 train.py +experiment=esdsb_clip trainer.log_every_n_steps=400

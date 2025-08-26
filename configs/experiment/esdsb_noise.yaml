@@ -35,25 +35,21 @@ data:
 
   x0_valset:
     _target_: src.dataset.AllVCTK
-    length_seconds: ${AUDIO_LENGTH}
+    length_seconds: 4.47
     sample_rate: 16000
     train: False
 
   x1_dataset:
-    _target_: src.dataset.ClippedVCTK
+    _target_: src.dataset.VCTKWHAM
     length_seconds: ${AUDIO_LENGTH}
     sample_rate: 16000
     train: True
-    no_clip_prob: 0.0
-    gain_range: [5, 30]
 
   x1_valset:
-    _target_: src.dataset.ClippedVCTK
-    length_seconds: ${AUDIO_LENGTH}
+    _target_: src.dataset.VCTKWHAM
+    length_seconds: 4.47
     sample_rate: 16000
     train: False
-    no_clip_prob: 0.0
-    gain_range: [5, 30]
 
   num_workers: 24
   batch_size: 64
@@ -70,7 +66,7 @@ model:
     num_res_blocks: 2
     attention_resolutions: [16, 8]
     dropout: 0.1
-    channel_mult: [1, 2, 4, 4]
+    channel_mult: [1, 2, 4, 8]
     num_classes: 2
     num_heads: 4
 

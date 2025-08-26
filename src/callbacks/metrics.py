@@ -3,10 +3,11 @@ from torch import Tensor
 import torchaudio
 from torchmetrics.functional.audio.dnsmos import deep_noise_suppression_mean_opinion_score
 from torchmetrics.functional.text import word_error_rate
-from torchaudio.transforms import Resample
 import re
 from tqdm import tqdm
 from transformers import ClapAudioModelWithProjection, ClapProcessor
+from torchmetrics.functional.audio import scale_invariant_signal_distortion_ratio
+from torchaudio.functional import resample
 
 
 class Metric:
@@ -29,9 +30,21 @@ class ResampleMixin:
     
     def resample(self,  audio : Tensor) -> Tensor:
         if self.sample_rate != self.target_sample_rate:
-            resampler = Resample(self.sample_rate, self.target_sample_rate)
-            audio = resampler(audio)
+            audio = resample(audio, self.sample_rate, self.target_sample_rate)
         return audio
+    
+class SNR:
+    def __init__(self):
+        self.values = []
+    
+    def update(self, generated : Tensor, real : Tensor) -> None:
+        if generated.dim() == 3:
+            generated = generated.mean(dim=1)
+        if real.dim() == 3:
+            real = real.mean(dim=1)
+
+        snr = scale_invariant_signal_distortion_ratio(generated, real).tolist()
+        self.values.extend(snr)
 
 class MOS:
     def __init__(self, device = 'cuda'):
@@ -219,7 +232,7 @@ class SRCS(Metric, ResampleMixin):
         return emb
     
     def update(self, generated : Tensor, real : Tensor):
-        assert real.shape == generated.shape
+        assert real.shape == generated.shape, f"Shapes of real and generated tensors must match: {real.shape} != {generated.shape}"
         real_emb = self.get_embedding(real) # shape = (batch_size, 192)
         generated_emb = self.get_embedding(generated) # shape = (batch_size, 192)
         # find the average cosine similarity between the paired embeddings

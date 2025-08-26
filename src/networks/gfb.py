@@ -820,7 +820,9 @@ class AltSTFTbackbone(nn.Module):
                 emb = time_cond
 
         if self.param_conditional:
-            param_cond = param_cond
+            if param_cond.dim() == 1:
+                # if param_cond is a vector, we need to add a dimension
+                param_cond = param_cond.unsqueeze(1)
             param_cond = self.embedding_param(param_cond)
             if not self.time_conditional:
                 emb = param_cond

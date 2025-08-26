@@ -44,58 +44,111 @@ def normalize(x : Tensor, old_range : tuple, new_range : tuple) -> Tensor:
 
 class STFTEncoderDecoder(Module):
     def __init__(
-        self, 
-        n_fft : int = 510, 
-        hop_length : int = 258, 
-        one_dimensional : bool = False
-        ):
+        self,
+        n_fft : int,
+        hop_length : int,
+    ):
         super().__init__()
         self.n_fft = n_fft
         self.hop_length = hop_length
-        self.original_length = None
-        self.one_dimensional = one_dimensional
+        self.win_length = n_fft
         
     def encode(self, audio : Tensor) -> Tensor:
-        if self.original_length is None:
-            self.original_length = audio.size(2)
-            self.window = torch.hamming_window(self.n_fft, device=audio.device)
-
+        if not hasattr(self, 'original_length'):
+            self.original_length = audio.shape[-1]
+        
         audio = torch.cat((audio, torch.zeros(audio.shape[0], audio.shape[1], self.n_fft - 1, device=audio.device)), dim=-1)
         audio = audio.squeeze(1)
-        spec = torch.stft(
-            audio,
-            n_fft=self.n_fft,
-            hop_length=self.hop_length,
-            win_length=self.n_fft,
-            window=self.window,
+        window = torch.hamming_window(self.win_length, device=audio.device)
+        stft = torch.stft(
+            audio, 
+            n_fft=self.n_fft, 
+            hop_length=self.hop_length, 
+            win_length=self.win_length, 
             center=False,
-            return_complex=True,
-        )
-        spec = torch.view_as_real(spec).permute(0, 3, 1, 2)
-        if self.one_dimensional:
-            B, C, F, T = spec.shape
-            spec = spec.reshape(B, C * F, T)
-        return spec
+            window=window,
+            return_complex=True
+            )
+
+        real, imag = stft.real, stft.imag
+        log_real = real.abs().log1p() * real.sign()
+        log_imag = imag.abs().log1p() * imag.sign()
+        out = torch.stack([log_real, log_imag], dim=1)
+
+        return out
     
-    def decode(self, spec : Tensor) -> Tensor:
-        if self.one_dimensional:
-            B, C, T = spec.shape
-            F = C // 2
-            spec = spec.reshape(B, 2, F, T)
-        spec = spec.permute(0, 2, 3, 1).contiguous()
-        spec = torch.view_as_complex(spec)
-        
+    def decode(self, encoded : Tensor) -> Tensor:
+        log_real, log_image = encoded[:, 0], encoded[:, 1]
+        real = (log_real.abs().exp() - 1) * log_real.sign()
+        imag = (log_image.abs().exp() - 1) * log_image.sign()
+        stft = real + 1j * imag
+
+        window = torch.hamming_window(self.win_length, device=stft.device)
         audio = torch.istft(
-            spec,
-            n_fft=self.n_fft,
-            hop_length=self.hop_length,
-            return_complex=False,
+            stft, 
+            n_fft=self.n_fft, 
+            hop_length=self.hop_length, 
+            win_length=self.win_length, 
             center=False,
-            window=self.window,
+            window=window
         )
-        audio = audio.unsqueeze(1)
-        audio = torch.nn.functional.pad(audio, (0, self.original_length - audio.size(2)), mode='constant', value=0)
-        return audio
+        audio = torch.nn.functional.pad(audio, (0, self.original_length - audio.shape[-1]), mode='constant', value=0)
+        return audio.unsqueeze(1)
+    
+class PolarSTFTEncoderDecoder(Module):
+    def __init__(
+        self,
+        n_fft : int,
+        hop_length : int,
+    ):
+        super().__init__()
+        self.n_fft = n_fft
+        self.hop_length = hop_length
+        self.win_length = n_fft
+        
+    def encode(self, audio : Tensor) -> Tensor:
+        if not hasattr(self, 'original_length'):
+            self.original_length = audio.shape[-1]
+        
+        audio = torch.cat((audio, torch.zeros(audio.shape[0], audio.shape[1], self.n_fft - 1, device=audio.device)), dim=-1)
+        audio = audio.squeeze(1)
+        window = torch.hamming_window(self.win_length, device=audio.device)
+        stft = torch.stft(
+            audio, 
+            n_fft=self.n_fft, 
+            hop_length=self.hop_length, 
+            win_length=self.win_length, 
+            center=False,
+            window=window,
+            return_complex=True
+            )
+        
+        log_amplitude = (1e-6 + stft.abs()).log()
+        angle = stft.angle()
+        cos = angle.cos()
+        sin = angle.sin()
+        out = torch.stack([log_amplitude, cos, sin], dim=1)
+        return out
+    
+    def decode(self, encoded : Tensor) -> Tensor:
+        log_amplitude, cos, sin = encoded[:, 0], encoded[:, 1], encoded[:, 2]
+        sin = sin.clamp(-1.0, 1.0)
+        cos = cos.clamp(-1.0, 1.0)
+        angle = torch.atan2(sin, cos)
+        magnitude = log_amplitude.exp()
+        stft = magnitude * torch.exp(1j * angle)
+        
+        window = torch.hamming_window(self.win_length, device=stft.device)
+        audio = torch.istft(
+            stft, 
+            n_fft=self.n_fft, 
+            hop_length=self.hop_length, 
+            win_length=self.win_length, 
+            center=False,
+            window=window
+        )
+        audio = torch.nn.functional.pad(audio, (0, self.original_length - audio.shape[-1]), mode='constant', value=0)
+        return audio.unsqueeze(1)
     
 class HifiGan(Module):
     def __init__(self):

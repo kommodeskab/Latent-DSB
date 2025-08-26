@@ -25,6 +25,7 @@ class DSBScheduler:
         deterministic : bool = False, 
         ):
         self.deterministic = deterministic
+        self.noise_factor = 1.0
 
     def sample_noise(self, shape : tuple[int, ...], device: str | torch.device) -> Tensor:
         """Sample noise from a normal distribution.
@@ -39,7 +40,7 @@ class DSBScheduler:
         if self.deterministic:
             return torch.zeros(shape, device=device)
         
-        return torch.randn(shape, device=device)
+        return torch.randn(shape, device=device) * self.noise_factor
     
     def get_conditional(self, direction : DIRECTIONS | list[DIRECTIONS], device: str | torch.device, batch_size : int | None = None) -> Tensor:
         """Get the conditional mask for the given direction. 1 for 'forward', 0 for 'backward'.
@@ -194,7 +195,7 @@ class ESDSB(BaseLightningModule, EncoderDecoderMixin):
         self.scheduler = DSBScheduler(**scheduler_kwargs)
         self.ema = ExponentialMovingAverage(self.model.parameters(), decay=ema_decay)
         self.stop_epoch = False
-            
+    
     def on_before_optimizer_step(self, optimizer : Optimizer) -> None:
         if self.global_step % 500 == 0:
             norms = grad_norm(self.model, norm_type=2)
@@ -202,10 +203,16 @@ class ESDSB(BaseLightningModule, EncoderDecoderMixin):
 
     def on_before_zero_grad(self, optimizer : Optimizer) -> None:
         self.ema.update()
+        
+    def on_save_checkpoint(self, checkpoint : dict[str, Any]) -> None:
+        checkpoint['ema'] = self.ema.state_dict()
+        
+    def on_load_checkpoint(self, checkpoint : dict[str, Any]) -> None:
+        ema_state_dict = checkpoint['ema']
+        self.ema.load_state_dict(ema_state_dict)
 
     def state_dict(self) -> dict:
-        with self.ema.average_parameters():
-            state_dict = super().state_dict()
+        state_dict = super().state_dict()
         # dont save encoder_decoder weights since they are frozen during training
         state_dict = {k: v for k, v in state_dict.items() if not k.startswith('encoder_decoder.')}
         return state_dict
@@ -216,7 +223,7 @@ class ESDSB(BaseLightningModule, EncoderDecoderMixin):
         encoder_state_dict = {f'encoder_decoder.{k}': v for k, v in encoder_state_dict.items()}
         state_dict.update(encoder_state_dict)
         return super().load_state_dict(state_dict, strict=strict, assign=assign)
-
+    
     def to(self, device : torch.device):
         # ema parameters have to be manually moved to the device
         self.ema.to(device)
@@ -274,7 +281,7 @@ class ESDSB(BaseLightningModule, EncoderDecoderMixin):
         self.model.train()
             
         if return_trajectory:
-            return torch.stack(trajectory, dim=1)
+            return torch.stack(trajectory, dim=0)
         
         return x
             
@@ -291,3 +298,16 @@ class ESDSB(BaseLightningModule, EncoderDecoderMixin):
                 **self.partial_lr_scheduler
             }
         }
+
+from src.utils import config_from_id, get_ckpt_path
+import hydra
+        
+def load_esdsb_model(experiment_id : str) -> ESDSB:
+    config = config_from_id(experiment_id)
+    model_config = config['model']
+    network = hydra.utils.instantiate(model_config['model'])
+    encoder_decoder = hydra.utils.instantiate(model_config['encoder_decoder'])
+    ckpt_path = get_ckpt_path(experiment_id, last=False, filename="last.ckpt")
+    model = ESDSB.load_from_checkpoint(ckpt_path, model=network, encoder_decoder=encoder_decoder)
+    model.eval()
+    return model

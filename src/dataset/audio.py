@@ -357,8 +357,8 @@ class SpeechNoiseDataset(Dataset):
             return speech, noisy_speech
         
         return noisy_speech
-    
-    def __getitem__(self, idx) -> tuple[Tensor, Tensor]:
+
+    def __getitem__(self, idx) -> tuple[Tensor, Tensor] | Tensor:
         return self.get_item(idx)
     
 class LibriFSDPaired(SpeechNoiseDataset):
@@ -722,3 +722,25 @@ class LibriRIR(RIRDataset):
         )
         
         super().__init__(audio_dataset, train, return_pair)
+
+class LibriWHAM(SpeechNoiseDataset):
+    def __init__(
+        self,
+        length_seconds : float,
+        sample_rate : int = 16_000,
+        train : bool = True,
+        return_pair : bool = False,
+        **kwargs,
+    ):
+        self.return_pair = return_pair
+        
+        if train:
+            speech = [LibriSpeech('male', 'train-clean-100'), LibriSpeech('female', 'train-clean-100')]
+            noise = [WHAM('train')]
+        else:
+            speech = [LibriSpeech('male', 'test-clean'), LibriSpeech('female', 'test-clean')]
+            noise = [WHAM('test')]
+        
+        speech_dataset = BaseConcatAudio(speech, length_seconds, sample_rate)
+        noise_dataset = BaseConcatAudio(noise, length_seconds, sample_rate)
+        super().__init__(speech_dataset, noise_dataset, return_pair)

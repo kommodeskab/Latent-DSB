@@ -1,6 +1,6 @@
 from pytorch_lightning import Callback, Trainer
 from src.lightning_modules.esdsb import ESDSB, DIRECTIONS
-from src.data_modules.esdsb_datamodule import ESDSBDatamodule, CacheDataset
+from src.data_modules.esdsb_datamodule import ESDSBDatamodule
 from torch.utils.data import DataLoader, Dataset, Subset 
 import torch
 from tqdm import tqdm
@@ -9,7 +9,6 @@ from src.callbacks.callbacks import plot_images
 import matplotlib.pyplot as plt
 from torch import Tensor
 from torcheval.metrics import FrechetInceptionDistance
-import random
 from typing import Literal
 
 class ESDSBCallback(Callback):
@@ -71,9 +70,35 @@ class ESDSBCallback(Callback):
         self.valset = datamodule.valset
         
         logger = pl_module.logger
+        num_samples = max(16, self.cache_batch_size)
         
-        self.x0_batch = get_batch_from_dataset(self.valset.x0_dataset, 128, shuffle=False)
-        self.x1_batch = get_batch_from_dataset(self.valset.x1_dataset, 128, shuffle=False)
+        self.x0_batch = get_batch_from_dataset(self.valset.x0_dataset, num_samples, shuffle=False)
+        self.x1_batch = get_batch_from_dataset(self.valset.x1_dataset, num_samples, shuffle=False)
+
+        x0_encoded = pl_module.encode(self.x0_batch[:1].to(pl_module.device)).cpu()
+        x1_encoded = pl_module.encode(self.x1_batch[:1].to(pl_module.device)).cpu()
+        
+        if x0_encoded.dim() == 3:
+            x0_encoded = x0_encoded.unsqueeze(1)
+            x1_encoded = x1_encoded.unsqueeze(1)
+            
+        # if the height or width is greater than 1, we plot the encodings as images
+        if min(x0_encoded.shape[2:]) > 1:
+            for encoding, title in zip([x0_encoded, x1_encoded], ['x0 Encoded', 'x1 Encoded']):
+                encoding = encoding.squeeze(0)
+                n_channels = encoding.shape[0]
+                fig, axs = plt.subplots(1, n_channels, figsize=(n_channels*5, 5))
+                axs : list[plt.Axes]
+                for i in range(n_channels):
+                    axs[i].imshow(encoding[i].cpu().numpy())
+                    axs[i].set_title(f'Channel {i}')
+                    axs[i].axis('off')
+                    
+                logger.log_image(
+                    key = title,
+                    images = [fig],
+                    step = pl_module.global_step,
+                )
 
         if self.what_media == 'image':
             x0_fig = plot_images(self.x0_batch[:16])
@@ -112,16 +137,16 @@ class ESDSBCallback(Callback):
         with pl_module.fix_validation_seed():
             forward_trajectory = pl_module.sample(x0_encoded, 'forward', self.scheduler_type, self.num_steps, return_trajectory=True, verbose=True)
             backward_trajectory = pl_module.sample(x1_encoded, 'backward', self.scheduler_type, self.num_steps, return_trajectory=True, verbose=True)
-        
-        forward_samples = forward_trajectory[:, -1]
-        backward_samples = backward_trajectory[:, -1]
+
+        forward_samples = forward_trajectory[-1, :]
+        backward_samples = backward_trajectory[-1, :]
         forward_samples = pl_module.decode(forward_samples)
         backward_samples = pl_module.decode(backward_samples)
         
         # just visualize a single trajectory
         idxs = torch.linspace(0, self.num_steps, 16, dtype=torch.long, device=device)
-        forward_trajectory = forward_trajectory[0, :][idxs]
-        backward_trajectory = backward_trajectory[0, :][idxs]
+        forward_trajectory = forward_trajectory[:, 0][idxs]
+        backward_trajectory = backward_trajectory[:, 0][idxs]
         forward_trajectory = pl_module.decode(forward_trajectory)
         backward_trajectory = pl_module.decode(backward_trajectory)
 
@@ -173,7 +198,7 @@ class ESDSBCallback(Callback):
 
         Args:
             pl_module (ESDSB): The ESDSB module.
-            direction (DIRECTIONS): The direction of the cache ('forward' or 'backward'). Notice: the sampling direction is the opposite of the cache direction.
+            direction (DIRECTIONS): The direction of the cache ('forward' or 'backward'). Notice: this direction is the OPPOSITE of the sampling direction.
             training (bool): Which cache: train if True, validation if False.
         """
         
@@ -219,14 +244,12 @@ class ESDSBCallback(Callback):
     def visualize_caches(self, pl_module : ESDSB):
         step = pl_module.global_step
         caches = [self.cache, self.val_cache]
-        titles = ['Forward Validation Cache', 'Backward Validation Cache', 'Forward Training Cache', 'Backward Training Cache']
+        titles = ['Training Cache', 'Validation Cache']
         
         for cache, title in zip(caches, titles):
-            samples = random.sample(list(cache), 16)
-            x0_samples, x1_samples, direction, is_from_cache = zip(*samples)
-            print(f"Visualizing {title} with following directions: {direction}...")
-            x0_samples = torch.stack(x0_samples).float() # convert to float for plotting
-            x1_samples = torch.stack(x1_samples).float()
+            batches = get_batch_from_dataset(cache, 16, shuffle=False)
+            x0_samples, x1_samples, direction, is_from_cache = batches
+            x0_samples, x1_samples = x0_samples.float(), x1_samples.float()
             
             device = pl_module.device
             x0_samples = pl_module.decode(x0_samples.to(device)).cpu()
@@ -247,6 +270,9 @@ class ESDSBCallback(Callback):
                 pass
             
     def on_validation_end(self, trainer : Trainer, pl_module : ESDSB):
+        self.save_checkpoint(trainer, 'last')
+        
+    def on_train_end(self, trainer : Trainer, pl_module : ESDSB):
         self.save_checkpoint(trainer, 'last')
         
     def on_train_batch_end(self, trainer : Trainer, pl_module : ESDSB, outputs, batch, batch_idx):
@@ -278,8 +304,8 @@ class ESDSBCallback(Callback):
             self.refresh_cache(pl_module, 'backward', training=False)
             
             pl_module.logger.log_metrics({
-                'Train cache': len(self.cache),
-                'Validation cache': len(self.val_cache),
+                'Train cache': len(self.cache.cache),
+                'Validation cache': len(self.val_cache.cache),
             }, step = pl_module.global_step)
             
             self.visualize_caches(pl_module)

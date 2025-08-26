@@ -18,7 +18,7 @@
 #BSUB -R "span[hosts=1]"
 
 # walltime
-#BSUB -W 6:00
+#BSUB -W 4:00
 #BSUB -o hpc/test_rir.out 
 #BSUB -e hpc/test_rir.err 
 
@@ -28,14 +28,14 @@ source .venv/bin/activate
 NUM_SAMPLES=256
 BATCH_SIZE=16
 
-python inference.py --experiment_id=baseline --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=1 --what_test=rir --folder_name=test_rir/baseline
-# 
-# for NUM_STEPS in 1 2 5 10 15 30 50
-# do
-#   python inference.py --experiment_id=GFB          --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=$NUM_STEPS                    --folder_name=test_rir/gfb_$NUM_STEPS       --what_test=rir
-#   python inference.py --experiment_id=130625004303 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=$NUM_STEPS --noise_factor=1.0 --folder_name=test_rir/stft_sto_$NUM_STEPS  --what_test=rir
-#   python inference.py --experiment_id=130625004256 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=$NUM_STEPS --noise_factor=1.0 --folder_name=test_rir/mel_sto_$NUM_STEPS   --what_test=rir
-# done
+# python inference.py --experiment_id=baseline --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=1 --what_test=rir --folder_name=test_rir/baseline
+
+for NUM_STEPS in 1 2 5 10 15 30 50
+do
+  # python inference.py --experiment_id=GFB          --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=$NUM_STEPS                    --folder_name=test_rir/gfb_$NUM_STEPS       --what_test=rir
+  python inference.py --experiment_id=ESDSB_220825142651 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=$NUM_STEPS --noise_factor=1.0 --folder_name=test_rir/stft_sto_$NUM_STEPS  --what_test=rir
+  # python inference.py --experiment_id=ESDSB_050825093652 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=$NUM_STEPS --noise_factor=0.0 --folder_name=test_rir/esdsb_det_$NUM_STEPS --what_test=rir
+done
 
 chgrp -R s214630bjjemiri /work3/s214630/Latent-DSB/
 chmod -R 770 /work3/s214630/Latent-DSB/

@@ -9,21 +9,22 @@ defaults:
 project_name: 'esdsb'
 task_name: 'esdsb afhq'
 
-IMAGE_SIZE: 128
+IMAGE_SIZE: 64
 
 callbacks:
   esdsb_callback:
     _target_: src.callbacks.ESDSBCallback
     cache_size: 10240
     validation_cache_size: 256
-    cache_batch_size: 256
-    steps_before_cache: 5000
+    cache_batch_size: 512
+    steps_before_cache: 100000
     refresh_every_n_steps: 2500
-    num_steps: 100
+    num_steps: 30
     cache_num_steps: 30
     scheduler_type: 'cosine'
-    plot_every_n_steps: 3000
+    plot_every_n_steps: 5000
     enable_checkpointing: False
+    what_media: 'image'
 
 data:
   x0_dataset:
@@ -58,9 +59,9 @@ model:
 
   model:
     _target_: src.networks.dhariwal.UNetModel
-    image_size: 16
-    in_channels: 4
-    out_channels: 4
+    image_size: 64
+    in_channels: 3
+    out_channels: 3
     model_channels: 64
     num_res_blocks: 2
     attention_resolutions: [16, 8]
@@ -70,7 +71,7 @@ model:
     num_heads: 4
 
   encoder_decoder: 
-    _target_: src.networks.StableDiffusionXL
+    _target_: src.networks.IdentityEncoderDecoder
 
   optimizer:
     _target_: torch.optim.AdamW
