@@ -181,6 +181,7 @@ class HifiGan(Module):
     def encode(self, x : Tensor) -> Tensor:
         if self.original_len is None:
             self.original_len = x.shape[2]
+            
         x_mel = [self.to_mel(audio = audio.squeeze())[0] for audio in x]
         x_mel = torch.stack(x_mel, dim=0)
         x_mel = x_mel + self.off_set

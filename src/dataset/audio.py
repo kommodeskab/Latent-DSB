@@ -344,14 +344,11 @@ class SpeechNoiseDataset(Dataset):
     
     def get_item(self, idx, snr : int | None = None) -> tuple[Tensor, Tensor] | Tensor:
         speech = self.speech_dataset[idx]
-        if torch.rand(1) < 0.05 and snr is None:
-            noisy_speech = speech.clone()
-        else:
-            noise_idx = torch.randint(0, len(self.noise_dataset), (1,))
-            noise = self.noise_dataset[noise_idx]
-            random_snr = torch.randint(self.min_snr, self.max_snr, (1,)) if snr is None else snr
-            noise_factor = self.calculate_noise_factor(speech, noise, random_snr)
-            noisy_speech = speech + noise_factor * noise
+        noise_idx = torch.randint(0, len(self.noise_dataset), (1,))
+        noise = self.noise_dataset[noise_idx]
+        random_snr = torch.randint(self.min_snr, self.max_snr, (1,)) if snr is None else snr
+        noise_factor = self.calculate_noise_factor(speech, noise, random_snr)
+        noisy_speech = speech + noise_factor * noise
         
         if self.return_pair:
             return speech, noisy_speech
@@ -744,3 +741,8 @@ class LibriWHAM(SpeechNoiseDataset):
         speech_dataset = BaseConcatAudio(speech, length_seconds, sample_rate)
         noise_dataset = BaseConcatAudio(noise, length_seconds, sample_rate)
         super().__init__(speech_dataset, noise_dataset, return_pair)
+        
+        if not train:
+            print("Setting SNR range to -2 to 5 dB for LibriWHAM test set")
+            self.min_snr=-2
+            self.max_snr=5

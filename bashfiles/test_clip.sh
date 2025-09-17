@@ -18,7 +18,7 @@
 #BSUB -R "span[hosts=1]"
 
 # walltime
-#BSUB -W 4:00
+#BSUB -W 14:00
 #BSUB -o hpc/test_clip.out 
 #BSUB -e hpc/test_clip.err 
 
@@ -28,13 +28,22 @@ source .venv/bin/activate
 NUM_SAMPLES=256
 BATCH_SIZE=16
 
-# python inference.py --experiment_id=baseline --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=1 --folder_name=test_clip/baseline --what_test=clip
+python inference.py --experiment_id=baseline --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=1 --folder_name=test_clip/baseline --what_test=clip
+python inference.py --experiment_id=SPADE --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=1 --folder_name=test_clip/SPADE  --what_test=clip
+
+# mel (50) deterministic
+python inference.py --experiment_id=ESDSB_120825012451 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=50 --noise_factor=0.0 --folder_name=test_clip/esdsb_det_50 --what_test=clip 
 
 for NUM_STEPS in 1 2 5 10 15 30 50
 do
-  # python inference.py --experiment_id=GFB          --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=$NUM_STEPS                    --folder_name=test_clip/gfb_$NUM_STEPS       --what_test=clip
+  # GFB
+  python inference.py --experiment_id=GFB                --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=$NUM_STEPS                    --folder_name=test_clip/gfb_$NUM_STEPS       --what_test=clip
+
+  # stft
   python inference.py --experiment_id=ESDSB_230825112100 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=$NUM_STEPS --noise_factor=1.0 --folder_name=test_clip/stft_sto_$NUM_STEPS   --what_test=clip
-  # python inference.py --experiment_id=ESDSB_120825012451 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=$NUM_STEPS --noise_factor=0.0 --folder_name=test_clip/esdsb_det_$NUM_STEPS --what_test=clip 
+  
+  # mel
+  python inference.py --experiment_id=ESDSB_120825012451 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=$NUM_STEPS --noise_factor=1.0 --folder_name=test_clip/esdsb_sto_$NUM_STEPS --what_test=clip 
 done
 
 chgrp -R s214630bjjemiri /work3/s214630/Latent-DSB/

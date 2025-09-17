@@ -2,19 +2,20 @@ import torch
 from argparse import ArgumentParser
 from src.lightning_modules.dsb import get_dsb_iterations, load_dsb_model
 from GFB import GFB
+from SPADE import SPADE
+from WPE import WPE
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import os
-from src.dataset import ClippedLibri, LibriRIR, LibriWHAM
-from src.callbacks.metrics import WER, SRCS, DNSMOS, KAD, SNR
+from src.callbacks.metrics import WER, SRCS, DNSMOS, KAD, SISDRi, MelCepstralDistance
 import random
 import numpy as np
 from torch import Tensor
 from src.lightning_modules.esdsb import load_esdsb_model
 from src.lightning_modules import DSB, ESDSB
-from src.networks.speech_separation import SpeechbrainSepformer
+from src.networks.speech_separation import SpeechbrainSepformer, AsteroidConvTasNet
 
-schedule = 'linear'
+schedule = 'cosine'
 sample_rate = 16000
 seed = 42
 torch.manual_seed(seed)
@@ -35,7 +36,6 @@ parser.add_argument('--dsb_iteration', type=int, default=None)
 parser.add_argument('--what_test', type=str, required=True) # clip, rir, noise
 parser.add_argument('--folder_name', type=str, required=True)
 parser.add_argument('--save_trajectory', default=False, help="Whether to save the trajectory or not")
-parser.add_argument('--snr', type=float, default=None)
 
 args = parser.parse_args()
 params = {}
@@ -52,7 +52,6 @@ dsb_iteration : int = args.dsb_iteration
 what_test : str = args.what_test
 folder_name : str = args.folder_name
 save_trajectory : bool = args.save_trajectory
-snr : float = args.snr
 
 assert what_test in ['rir', 'clip', 'noise'], "what_test must be either 'rir' or 'clip'"
 
@@ -89,7 +88,14 @@ elif experiment_id == 'sepformer':
     print("Using SpeechbrainSepformer model")
     dsb = SpeechbrainSepformer()
     length_seconds = 4.096
-    # sample_rate = dsb.sample_rate # 8000
+    # sample_rate = dsb.sample_rate
+    timeschedule = None
+    
+elif experiment_id == 'convtasnet':
+    print("Using AsteroidConvTasNet model")
+    dsb = AsteroidConvTasNet()
+    length_seconds = 4.096
+    # sample_rate = dsb.sample_rate
     timeschedule = None
 
 elif experiment_id == 'baseline':
@@ -117,6 +123,18 @@ elif 'ESDSB' in experiment_id:
 
     timeschedule = dsb.scheduler.get_timeschedule(num_steps=num_steps, scheduler_type=schedule, direction='backward')
 
+elif experiment_id == 'WPE':
+    print("Using WPE model")
+    dsb = WPE()
+    length_seconds = 4.096
+    timeschedule = None
+
+elif experiment_id == 'SPADE':
+    print("Using SPADE model")
+    dsb = SPADE()
+    length_seconds = 4.096
+    timeschedule = None
+
 else:
     print(f"Using DSB model with experiment_id: {experiment_id}")
     if dsb_iteration is None:
@@ -143,46 +161,34 @@ else:
 
 dsb.to(device)
 
-if what_test == 'clip':
-    assert snr is None, 'Specified SNR can only be used with noise dataset'
-    dataset = ClippedLibri(length_seconds=5.0, sample_rate=sample_rate, train=False, return_pair=True)
-    gain_db = dataset.what_db_for_snr(target_snr=2.0)
-    dataset = [dataset.get_item(i, gain_db=gain_db) for i in range(num_samples)]
+class TestDataset(torch.utils.data.Dataset):
+    def __init__(self, what_test : str):
+        super().__init__()
+        assert what_test in ['clip', 'rir', 'noise']
+        self.path = f"/work3/s214630/data/{what_test}"
+        
+    def __len__(self) -> int:
+        return num_samples
     
-elif what_test == 'rir':
-    assert snr is None, 'Specified SNR can only be used with noise dataset'
-    dataset = LibriRIR(length_seconds=5.0, sample_rate=sample_rate, train=False, return_pair=True)
-    dataset = [dataset.get_item(i) for i in range(num_samples)]
+    def __getitem__(self, idx : int) -> tuple[Tensor, Tensor]:
+        path = self.path + f"/batch_{idx}"
+        data = torch.load(path, weights_only=True)
+        return data['x0'], data['x1']
     
-elif what_test == 'noise':
-    print(f"Using SNR = {snr}")
-    dataset = LibriWHAM(length_seconds=5.0, sample_rate=sample_rate, train=False, return_pair=True)
-    dataset = [dataset.get_item(i, snr=snr) for i in range(num_samples)]
-    
-else:
-    raise ValueError(f"Unknown test type: {what_test}")
-    
+dataset = TestDataset(what_test)
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=1)
 
 wer = WER(sample_rate, device)
 srcs = SRCS(sample_rate, device)
 dnsmos = DNSMOS(sample_rate, device)
 kad = KAD(sample_rate, device)
-snr = SNR()
-
-def encoding_to_waveform(trajectory : Tensor, dsb : DSB) -> Tensor:
-    # convert the latent trajectory to waveform trajectory
-    traj_len, batch_size, *sample_shape = trajectory.shape
-    trajectory = trajectory.reshape(traj_len * batch_size, *sample_shape)
-    waveform = dsb.chunk_decode(trajectory, chunk_size=32)
-    waveform_shape = waveform.shape[1:]
-    waveform = waveform.reshape(traj_len, batch_size, *waveform_shape)
-    return waveform
+sisdri = SISDRi()
+mcd = MelCepstralDistance(sample_rate)
 
 for i, batch in enumerate(tqdm(dataloader, desc="Loading batches")):
     x0, x1 = batch
-    x0 : torch.Tensor
-    x1 : torch.Tensor
+    x0 : Tensor
+    x1 : Tensor
     
     seq_len = int(length_seconds * sample_rate)
     x0, x1 = x0.to(device), x1.to(device)
@@ -195,8 +201,12 @@ for i, batch in enumerate(tqdm(dataloader, desc="Loading batches")):
         trajectory = dsb.sample(x1_encoded, direction='backward', scheduler_type=schedule, num_steps=num_steps, return_trajectory=True)
     elif isinstance(dsb, (DSB, GFB, BaselineModel)):
         trajectory = dsb.sample(x1_encoded, forward=False, return_trajectory=True, noise='inference', noise_factor=noise_factor, show_progress=True)
-    elif isinstance(dsb, SpeechbrainSepformer):
-        trajectory = dsb.separate(x1, sample_rate=sample_rate).unsqueeze(0) # pesudo trajectory with a single time step
+    elif isinstance(dsb, (SpeechbrainSepformer, AsteroidConvTasNet)):
+        trajectory = dsb.separate(x1).unsqueeze(0) # pesudo trajectory with a single time step
+    elif isinstance(dsb, SPADE):
+        trajectory = dsb.declip(x1).unsqueeze(0)
+    elif isinstance(dsb, WPE):
+        trajectory = dsb.dereverb(x1).unsqueeze(0)
 
     x0_recon_encoded = trajectory[-1]
     x0_recon = dsb.decode(x0_recon_encoded)
@@ -204,13 +214,15 @@ for i, batch in enumerate(tqdm(dataloader, desc="Loading batches")):
     # squeeze and make sure that length is no longer than 2**16 for fair comparison
     x0_recon = x0_recon.squeeze(1)[:, :2**16]
     x0 = x0.squeeze(1)[:, :2**16]
+    x1 = x1.squeeze(1)[:, :2**16]
     trajectory = trajectory[:, :, :, :2**16]
     
     wer.update(x0_recon, x0)
     srcs.update(x0_recon, x0)  
     dnsmos.update(x0_recon)
     kad.update(x0_recon, x0)
-    snr.update(x0_recon, x0)
+    sisdri.update(x0, x1, x0_recon)
+    mcd.update(x0_recon, x0)
 
     trajectory = trajectory.float().cpu()
     x0_recon = x0_recon.float().cpu()
@@ -245,7 +257,8 @@ metrics = {
     'srcs': srcs.values,
     'dnsmos': dnsmos.values,
     'kad': kad.compute(),
-    'snr': snr.values,
+    'sisdri': sisdri.values,
+    'mcd': mcd.values
 }
 
 print("Metrics:")

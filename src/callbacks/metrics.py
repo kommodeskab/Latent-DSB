@@ -8,7 +8,9 @@ from tqdm import tqdm
 from transformers import ClapAudioModelWithProjection, ClapProcessor
 from torchmetrics.functional.audio import scale_invariant_signal_distortion_ratio
 from torchaudio.functional import resample
-
+import torch.nn.functional as F
+import torchaudio.transforms as T
+import numpy as np
 
 class Metric:
     values : list
@@ -28,23 +30,86 @@ class ResampleMixin:
     sample_rate : int
     target_sample_rate : int
     
-    def resample(self,  audio : Tensor) -> Tensor:
+    def resample(self, audio : Tensor) -> Tensor:
         if self.sample_rate != self.target_sample_rate:
             audio = resample(audio, self.sample_rate, self.target_sample_rate)
         return audio
+
+
+class MelCepstralDistance(Metric):
+    def __init__(self, sample_rate : int):
+        super().__init__()
+        self.sample_rate = sample_rate
+        self.values = []
     
-class SNR:
+    def update(self, generated : Tensor, target : Tensor) -> None:
+        for x, y in zip(generated, target):
+            mcd = self.mel_cepstral_dist(x, y, self.sample_rate)
+            self.values.append(mcd)
+    
+    @staticmethod
+    def mel_cepstral_dist(
+        x0: torch.Tensor, 
+        x1: torch.Tensor, 
+        sr: int = 16000, 
+        n_mfcc: int = 13
+        ) -> torch.Tensor:
+        x0 = x0.squeeze(0)
+        x1 = x1.squeeze(0)
+
+        # MFCC extractor with typical TTS settings
+        mfcc_transform = torchaudio.transforms.MFCC(
+            sample_rate=sr,
+            n_mfcc=n_mfcc,
+            melkwargs={
+                "n_fft": 512,
+                "n_mels": 40,
+                "hop_length": int(0.01 * sr),   # 10 ms
+                "win_length": int(0.025 * sr),  # 25 ms
+                "window_fn": torch.hann_window,
+                "center": True,
+                "power": 2.0,
+            },
+        ).to(x0.device)
+
+        # Extract MFCCs
+        mfcc0 = mfcc_transform(x0)  # (n_mfcc, T)
+        mfcc1 = mfcc_transform(x1)
+
+        # Drop c0 (amplitude term)
+        mfcc0 = mfcc0[1:, :]
+        mfcc1 = mfcc1[1:, :]
+
+        # Truncate to same time length
+        T = min(mfcc0.shape[1], mfcc1.shape[1])
+        mfcc0 = mfcc0[:, :T]
+        mfcc1 = mfcc1[:, :T]
+
+        # Framewise Euclidean distance
+        diff = mfcc0 - mfcc1
+        dist_per_frame = torch.sqrt(torch.sum(diff**2, dim=0))
+
+        # MCD scaling constant
+        mcd = torch.mean(dist_per_frame).cpu().item()
+
+        return mcd
+
+class SISDRi:
     def __init__(self):
         self.values = []
     
-    def update(self, generated : Tensor, real : Tensor) -> None:
-        if generated.dim() == 3:
-            generated = generated.mean(dim=1)
-        if real.dim() == 3:
-            real = real.mean(dim=1)
-
-        snr = scale_invariant_signal_distortion_ratio(generated, real).tolist()
-        self.values.extend(snr)
+    def update(self, clean : Tensor, degraded : Tensor, prediction : Tensor) -> None:
+        if clean.dim() == 3:
+            clean = clean.mean(dim=1)
+        if degraded.dim() == 3:
+            degraded = degraded.mean(dim=1)
+        if prediction.dim() == 3:
+            prediction = prediction.mean(dim=1)
+            
+        sisdr_pred = scale_invariant_signal_distortion_ratio(prediction, clean, zero_mean=True)
+        sisdr_degraded = scale_invariant_signal_distortion_ratio(degraded, clean, zero_mean=True)
+        improvement = (sisdr_pred - sisdr_degraded).tolist()
+        self.values.extend(improvement)
 
 class MOS:
     def __init__(self, device = 'cuda'):
@@ -145,9 +210,9 @@ class KAD(ResampleMixin):
 class WER(Metric, ResampleMixin):
     def __init__(self, sample_rate : int, device : str):
         # initialize models for transcription
+        from transformers import WhisperProcessor, WhisperForConditionalGeneration
         self.device = device
         self.sample_rate = sample_rate
-        from transformers import WhisperProcessor, WhisperForConditionalGeneration
         self.target_sample_rate = 16000 # Whisper model expects 16kHz
         self.processor = WhisperProcessor.from_pretrained("openai/whisper-small")
         self.model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-small").to(self.device)
