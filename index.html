@@ -1,213 +1,367 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Audio Demos</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-      padding: 2rem;
-      background: #f9f9f9;
-      color: #333;
-    }
-    h1, h2 {
-      color: #333;
-      text-align: center;
-      margin-bottom: 1rem;
-    }
-    h2 {
-        margin-top: 3rem;
-    }
-    p {
-        line-height: 1.6;
-        margin: 0 auto 1.5rem auto;
-        max-width: 80ch;
-        text-align: justify;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 2rem;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-      background: #fff;
-      border-radius: 8px;
-      overflow: hidden;
-    }
-    th, td {
-      padding: 12px 15px;
-      text-align: center;
-      border-bottom: 1px solid #ddd;
-    }
-    th {
-      background-color: #007bff;
-      color: white;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    tr:hover {
-        background-color: #f2f2f2;
-    }
-    audio {
-        width: 150px;
-    }
-    th.baseline, td.baseline {
-      width: 170px;
-    }
-    th.baseline {
-      background-color: #6c757d;
-    }
-    .author-info {
-      text-align: center;
-      margin: 2rem auto;
-      display: table;
-    }
-    .author-info p {
-      margin: 0.25rem 0;
-      line-height: 1.2;
-      text-align: center;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>Scientific Paper Title</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #f8f9fa;
+            margin: 0;
+            padding: 0;
+        }
+        .header {
+            background: #343a40;
+            color: #fff;
+            padding: 2rem 1rem 1rem 1rem;
+            text-align: center;
+        }
+        .abstract {
+            max-width: 700px;
+            margin: 2rem auto;
+            background: linear-gradient(135deg, #fafdff 0%, #e3f2fd 100%);
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(52,58,64,0.07);
+            border: 1.5px solid #e3f2fd;
+            padding: 2.5rem 2rem 2rem 2rem;
+            font-size: 1.15rem;
+            color: #222;
+            line-height: 1.7;
+            position: relative;
+        }
+        .abstract h3 {
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1976d2;
+            margin-bottom: 1.2rem;
+            letter-spacing: 0.5px;
+        }
+        .abstract p {
+            margin: 0;
+        }
+        .abstract p::first-letter {
+            float: left;
+            font-size: 2.3rem;
+            line-height: 1;
+            font-weight: 700;
+            color: #1976d2;
+            padding-right: 0.18em;
+            padding-left: 2px;
+        }
+        table {
+            max-width: 500px;
+            width: 100%;
+            margin-left: auto;
+            margin-right: auto;
+            margin-top: 2rem;
+            margin-bottom: 2rem;
+            border-collapse: collapse;
+            background: #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 0.7rem;
+            text-align: center;
+            border-bottom: 1px solid #dee2e6;
+        }
+        th {
+            background: #e9ecef;
+        }
+        th.model-ref,
+        td.model-ref {
+            background: #e3f2fd;
+        }
+        audio {
+            width: 200px;
+            min-width: 40px;
+        }
+        .model-ref audio {
+            width: 150px;
+        }
+        caption {
+            caption-side: top;
+            font-size: 1.3rem;
+            font-weight: 500;
+            color: #343a40;
+            padding: 1rem 0 0.5rem 0;
+            letter-spacing: 0.5px;
+        }
+        .code-btn {
+            display: inline-block;
+            background: #1976d2;
+            color: #fff;
+            font-size: 1.1rem;
+            font-weight: 500;
+            padding: 0.7rem 1.6rem;
+            border-radius: 6px;
+            text-decoration: none;
+            box-shadow: 0 2px 6px rgba(25, 118, 210, 0.08);
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+        .code-btn:hover {
+            background: #1565c0;
+            box-shadow: 0 4px 12px rgba(25, 118, 210, 0.15);
+        }
+        .dsb-star {
+            color: #1976d2;
+            font-weight: bold;
+            font-size: 1.1em;
+            vertical-align: super;
+            margin-left: 2px;
+            letter-spacing: 0.5px;
+        }
+    </style>
 </head>
 <body>
-  <h1>Unpaired audio restoration using Schrödinger Bridges</h1>
-
-  <div class="author-info">
-    <p><strong>Andreas Hansen Bagge</strong></p>
-    <p>DTU Compute, Technical University of Denmark</p>
-    <p><a href="mailto:s214630@dtu.dk">s214630@dtu.dk</a></p>
-  </div>
-
-  <p>Unpaired audio-to-audio translation, also called audio domain transferring, is the problem of finding a mapping between audio domains which retains the content of the audio samples while applying the characteristics of another domain. A potential framework for performing unpaired audio domain transferring is to interpret the audio domains as probability distributions and then solving the Schrödinger Bridge problem, i.e. an entropy-regularized optimal transport problem between probability distributions. This paper examines the use of the Diffusion Schrödinger Bridge (DSB) algorithm applied to two unpaired audio restoration tasks, declipping and dereveberation. The DSB algorithm is computationally heavy and we therefore propose training on lower-dimensional Log Mel-spectrograms which can be decoded into speech using a vocoder. Additionally, we introduce a theoretically justified pretraining step to the DSB algorithm. We compare our method to a similar diffusion based approach called a Gaussian flow bridge (GFB) which maps the samples into an intermediate normal distribution, and we show that DSB outperforms GFB for few step diffusion by generating more straight trajectories while GFB is best at many step diffusion.</p>
-  <p>Our model is marked with<sup>*</sup></p>
-
-  <h2>Clip (Clipped Audio)</h2>
-  <table border="1" style="width:100%; border-collapse: collapse;">
-    <thead>
-      <tr>
-        <th class="baseline">Original</th>
-        <th class="baseline">Distorted (SDR=2)</th>
-        <th>DSB Mel Spectrogram (1) <sup>*</sup></th>
-        <th>DSB Mel Spectrogram (30) <sup>*</sup></th>
-        <th>DSB STFT (1) <sup>*</sup></th>
-        <th>DSB STFT (30) <sup>*</sup></th>
-        <th>GFB</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td class="baseline"><audio controls src="audio_samples/clip_baseline_x0_0.wav"></audio></td>
-        <td class="baseline"><audio controls src="audio_samples/clip_baseline_x1_0.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_mel_sto_1_x0_recon_0.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_mel_sto_30_x0_recon_0.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_stft_sto_1_x0_recon_0.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_stft_sto_30_x0_recon_0.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_gfb_30_x0_recon_0.wav"></audio></td>
-      </tr>
-      <tr>
-        <td class="baseline"><audio controls src="audio_samples/clip_baseline_x0_1.wav"></audio></td>
-        <td class="baseline"><audio controls src="audio_samples/clip_baseline_x1_1.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_mel_sto_1_x0_recon_1.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_mel_sto_30_x0_recon_1.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_stft_sto_1_x0_recon_1.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_stft_sto_30_x0_recon_1.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_gfb_30_x0_recon_1.wav"></audio></td>
-      </tr>
-      <tr>
-        <td class="baseline"><audio controls src="audio_samples/clip_baseline_x0_2.wav"></audio></td>
-        <td class="baseline"><audio controls src="audio_samples/clip_baseline_x1_2.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_mel_sto_1_x0_recon_2.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_mel_sto_30_x0_recon_2.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_stft_sto_1_x0_recon_2.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_stft_sto_30_x0_recon_2.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_gfb_30_x0_recon_2.wav"></audio></td>
-      </tr>
-      <tr>
-        <td class="baseline"><audio controls src="audio_samples/clip_baseline_x0_3.wav"></audio></td>
-        <td class="baseline"><audio controls src="audio_samples/clip_baseline_x1_3.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_mel_sto_1_x0_recon_3.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_mel_sto_30_x0_recon_3.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_stft_sto_1_x0_recon_3.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_stft_sto_30_x0_recon_3.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_gfb_30_x0_recon_3.wav"></audio></td>
-      </tr>
-      <tr>
-        <td class="baseline"><audio controls src="audio_samples/clip_baseline_x0_4.wav"></audio></td>
-        <td class="baseline"><audio controls src="audio_samples/clip_baseline_x1_4.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_mel_sto_1_x0_recon_4.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_mel_sto_30_x0_recon_4.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_stft_sto_1_x0_recon_4.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_stft_sto_30_x0_recon_4.wav"></audio></td>
-        <td><audio controls src="audio_samples/clip_gfb_30_x0_recon_4.wav"></audio></td>
-      </tr>
-    </tbody>
-  </table>
-
-  <h2>RIR (Room Impulse Response)</h2>
-  <table border="1" style="width:100%; border-collapse: collapse;">
-    <thead>
-      <tr>
-        <th class="baseline">Original</th>
-        <th class="baseline">Distorted</th>
-        <th>DSB Mel Spectrogram (1) <sup>*</sup></th>
-        <th>DSB Mel Spectrogram (30) <sup>*</sup></th>
-        <th>DSB STFT (1) <sup>*</sup></th>
-        <th>DSB STFT (30) <sup>*</sup></th>
-        <th>GFB</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td class="baseline"><audio controls src="audio_samples/rir_baseline_x0_0.wav"></audio></td>
-        <td class="baseline"><audio controls src="audio_samples/rir_baseline_x1_0.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_mel_sto_1_x0_recon_0.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_mel_sto_30_x0_recon_0.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_stft_sto_1_x0_recon_0.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_stft_sto_30_x0_recon_0.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_gfb_30_x0_recon_0.wav"></audio></td>
-      </tr>
-      <tr>
-        <td class="baseline"><audio controls src="audio_samples/rir_baseline_x0_1.wav"></audio></td>
-        <td class="baseline"><audio controls src="audio_samples/rir_baseline_x1_1.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_mel_sto_1_x0_recon_1.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_mel_sto_30_x0_recon_1.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_stft_sto_1_x0_recon_1.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_stft_sto_30_x0_recon_1.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_gfb_30_x0_recon_1.wav"></audio></td>
-      </tr>
-      <tr>
-        <td class="baseline"><audio controls src="audio_samples/rir_baseline_x0_2.wav"></audio></td>
-        <td class="baseline"><audio controls src="audio_samples/rir_baseline_x1_2.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_mel_sto_1_x0_recon_2.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_mel_sto_30_x0_recon_2.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_stft_sto_1_x0_recon_2.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_stft_sto_30_x0_recon_2.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_gfb_30_x0_recon_2.wav"></audio></td>
-      </tr>
-      <tr>
-        <td class="baseline"><audio controls src="audio_samples/rir_baseline_x0_3.wav"></audio></td>
-        <td class="baseline"><audio controls src="audio_samples/rir_baseline_x1_3.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_mel_sto_1_x0_recon_3.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_mel_sto_30_x0_recon_3.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_stft_sto_1_x0_recon_3.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_stft_sto_30_x0_recon_3.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_gfb_30_x0_recon_3.wav"></audio></td>
-      </tr>
-      <tr>
-        <td class="baseline"><audio controls src="audio_samples/rir_baseline_x0_4.wav"></audio></td>
-        <td class="baseline"><audio controls src="audio_samples/rir_baseline_x1_4.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_mel_sto_1_x0_recon_4.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_mel_sto_30_x0_recon_4.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_stft_sto_1_x0_recon_4.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_stft_sto_30_x0_recon_4.wav"></audio></td>
-        <td><audio controls src="audio_samples/rir_gfb_30_x0_recon_4.wav"></audio></td>
-      </tr>
-    </tbody>
-  </table>
-
-  <h2>Paper</h2>
-  <div style="text-align: center; margin-bottom: 2rem;">
-    <iframe src="Latent_DSB.pdf" width="80%" height="800px" style="border: 1px solid #ddd;"></iframe>
-  </div>
-
+    <div class="header">
+        <h1>Schrödinger Bridges for speech enhancement with unpaired data</h1>
+    </div>
+    <div class="abstract">
+        <h3>Abstract</h3>
+        <p>
+Unpaired audio domain transfer is a promising yet underexplored direction for achieving robust speech enhancement models capable of handling real-world noisy and distorted speech.
+We propose solving the unpaired audio transfer problem by employing principled Schrödinger Bridges that provide a mapping between probability distributions 
+using the Diffusion Schrödinger Bridge (DSB) algorithm. 
+We employ state-of-the-art training methods for Schrödinger Bridges based on diffusion and provide an efficient implementation. 
+The proposed approach is evaluated on three unpaired speech enhancement tasks; declipping, dereverberation, and denoising in both the Fourier domain and the Mel domain using both statistical and perceptual metrics.
+We compare against a Gaussian flow bridge model, which is an unpaired diffusion-based bridge model, as well as classical algorithms, and industry-standard deep learning models trained on paired data.
+We show that DSB trained on Log Mel spectrograms outperforms the diffusion baseline model across all metrics and surpasses classical algorithms and paired deep learning models on pMOS. 
+        </p>
+    </div>
+    <div style="text-align:center; margin-bottom: 1.5rem;">
+        <a href="https://github.com/kommodeskab/Latent-DSB" target="_blank" class="code-btn">View Code on GitHub</a>
+    </div>
+    <div style="text-align:center; margin-bottom: 0.5rem;">
+        <span style="font-size:1.1rem; color:#1976d2; font-weight:500;">* ours</span>
+    </div>
+    <div style="display: flex; justify-content: center;">
+        <table>
+            <colgroup>
+                <col style="width: 80px;">
+                <col style="width: 80px;">
+                <col style="width: 1fr;">
+                <col style="width: 1fr;">
+                <col style="width: 1fr;">
+                <col style="width: 1fr;">
+                <col style="width: 1fr;">
+            </colgroup>
+            <caption>Declipping</caption>
+            <thead style="background:#e9ecef;">
+                <tr>
+                    <th class="model-ref" style="padding:0.7rem; border-bottom:1px solid #dee2e6;">Original</th>
+                    <th class="model-ref" style="padding:0.7rem; border-bottom:1px solid #dee2e6;">Distorted</th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">DSB Mel (1)<span class="dsb-star">*</span></th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">DSB Mel (50)<span class="dsb-star">*</span></th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">DSB STFT (50)<span class="dsb-star">*</span></th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">GFB (50)</th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">SPADE</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Row 0 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/clip_baseline_x0_0.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/clip_baseline_x1_0.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_esdsb_sto_1_x0_recon_0.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_esdsb_sto_50_x0_recon_0.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_stft_sto_50_x0_recon_0.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_gfb_50_x0_recon_0.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_SPADE_x0_recon_0.wav"></audio></td>
+                </tr>
+                <!-- Row 1 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/clip_baseline_x0_1.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/clip_baseline_x1_1.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_esdsb_sto_1_x0_recon_1.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_esdsb_sto_50_x0_recon_1.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_stft_sto_50_x0_recon_1.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_gfb_50_x0_recon_1.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_SPADE_x0_recon_1.wav"></audio></td>
+                </tr>
+                <!-- Row 2 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/clip_baseline_x0_2.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/clip_baseline_x1_2.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_esdsb_sto_1_x0_recon_2.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_esdsb_sto_50_x0_recon_2.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_stft_sto_50_x0_recon_2.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_gfb_50_x0_recon_2.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_SPADE_x0_recon_2.wav"></audio></td>
+                </tr>
+                <!-- Row 3 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/clip_baseline_x0_3.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/clip_baseline_x1_3.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_esdsb_sto_1_x0_recon_3.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_esdsb_sto_50_x0_recon_3.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_stft_sto_50_x0_recon_3.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_gfb_50_x0_recon_3.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_SPADE_x0_recon_3.wav"></audio></td>
+                </tr>
+                <!-- Row 4 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/clip_baseline_x0_4.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/clip_baseline_x1_4.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_esdsb_sto_1_x0_recon_4.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_esdsb_sto_50_x0_recon_4.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_stft_sto_50_x0_recon_4.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_gfb_50_x0_recon_4.wav"></audio></td>
+                    <td><audio controls src="audio_samples/clip_SPADE_x0_recon_4.wav"></audio></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div style="display: flex; justify-content: center;">
+        <table>
+            <colgroup>
+                <col style="width: 80px;">
+                <col style="width: 80px;">
+                <col style="width: 1fr;">
+                <col style="width: 1fr;">
+                <col style="width: 1fr;">
+                <col style="width: 1fr;">
+                <col style="width: 1fr;">
+            </colgroup>
+            <caption>Dereverberation</caption>
+            <thead style="background:#e9ecef;">
+                <tr>
+                    <th class="model-ref" style="padding:0.7rem; border-bottom:1px solid #dee2e6;">Original</th>
+                    <th class="model-ref" style="padding:0.7rem; border-bottom:1px solid #dee2e6;">Distorted</th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">DSB Mel (1)<span class="dsb-star">*</span></th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">DSB Mel (50)<span class="dsb-star">*</span></th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">DSB STFT (50)<span class="dsb-star">*</span></th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">GFB (50)</th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">WPE</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Row 0 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/rir_baseline_x0_0.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/rir_baseline_x1_0.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_esdsb_sto_1_x0_recon_0.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_esdsb_sto_50_x0_recon_0.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_stft_sto_50_x0_recon_0.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_gfb_50_x0_recon_0.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_WPE_x0_recon_0.wav"></audio></td>
+                </tr>
+                <!-- Row 1 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/rir_baseline_x0_1.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/rir_baseline_x1_1.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_esdsb_sto_1_x0_recon_1.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_esdsb_sto_50_x0_recon_1.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_stft_sto_50_x0_recon_1.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_gfb_50_x0_recon_1.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_WPE_x0_recon_1.wav"></audio></td>
+                </tr>
+                <!-- Row 2 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/rir_baseline_x0_2.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/rir_baseline_x1_2.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_esdsb_sto_1_x0_recon_2.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_esdsb_sto_50_x0_recon_2.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_stft_sto_50_x0_recon_2.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_gfb_50_x0_recon_2.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_WPE_x0_recon_2.wav"></audio></td>
+                </tr>
+                <!-- Row 3 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/rir_baseline_x0_3.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/rir_baseline_x1_3.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_esdsb_sto_1_x0_recon_3.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_esdsb_sto_50_x0_recon_3.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_stft_sto_50_x0_recon_3.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_gfb_50_x0_recon_3.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_WPE_x0_recon_3.wav"></audio></td>
+                </tr>
+                <!-- Row 4 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/rir_baseline_x0_4.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/rir_baseline_x1_4.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_esdsb_sto_1_x0_recon_4.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_esdsb_sto_50_x0_recon_4.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_stft_sto_50_x0_recon_4.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_gfb_50_x0_recon_4.wav"></audio></td>
+                    <td><audio controls src="audio_samples/rir_WPE_x0_recon_4.wav"></audio></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div style="display: flex; justify-content: center;">
+        <table>
+            <colgroup>
+                <col style="width: 80px;">
+                <col style="width: 80px;">
+                <col style="width: 1fr;">
+                <col style="width: 1fr;">
+                <col style="width: 1fr;">
+                <col style="width: 1fr;">
+            </colgroup>
+            <caption>Denoising</caption>
+            <thead style="background:#e9ecef;">
+                <tr>
+                    <th class="model-ref" style="padding:0.7rem; border-bottom:1px solid #dee2e6;">Original</th>
+                    <th class="model-ref" style="padding:0.7rem; border-bottom:1px solid #dee2e6;">Distorted</th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">DSB Mel (1)<span class="dsb-star">*</span></th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">DSB Mel (50)<span class="dsb-star">*</span></th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">ConvTasNet</th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">SepFormer</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Row 0 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/noise_baseline_x0_0.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/noise_baseline_x1_0.wav"></audio></td>
+                    <td><audio controls src="audio_samples/noise_esdsb_sto_1_x0_recon_0.wav"></audio></td>
+                    <td><audio controls src="audio_samples/noise_esdsb_sto_50_x0_recon_0.wav"></audio></td>
+                    <td><audio controls src="audio_samples/noise_convtasnet_x0_recon_0.wav"></audio></td>
+                    <td><audio controls src="audio_samples/noise_sepformer_x0_recon_0.wav"></audio></td>
+                </tr>
+                <!-- Row 1 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/noise_baseline_x0_1.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/noise_baseline_x1_1.wav"></audio></td>
+                    <td><audio controls src="audio_samples/noise_esdsb_sto_1_x0_recon_1.wav"></audio></td>
+                    <td><audio controls src="audio_samples/noise_esdsb_sto_50_x0_recon_1.wav"></audio></td>
+                    <td><audio controls src="audio_samples/noise_convtasnet_x0_recon_1.wav"></audio></td>
+                    <td><audio controls src="audio_samples/noise_sepformer_x0_recon_1.wav"></audio></td>
+                </tr>
+                <!-- Row 2 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/noise_baseline_x0_2.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/noise_baseline_x1_2.wav"></audio></td>
+                    <td><audio controls src="audio_samples/noise_esdsb_sto_1_x0_recon_2.wav"></audio></td>
+                    <td><audio controls src="audio_samples/noise_esdsb_sto_50_x0_recon_2.wav"></audio></td>
+                    <td><audio controls src="audio_samples/noise_convtasnet_x0_recon_2.wav"></audio></td>
+                    <td><audio controls src="audio_samples/noise_sepformer_x0_recon_2.wav"></audio></td>
+                </tr>
+                <!-- Row 3 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/noise_baseline_x0_3.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/noise_baseline_x1_3.wav"></audio></td>
+                    <td><audio controls src="audio_samples/noise_esdsb_sto_1_x0_recon_3.wav"></audio></td>
+                    <td><audio controls src="audio_samples/noise_esdsb_sto_50_x0_recon_3.wav"></audio></td>
+                    <td><audio controls src="audio_samples/noise_convtasnet_x0_recon_3.wav"></audio></td>
+                    <td><audio controls src="audio_samples/noise_sepformer_x0_recon_3.wav"></audio></td>
+                </tr>
+                <!-- Row 4 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/noise_baseline_x0_4.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/noise_baseline_x1_4.wav"></audio></td>
+                    <td><audio controls src="audio_samples/noise_esdsb_sto_1_x0_recon_4.wav"></audio></td>
+                    <td><audio controls src="audio_samples/noise_esdsb_sto_50_x0_recon_4.wav"></audio></td>
+                    <td><audio controls src="audio_samples/noise_convtasnet_x0_recon_4.wav"></audio></td>
+                    <td><audio controls src="audio_samples/noise_sepformer_x0_recon_4.wav"></audio></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <!-- ...existing code... -->
 </body>
 </html>
