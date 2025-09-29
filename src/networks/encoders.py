@@ -42,6 +42,31 @@ def normalize(x : Tensor, old_range : tuple, new_range : tuple) -> Tensor:
     new_min, new_max = new_range
     return (x - old_min) * (new_max - new_min) / (old_max - old_min) + new_min
 
+class OpenSoundEncoder(Module):
+    def __init__(self):
+        super().__init__()
+        print("Loading OpenSound VAE...")
+        from stable_audio_tools import create_model_from_config_path
+        vae = create_model_from_config_path('open-sound-vae/config.json')
+        ckpt = torch.load("open-sound-vae/1500k.ckpt", map_location="cpu", weights_only=True)
+        state_dict : dict[str, Tensor] = ckpt["state_dict"]
+        state_dict = {k[len('autoencoder.'):]: v for k, v in state_dict.items() if k.startswith('autoencoder.')}
+        vae.load_state_dict(state_dict, strict=True)
+        for param in vae.parameters():
+            param.requires_grad = False
+        vae.eval()
+        self.vae = vae
+        
+    def encode(self, x : Tensor) -> Tensor:
+        self.original_length = x.shape[-1]
+        return self.vae.encode(x).unsqueeze(1)
+    
+    def decode(self, x : Tensor) -> Tensor:
+        x = x.squeeze(1)
+        audio = self.vae.decode(x)
+        audio = torch.nn.functional.pad(audio, (0, self.original_length - audio.shape[-1]), mode='constant', value=0)
+        return audio
+
 class STFTEncoderDecoder(Module):
     def __init__(
         self,
@@ -70,17 +95,12 @@ class STFTEncoderDecoder(Module):
             return_complex=True
             )
 
-        real, imag = stft.real, stft.imag
-        log_real = real.abs().log1p() * real.sign()
-        log_imag = imag.abs().log1p() * imag.sign()
-        out = torch.stack([log_real, log_imag], dim=1)
+        out = torch.stack([stft.real, stft.imag], dim=1)
 
         return out
     
     def decode(self, encoded : Tensor) -> Tensor:
-        log_real, log_image = encoded[:, 0], encoded[:, 1]
-        real = (log_real.abs().exp() - 1) * log_real.sign()
-        imag = (log_image.abs().exp() - 1) * log_image.sign()
+        real, imag = encoded[:, 0], encoded[:, 1]
         stft = real + 1j * imag
 
         window = torch.hamming_window(self.win_length, device=stft.device)

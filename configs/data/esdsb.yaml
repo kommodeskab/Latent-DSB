@@ -1,4 +1,0 @@
-_target_: src.data_modules.ESDSBDatamodule
-
-batch_size: 64
-num_workers: 4

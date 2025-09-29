@@ -11,8 +11,8 @@ from src.callbacks.metrics import WER, SRCS, DNSMOS, KAD, SISDRi, MelCepstralDis
 import random
 import numpy as np
 from torch import Tensor
-from src.lightning_modules.esdsb import load_esdsb_model
-from src.lightning_modules import DSB, ESDSB
+from src.lightning_modules.dsb import load_dsb_model
+from src.lightning_modules import DSB
 from src.networks.speech_separation import SpeechbrainSepformer, AsteroidConvTasNet
 
 schedule = 'cosine'
@@ -106,11 +106,11 @@ elif experiment_id == 'baseline':
     dsb = BaselineModel(num_steps=num_steps)
     timeschedule = None
     
-elif 'ESDSB' in experiment_id:
-    print(f'Using ESDSB model with experiment_id: {experiment_id}')
+elif 'DSB' in experiment_id:
+    print(f'Using DSB model with experiment_id: {experiment_id}')
     _, experiment_id = experiment_id.split('_')
     
-    dsb = load_esdsb_model(experiment_id)
+    dsb = load_dsb_model(experiment_id)
     dsb.scheduler.noise_factor = noise_factor
     
     from src.networks import STFTEncoderDecoder, HifiGan
@@ -197,7 +197,7 @@ for i, batch in enumerate(tqdm(dataloader, desc="Loading batches")):
     
     x1_encoded = dsb.encode(x1)
     
-    if isinstance(dsb, ESDSB):
+    if isinstance(dsb, DSB):
         trajectory = dsb.sample(x1_encoded, direction='backward', scheduler_type=schedule, num_steps=num_steps, return_trajectory=True)
     elif isinstance(dsb, (DSB, GFB, BaselineModel)):
         trajectory = dsb.sample(x1_encoded, forward=False, return_trajectory=True, noise='inference', noise_factor=noise_factor, show_progress=True)

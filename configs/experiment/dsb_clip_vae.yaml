@@ -7,20 +7,20 @@ defaults:
   - override /logger: default
 
 project_name: 'dsb'
-task_name: 'dsb clip'
+task_name: 'dsb clip vae'
 
-AUDIO_LENGTH: 2.23
+AUDIO_LENGTH: 2.56
 
 callbacks:
   dsb_callback:
     _target_: src.callbacks.DSBCallback
     cache_size: 10240
     validation_cache_size: 256
-    cache_batch_size: 512
+    cache_batch_size: 128
     steps_before_cache: 150000
     refresh_every_n_steps: 2500
     num_steps: 100
-    cache_num_steps: 30
+    cache_num_steps: 25
     scheduler_type: 'cosine'
     plot_every_n_steps: 5000
     enable_checkpointing: True
@@ -35,24 +35,28 @@ data:
 
   x0_valset:
     _target_: src.dataset.AllVCTK
-    length_seconds: 4.47
+    length_seconds: ${AUDIO_LENGTH}
     sample_rate: 16000
     train: False
 
   x1_dataset:
-    _target_: src.dataset.VCTKWHAM
+    _target_: src.dataset.ClippedVCTK
     length_seconds: ${AUDIO_LENGTH}
     sample_rate: 16000
     train: True
+    no_clip_prob: 0.0
+    gain_range: [5, 30]
 
   x1_valset:
-    _target_: src.dataset.VCTKWHAM
-    length_seconds: 4.47
+    _target_: src.dataset.ClippedVCTK
+    length_seconds: ${AUDIO_LENGTH}
     sample_rate: 16000
     train: False
-
+    no_clip_prob: 0.0
+    gain_range: [5, 30]
+  
   num_workers: 24
-  batch_size: 64
+  batch_size: 32
 
 model:
   epsilon: 2.0
@@ -66,12 +70,12 @@ model:
     num_res_blocks: 2
     attention_resolutions: [16, 8]
     dropout: 0.1
-    channel_mult: [1, 2, 4, 8]
+    channel_mult: [1, 2, 4, 4]
     num_classes: 2
     num_heads: 4
 
   encoder_decoder: 
-    _target_: src.networks.HifiGan
+    _target_: src.networks.OpenSoundEncoder
 
   optimizer:
     _target_: torch.optim.AdamW
@@ -98,6 +102,6 @@ trainer:
   check_val_every_n_epoch: !!null
   gradient_clip_val: 1.0
   max_epochs: -1
-  max_steps: 300000
+  max_steps: 400000
   precision: 'bf16'
   limit_val_batches: 10

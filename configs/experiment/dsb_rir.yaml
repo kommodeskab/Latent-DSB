@@ -7,7 +7,7 @@ defaults:
   - override /logger: default
 
 project_name: 'dsb'
-task_name: 'dsb clip'
+task_name: 'dsb rir'
 
 AUDIO_LENGTH: 2.23
 
@@ -35,19 +35,19 @@ data:
 
   x0_valset:
     _target_: src.dataset.AllVCTK
-    length_seconds: 4.47
+    length_seconds: ${AUDIO_LENGTH}
     sample_rate: 16000
     train: False
 
   x1_dataset:
-    _target_: src.dataset.VCTKWHAM
+    _target_: src.dataset.VCTKRIR
     length_seconds: ${AUDIO_LENGTH}
     sample_rate: 16000
     train: True
 
   x1_valset:
-    _target_: src.dataset.VCTKWHAM
-    length_seconds: 4.47
+    _target_: src.dataset.VCTKRIR
+    length_seconds: ${AUDIO_LENGTH}
     sample_rate: 16000
     train: False
 

@@ -35,27 +35,34 @@ data:
 
   x0_valset:
     _target_: src.dataset.AllVCTK
-    length_seconds: 4.47
+    length_seconds: ${AUDIO_LENGTH}
     sample_rate: 16000
     train: False
 
   x1_dataset:
-    _target_: src.dataset.VCTKWHAM
+    _target_: src.dataset.ClippedVCTK
     length_seconds: ${AUDIO_LENGTH}
     sample_rate: 16000
     train: True
+    no_clip_prob: 0.0
+    gain_range: [5, 30]
 
   x1_valset:
-    _target_: src.dataset.VCTKWHAM
-    length_seconds: 4.47
+    _target_: src.dataset.ClippedVCTK
+    length_seconds: ${AUDIO_LENGTH}
     sample_rate: 16000
     train: False
+    no_clip_prob: 0.0
+    gain_range: [5, 30]
 
   num_workers: 24
   batch_size: 64
 
 model:
   epsilon: 2.0
+
+  loss:
+    _target_: src.losses.MSELoss
 
   model:
     _target_: src.networks.dhariwal.UNetModel
@@ -66,7 +73,7 @@ model:
     num_res_blocks: 2
     attention_resolutions: [16, 8]
     dropout: 0.1
-    channel_mult: [1, 2, 4, 8]
+    channel_mult: [1, 2, 4, 4]
     num_classes: 2
     num_heads: 4
 

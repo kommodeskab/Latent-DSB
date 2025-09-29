@@ -5,6 +5,36 @@ from datetime import datetime
 import glob
 from typing import Any
 import wandb
+from torch import Tensor
+from typing import Dict
+import contextlib
+import random
+import numpy as np
+import torch
+
+Data = Dict[str, Tensor]
+
+@contextlib.contextmanager
+def temporary_seed(seed : int):
+    random_state = random.getstate()
+    numpy_state = np.random.get_state()
+    torch_state = torch.random.get_rng_state()
+    cuda_state = torch.cuda.get_rng_state() if torch.cuda.is_available() else None
+
+    try:
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if cuda_state is not None:
+            torch.cuda.set_rng_state(cuda_state)
+        yield
+        
+    finally:
+        random.setstate(random_state)
+        np.random.set_state(numpy_state)
+        torch.random.set_rng_state(torch_state)
+        if cuda_state is not None:
+            torch.cuda.set_rng_state(cuda_state)
 
 def get_current_time() -> str:
     now = datetime.now()

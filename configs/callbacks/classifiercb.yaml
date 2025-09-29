@@ -1,7 +1,0 @@
-defaults:
-  - learningratemonitor
-  - richprogressbar
-  - richmodelsummary
-  - timer
-  - classification
-  - modelcheckpoint

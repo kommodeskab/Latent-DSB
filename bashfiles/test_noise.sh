@@ -33,13 +33,13 @@ python inference.py --experiment_id=sepformer --num_samples=$NUM_SAMPLES --batch
 python inference.py --experiment_id=convtasnet --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=1 --folder_name=test_noise/convtasnet --what_test=noise 
 
 # stft
-python inference.py --experiment_id=ESDSB_090925111017 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=50 --noise_factor=1.0 --folder_name=test_noise/stft_sto_50 --what_test=noise 
-python inference.py --experiment_id=ESDSB_090925111017 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=1  --noise_factor=1.0 --folder_name=test_noise/stft_sto_1 --what_test=noise 
+python inference.py --experiment_id=dsb_090925111017 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=50 --noise_factor=1.0 --folder_name=test_noise/stft_sto_50 --what_test=noise 
+python inference.py --experiment_id=dsb_090925111017 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=1  --noise_factor=1.0 --folder_name=test_noise/stft_sto_1 --what_test=noise 
 
 # mel
-python inference.py --experiment_id=ESDSB_130825172731 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=1 --noise_factor=1.0 --folder_name=test_noise/esdsb_sto_1 --what_test=noise 
-python inference.py --experiment_id=ESDSB_130825172731 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=50 --noise_factor=1.0 --folder_name=test_noise/esdsb_sto_50 --what_test=noise 
-python inference.py --experiment_id=ESDSB_130825172731 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=50 --noise_factor=0.0 --folder_name=test_noise/esdsb_det_50 --what_test=noise 
+python inference.py --experiment_id=dsb_130825172731 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=1 --noise_factor=1.0 --folder_name=test_noise/dsb_sto_1 --what_test=noise 
+python inference.py --experiment_id=dsb_130825172731 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=50 --noise_factor=1.0 --folder_name=test_noise/dsb_sto_50 --what_test=noise 
+python inference.py --experiment_id=dsb_130825172731 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=50 --noise_factor=0.0 --folder_name=test_noise/dsb_det_50 --what_test=noise 
 
 
 chgrp -R s214630bjjemiri /work3/s214630/Latent-DSB/

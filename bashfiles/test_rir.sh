@@ -32,7 +32,7 @@ python inference.py --experiment_id=baseline --num_samples=$NUM_SAMPLES --batch_
 python inference.py --experiment_id=WPE      --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=1 --what_test=rir --folder_name=test_rir/WPE
 
 # mel (50) deterministic
-python inference.py --experiment_id=ESDSB_050825093652 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=50 --noise_factor=0.0 --folder_name=test_rir/esdsb_det_50 --what_test=rir
+python inference.py --experiment_id=dsb_050825093652 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=50 --noise_factor=0.0 --folder_name=test_rir/dsb_det_50 --what_test=rir
 
 for NUM_STEPS in 1 2 5 10 15 30 50
 do
@@ -40,10 +40,10 @@ do
   python inference.py --experiment_id=GFB                --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=$NUM_STEPS                    --folder_name=test_rir/gfb_$NUM_STEPS       --what_test=rir
   
   # stft
-  python inference.py --experiment_id=ESDSB_220825142651 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=$NUM_STEPS --noise_factor=1.0 --folder_name=test_rir/stft_sto_$NUM_STEPS  --what_test=rir
+  python inference.py --experiment_id=dsb_220825142651 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=$NUM_STEPS --noise_factor=1.0 --folder_name=test_rir/stft_sto_$NUM_STEPS  --what_test=rir
   
   # mel
-  python inference.py --experiment_id=ESDSB_050825093652 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=$NUM_STEPS --noise_factor=1.0 --folder_name=test_rir/esdsb_sto_$NUM_STEPS --what_test=rir
+  python inference.py --experiment_id=dsb_050825093652 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=$NUM_STEPS --noise_factor=1.0 --folder_name=test_rir/dsb_sto_$NUM_STEPS --what_test=rir
 done
 
 chgrp -R s214630bjjemiri /work3/s214630/Latent-DSB/

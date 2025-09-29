@@ -7,22 +7,22 @@ defaults:
   - override /logger: default
 
 project_name: 'dsb'
-task_name: 'dsb clip'
+task_name: 'dsb rir stft'
 
-AUDIO_LENGTH: 2.23
+AUDIO_LENGTH: 4.096
 
 callbacks:
   dsb_callback:
     _target_: src.callbacks.DSBCallback
-    cache_size: 10240
-    validation_cache_size: 256
-    cache_batch_size: 512
+    cache_size: 3840
+    validation_cache_size: 32
+    cache_batch_size: 64
     steps_before_cache: 150000
-    refresh_every_n_steps: 2500
-    num_steps: 100
-    cache_num_steps: 30
+    refresh_every_n_steps: 19200
+    num_steps: 50
+    cache_num_steps: 25
     scheduler_type: 'cosine'
-    plot_every_n_steps: 5000
+    plot_every_n_steps: 10000
     enable_checkpointing: True
     what_media: 'audio'
 
@@ -35,24 +35,24 @@ data:
 
   x0_valset:
     _target_: src.dataset.AllVCTK
-    length_seconds: 4.47
+    length_seconds: 4.096
     sample_rate: 16000
     train: False
 
   x1_dataset:
-    _target_: src.dataset.VCTKWHAM
+    _target_: src.dataset.VCTKRIR
     length_seconds: ${AUDIO_LENGTH}
     sample_rate: 16000
     train: True
 
   x1_valset:
-    _target_: src.dataset.VCTKWHAM
-    length_seconds: 4.47
+    _target_: src.dataset.VCTKRIR
+    length_seconds: 4.096
     sample_rate: 16000
     train: False
 
   num_workers: 24
-  batch_size: 64
+  batch_size: 8
 
 model:
   epsilon: 2.0
@@ -60,8 +60,8 @@ model:
   model:
     _target_: src.networks.dhariwal.UNetModel
     image_size: 32
-    in_channels: 1
-    out_channels: 1
+    in_channels: 2
+    out_channels: 2
     model_channels: 64
     num_res_blocks: 2
     attention_resolutions: [16, 8]
@@ -69,9 +69,11 @@ model:
     channel_mult: [1, 2, 4, 8]
     num_classes: 2
     num_heads: 4
-
-  encoder_decoder: 
-    _target_: src.networks.HifiGan
+  
+  encoder_decoder:
+    _target_: src.networks.STFTEncoderDecoder
+    n_fft: 510
+    hop_length: 128
 
   optimizer:
     _target_: torch.optim.AdamW

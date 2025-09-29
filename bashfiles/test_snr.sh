@@ -30,7 +30,7 @@ BATCH_SIZE=16
 
 for SNR in 0 5 10 15
 do
-  python inference.py --experiment_id=ESDSB_130825172731 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=30 --snr=$SNR --folder_name=test_snr/esdsb_sto_$SNR --what_test=noise 
+  python inference.py --experiment_id=dsb_130825172731 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --num_steps=30 --snr=$SNR --folder_name=test_snr/dsb_sto_$SNR --what_test=noise 
 done
 
 chgrp -R s214630bjjemiri /work3/s214630/Latent-DSB/

@@ -30,7 +30,7 @@ BATCH_SIZE=16
 
 for NOISE_FACTOR in 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0
 do
-  python inference.py --experiment_id=ESDSB_130825172731 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --noise_factor=$NOISE_FACTOR --num_steps=30 --folder_name=test_noise_factor/esdsb_sto_$NOISE_FACTOR --what_test=noise 
+  python inference.py --experiment_id=dsb_130825172731 --num_samples=$NUM_SAMPLES --batch_size=$BATCH_SIZE --noise_factor=$NOISE_FACTOR --num_steps=30 --folder_name=test_noise_factor/dsb_sto_$NOISE_FACTOR --what_test=noise 
 done
 
 chgrp -R s214630bjjemiri /work3/s214630/Latent-DSB/
