@@ -70,7 +70,7 @@ class DSBCallback(Callback):
         self.valset = datamodule.valset
         
         logger = pl_module.logger
-        num_samples = self.cache_batch_size
+        num_samples = self.validation_cache_size
         
         self.x0_batch = get_batch_from_dataset(self.valset.x0_dataset, num_samples, shuffle=False)
         self.x1_batch = get_batch_from_dataset(self.valset.x1_dataset, num_samples, shuffle=False)

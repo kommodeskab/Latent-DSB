@@ -94,7 +94,7 @@ class DSBScheduler:
         
         if self.condition_on_start:
             # concatenate x0/x1 to xt along the channel dimension
-            start = torch.zeros_like(xt)
+            start = torch.empty_like(x0)
             start[mask] = x0[mask]
             start[~mask] = x1[~mask]
             xt = torch.cat([xt, start], dim=1)
@@ -158,3 +158,55 @@ class DSBScheduler:
         while x.dim() < dim:
             x = x.unsqueeze(-1)
         return x
+
+
+from typing import Dict
+from torch import Tensor
+import torch
+
+TensorDict = Dict[str, Tensor]
+
+class BaggeScheduler:
+    def __init__(
+        self,
+        beta : float = 2.0,
+    ):
+        self.beta = beta
+        
+    @staticmethod
+    def to_dim(x: Tensor, dim: int) -> Tensor:
+        while x.dim() < dim:
+            x = x.unsqueeze(-1)
+        return x
+        
+    def sample_training_step(self, x0: Tensor, x1: Tensor, timesteps: Tensor) -> TensorDict:        
+        t = self.to_dim(timesteps, x0.dim())
+        mu_t = (1 - t) * x0 + t * x1
+        sigma_t = self.beta * t * (1 - t)
+        noise = torch.randn_like(mu_t)
+        xt = mu_t + sigma_t ** 0.5 * noise
+        flow = x1 - x0
+        
+        return {
+            "xt": xt,
+            "noise": noise,
+            "flow": flow,
+            "timesteps": timesteps,
+        }
+        
+    def step(self, xt: Tensor, flow: Tensor, noise: Tensor, tk: float, tk_plus_one: float, forward: bool) -> Tensor:
+        delta_t = tk_plus_one - tk
+        b = self.beta
+        
+        if forward:
+            drift = flow - torch.sqrt(b * tk / (1 - tk)) * noise
+            mu_next = xt + delta_t * drift
+            sigma_next = b * delta_t * (1 - tk_plus_one) / (1 - tk)
+        else:
+            drift = flow + torch.sqrt(b * (1 - tk) / tk) * noise
+            mu_next = xt - delta_t * drift
+            sigma_next = b * delta_t * tk / tk_plus_one
+            
+        noise = torch.randn_like(xt)
+        xt_next = mu_next + sigma_next ** 0.5 * noise
+        return xt_next

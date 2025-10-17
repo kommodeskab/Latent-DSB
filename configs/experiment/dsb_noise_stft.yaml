@@ -17,8 +17,8 @@ callbacks:
     cache_size: 3840
     validation_cache_size: 32
     cache_batch_size: 64
-    steps_before_cache: 150000
-    refresh_every_n_steps: 3840
+    steps_before_cache: 75000
+    refresh_every_n_steps: 7680
     num_steps: 50
     cache_num_steps: 10
     scheduler_type: 'cosine'
@@ -55,14 +55,14 @@ data:
   batch_size: 8
 
 model:
-  epsilon: 2.0
-  condition_on_start: True
+  epsilon: 1.0
+  condition_on_start: False
 
   model:
     _target_: src.networks.dhariwal.UNetModel
     image_size: 256
-    in_channels: 4
-    out_channels: 2
+    in_channels: 3
+    out_channels: 3
     model_channels: 64
     num_res_blocks: 2
     attention_resolutions: [16, 8]
@@ -72,10 +72,11 @@ model:
     num_heads: 4
 
   loss_fn:
-    _target_: src.losses.STFTLoss
+    _target_: src.losses.MultiChannelMSELoss
+    weights: 1.0
 
   encoder_decoder: 
-    _target_: src.networks.STFTEncoderDecoder
+    _target_: src.networks.PolarSTFTEncoderDecoder
     n_fft: 510
     hop_length: 128
 

@@ -5,7 +5,6 @@ from src.lightning_modules.baselightningmodule import BaseLightningModule
 from torch.nn import Module
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
-from torch.nn.functional import mse_loss
 from tqdm import tqdm
 from lightning.pytorch.utilities import grad_norm
 from torch_ema import ExponentialMovingAverage
@@ -87,24 +86,23 @@ class DSB(BaseLightningModule, EncoderDecoderMixin):
             x0, x1 = self.encode_batch(x0, x1)
         xt, timesteps, conditional, flow = self.scheduler.sample_training_batch(x0, x1, direction)
         model_output = self(xt, timesteps, conditional)
-        loss = self.loss_fn({
-            'out': model_output, 
-            'target': flow
-            })
+        loss = self.loss_fn({'out': model_output, 'target': flow})
         return loss
         
     def training_step(self, batch : tuple[Tensor, Tensor], batch_idx : int) -> Tensor:
         loss = self._common_step(batch)
-        self.log('train_loss', loss, prog_bar=True)
-        return loss
+        loss = {f"train_{k}": v for k, v in loss.items()}
+        self.log_dict(loss, prog_bar=True)
+        return loss['train_loss']
     
     @torch.no_grad()
     def validation_step(self, batch : tuple[Tensor, Tensor], batch_idx : int) -> Tensor:
         with self.fix_validation_seed():
             with self.ema.average_parameters():
                 loss = self._common_step(batch)
-        self.log('val_loss', loss, prog_bar=True)
-        return loss
+        loss = {f"val_{k}": v for k, v in loss.items()}
+        self.log_dict(loss, prog_bar=True)
+        return loss['val_loss']
 
     @torch.no_grad()
     def sample(self, x_start : Tensor, direction : DIRECTIONS, scheduler_type : SCHEDULER_TYPES, num_steps : int, return_trajectory : bool, verbose : bool = True) -> Tensor:

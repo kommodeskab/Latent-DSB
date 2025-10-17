@@ -145,13 +145,14 @@ class PolarSTFTEncoderDecoder(Module):
         
         log_amplitude = (1e-6 + stft.abs()).log()
         angle = stft.angle()
-        cos = angle.cos()
-        sin = angle.sin()
+        cos = 3 * angle.cos() # multiply by 3 to bring on (approx) same scale as log_amplitude
+        sin = 3 * angle.sin()
         out = torch.stack([log_amplitude, cos, sin], dim=1)
         return out
     
     def decode(self, encoded : Tensor) -> Tensor:
         log_amplitude, cos, sin = encoded[:, 0], encoded[:, 1], encoded[:, 2]
+        cos, sin = cos / 3, sin / 3 # undo scaling
         sin = sin.clamp(-1.0, 1.0)
         cos = cos.clamp(-1.0, 1.0)
         angle = torch.atan2(sin, cos)

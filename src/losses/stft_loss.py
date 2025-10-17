@@ -2,7 +2,7 @@ import torch.nn as nn
 from torch import Tensor
 from typing import Dict
 import torch.nn.functional as F
-from typing import Optional
+from typing import Optional, Literal
 import torch
 
 Data = Dict[str, Tensor]
@@ -10,43 +10,81 @@ Data = Dict[str, Tensor]
 class STFTLoss(nn.Module):
     def __init__(
         self, 
-        weights : Optional[Dict[str, float]] = None
+        weights : Optional[Dict[str, float]] = None,
+        polar_encoding : bool = False,
+        complex_mode : Literal['l1', 'cos']  = 'l1'
         ):
         super().__init__()
         self.weights = {'sc': 1.0, 'logmag': 1.0, 'complex': 0.1}
         if weights is not None:
             self.weights.update(weights)
+        self.polar_encoding = polar_encoding
+        self.complex_mode = complex_mode
+        assert complex_mode in ['l1', 'cos'], "complex_mode must be 'l1' or 'cos'"
+            
+    def stft_features(self, x : Tensor) -> Data:
+        real, imag = x[:,0], x[:,1]
+        mag = torch.sqrt(real**2 + imag**2 + 1e-5)
+        log_mag = torch.log(mag + 1e-5)
+        phase = torch.atan2(imag, real)
+        return {
+            'mag': mag,
+            'log_mag': log_mag,
+            'phase': phase,
+            'stft': x,
+        }
+            
+    def polar_features(self, x : Tensor) -> Data:
+        # a polar encoding is a 3-channel representation of the STFT
+        # first channel is the log-magnitude, second and third channels are the cosine and sine of the phase
+        log_mag = x[:, 0].clamp(max=10) # avoid too large values for numerical stability since we exponentiate later
+        mag = log_mag.exp()
+        cos_phase = x[:, 1]
+        sin_phase = x[:, 2]
+        phase = torch.atan2(sin_phase, cos_phase)
+        stft = torch.stack([mag * cos_phase, mag * sin_phase], dim=1)
+        return {
+            'mag': mag,
+            'log_mag': log_mag,
+            'phase': phase,
+            'stft': stft,
+        }
         
     def forward(self, batch: Data) -> Tensor:
         x_hat, x = batch["out"], batch["target"]
         
-        xr, xi = x[:,0], x[:,1]
-        yr, yi = x_hat[:,0], x_hat[:,1] 
+        if self.polar_encoding:
+            features_x = self.polar_features(x)
+            features_xhat = self.polar_features(x_hat)
+        else:
+            features_x = self.stft_features(x)
+            features_xhat = self.stft_features(x_hat)
         
-        _eps = 1e-8
-        
-        # magnitude
-        mag_x = torch.sqrt(xr**2 + xi**2 + _eps)
-        mag_xhat = torch.sqrt(yr**2 + yi**2 + _eps)
-        
-        log_mag_x = (mag_x + _eps).log()
-        log_mag_xhat = (mag_xhat + _eps).log()
-        
-        # Spectral convergence
-        num = torch.norm(mag_x - mag_xhat, p='fro', dim=(1,2))
-        den = torch.norm(mag_x, p='fro', dim=(1,2)).clamp(min=_eps)
+        # spectral convergence
+        num = torch.norm(features_x['mag'] - features_xhat['mag'], p='fro', dim=(1,2))
+        den = torch.norm(features_x['mag'], p='fro', dim=(1,2)).clamp(min=1e-5)
         loss_sc = (num / den).mean()
         
-        # Log-magnitude
-        loss_logmag = F.l1_loss(log_mag_x, log_mag_xhat)
+        # log-magnitude
+        loss_logmag = F.l1_loss(features_x['log_mag'], features_xhat['log_mag'])
         
         # phase aware loss
-        loss_complex = F.l1_loss(x, x_hat)
-        
+        if self.complex_mode == 'cos':
+            phi_x = features_x['phase']
+            phi_y = features_xhat['phase']
+            loss_phase = (1 - torch.cos(phi_x - phi_y)).mean()
+        elif self.complex_mode == 'l1':
+            loss_phase = F.l1_loss(features_x['stft'], features_xhat['stft'])
+                
         loss = (
             self.weights['sc'] * loss_sc +
             self.weights['logmag'] * loss_logmag +
-            self.weights['complex'] * loss_complex
+            self.weights['complex'] * loss_phase
         )
         
-        return loss
+        return {
+            "sc_loss": loss_sc,
+            "logmag_loss": loss_logmag,
+            "complex_loss": loss_phase,
+            "loss": loss
+        }
