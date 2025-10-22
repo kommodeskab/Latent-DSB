@@ -1,4 +1,4 @@
-_target_: src.data_modules.DSBDatamodule
+_target_: src.data_modules.FlowMatchingDM
 
 batch_size: 64
 num_workers: 4

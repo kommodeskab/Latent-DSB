@@ -2,7 +2,7 @@
 project_name: ???
 task_name: ???
 seed: 42
-compile: True
+compile: False
 continue_from_id: False
 
 defaults:

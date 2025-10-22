@@ -14,20 +14,12 @@ AUDIO_LENGTH: 4.096
 callbacks:
   dsb_callback:
     _target_: src.callbacks.DSBCallback
-    cache_size: 3840
-    validation_cache_size: 32
-    cache_batch_size: 64
-    steps_before_cache: 75000
-    refresh_every_n_steps: 7680
     num_steps: 50
-    cache_num_steps: 10
     scheduler_type: 'cosine'
-    plot_every_n_steps: 5000
-    enable_checkpointing: True
     what_media: 'audio'
 
 data:
-  x0_dataset:
+  x0_trainset:
     _target_: src.dataset.AllVCTK
     length_seconds: ${AUDIO_LENGTH}
     sample_rate: 16000
@@ -39,7 +31,7 @@ data:
     sample_rate: 16000
     train: False
 
-  x1_dataset:
+  x1_trainset:
     _target_: src.dataset.VCTKWHAM
     length_seconds: ${AUDIO_LENGTH}
     sample_rate: 16000
@@ -52,17 +44,21 @@ data:
     train: False
 
   num_workers: 24
-  batch_size: 8
+  batch_size: 16
 
 model:
   epsilon: 1.0
-  condition_on_start: False
+  pretraining_steps: 75000
+  inference_steps: 10
+  compile: True
+  p_cache: 0.5
+  cache_size: 3036
 
   model:
     _target_: src.networks.dhariwal.UNetModel
     image_size: 256
-    in_channels: 3
-    out_channels: 3
+    in_channels: 2
+    out_channels: 2
     model_channels: 64
     num_res_blocks: 2
     attention_resolutions: [16, 8]
@@ -72,13 +68,13 @@ model:
     num_heads: 4
 
   loss_fn:
-    _target_: src.losses.MultiChannelMSELoss
-    weights: 1.0
+    _target_: src.losses.SmooothL1Loss
 
   encoder_decoder: 
-    _target_: src.networks.PolarSTFTEncoderDecoder
+    _target_: src.networks.STFTEncoderDecoder
     n_fft: 510
     hop_length: 128
+    p: 0.25
 
   optimizer:
     _target_: torch.optim.AdamW
@@ -98,7 +94,7 @@ model:
 
 trainer:
   fast_dev_run: False
-  enable_checkpointing: False
+  enable_checkpointing: True
   log_every_n_steps: 1
   reload_dataloaders_every_n_epochs: 1
   val_check_interval: 3000
@@ -107,4 +103,4 @@ trainer:
   max_epochs: -1
   max_steps: 300000
   precision: 'bf16'
-  limit_val_batches: 10
+  limit_val_batches: 20

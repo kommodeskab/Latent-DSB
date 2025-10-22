@@ -11,6 +11,26 @@ class MSELoss(nn.Module):
         x_hat, x = batch["out"], batch["target"]
         loss = self.mse_loss.forward(x_hat, x)
         return {"loss": loss}
+
+class SmooothL1Loss(nn.Module):
+    def __init__(self, beta: float = 1.0):
+        super().__init__()
+        self.smooth_l1_loss = nn.SmoothL1Loss(beta=beta)
+        
+    def forward(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        x_hat, x = batch["out"], batch["target"]
+        loss = self.smooth_l1_loss.forward(x_hat, x)
+        return {"loss": loss}
+
+class L1Loss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.l1_loss = nn.L1Loss()
+        
+    def forward(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        x_hat, x = batch["out"], batch["target"]
+        loss = self.l1_loss.forward(x_hat, x)
+        return {"loss": loss}
     
 class MultiChannelMSELoss(nn.Module):
     def __init__(

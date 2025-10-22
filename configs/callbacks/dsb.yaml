@@ -1,4 +1,7 @@
 defaults:
+  - log_loss
   - learningratemonitor
   - richmodelsummary
   - timer
+  - log_grads
+  - ema

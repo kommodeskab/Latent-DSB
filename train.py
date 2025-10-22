@@ -69,7 +69,7 @@ def my_app(cfg : DictConfig) -> None:
 
     if cfg.compile:
         print("Compiling model..")
-        torch.compile(model)
+        model = torch.compile(model, fullgraph=False)
         
     print("Beginning training..")
     trainer.fit(model, datamodule, ckpt_path=ckpt_path)

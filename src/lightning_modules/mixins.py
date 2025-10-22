@@ -7,15 +7,11 @@ class EncoderDecoderMixin:
     
     @torch.no_grad()
     def encode(self, x : Tensor) -> Tensor:
-        if self.encoder_decoder.training:
-            self.encoder_decoder.eval()
         x = self.encoder_decoder.encode(x)
         return x
 
     @torch.no_grad()
     def decode(self, x : Tensor) -> Tensor:
-        if self.encoder_decoder.training:
-            self.encoder_decoder.eval()
         x = self.encoder_decoder.decode(x)
         return x
     

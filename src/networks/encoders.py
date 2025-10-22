@@ -8,7 +8,7 @@ from speechbrain.lobes.models.FastSpeech2 import mel_spectogram
 from transformers import SpeechT5HifiGan
 from diffusers import AutoencoderKL
 
-class BaseEncoderDecoder(Module):
+class BaseEncoderDecoder:
     def encode(self, x : Tensor) -> Tensor: ...    
     def decode(self, h : Tensor) -> Tensor: ...
     
@@ -67,16 +67,17 @@ class OpenSoundEncoder(Module):
         audio = torch.nn.functional.pad(audio, (0, self.original_length - audio.shape[-1]), mode='constant', value=0)
         return audio
 
-class STFTEncoderDecoder(Module):
+class STFTEncoderDecoder:
     def __init__(
         self,
         n_fft : int,
         hop_length : int,
+        p: int = 1,
     ):
-        super().__init__()
         self.n_fft = n_fft
         self.hop_length = hop_length
         self.win_length = n_fft
+        self.p = p
         
     def encode(self, audio : Tensor) -> Tensor:
         if not hasattr(self, 'original_length'):
@@ -94,13 +95,22 @@ class STFTEncoderDecoder(Module):
             window=window,
             return_complex=True
             )
+        
+        real, imag = stft.real, stft.imag
+        
+        real = real.sign() * real.abs().pow(self.p)
+        imag = imag.sign() * imag.abs().pow(self.p)
 
-        out = torch.stack([stft.real, stft.imag], dim=1)
+        out = torch.stack([real, imag], dim=1)
 
         return out
     
     def decode(self, encoded : Tensor) -> Tensor:
         real, imag = encoded[:, 0], encoded[:, 1]
+        
+        real = real.sign() * real.abs().pow(1 / self.p)
+        imag = imag.sign() * imag.abs().pow(1 / self.p)
+        
         stft = real + 1j * imag
 
         window = torch.hamming_window(self.win_length, device=stft.device)
@@ -115,13 +125,12 @@ class STFTEncoderDecoder(Module):
         audio = torch.nn.functional.pad(audio, (0, self.original_length - audio.shape[-1]), mode='constant', value=0)
         return audio.unsqueeze(1)
     
-class PolarSTFTEncoderDecoder(Module):
+class PolarSTFTEncoderDecoder:
     def __init__(
         self,
         n_fft : int,
         hop_length : int,
     ):
-        super().__init__()
         self.n_fft = n_fft
         self.hop_length = hop_length
         self.win_length = n_fft
@@ -171,9 +180,8 @@ class PolarSTFTEncoderDecoder(Module):
         audio = torch.nn.functional.pad(audio, (0, self.original_length - audio.shape[-1]), mode='constant', value=0)
         return audio.unsqueeze(1)
     
-class HifiGan(Module):
+class HifiGan:
     def __init__(self):
-        super().__init__()
         self.vocoder : SpeechT5HifiGan = SpeechT5HifiGan.from_pretrained("cvssp/audioldm2", subfolder="vocoder")
         for param in self.vocoder.parameters():
             param.requires_grad = False
@@ -198,8 +206,15 @@ class HifiGan(Module):
         
         self.original_len = None
         self.off_set = 4 # approximately normalize between -4 and 4
+        
+    @property
+    def device(self):
+        return next(self.vocoder.parameters()).device
     
     def encode(self, x : Tensor) -> Tensor:
+        if self.device != x.device:
+            self.vocoder.to(x.device)
+        
         if self.original_len is None:
             self.original_len = x.shape[2]
             
