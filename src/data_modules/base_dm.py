@@ -3,6 +3,9 @@ from torch.utils.data import DataLoader, random_split, Dataset
 import torch
 import os
 from typing import Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 def split_dataset(
     train_dataset : Dataset, 
@@ -30,26 +33,26 @@ class BaseDM(pl.LightningDataModule):
         self.save_hyperparameters(ignore=["dataset", "val_dataset"])
         self.original_dataset = dataset
         self.train_dataset, self.val_dataset = split_dataset(dataset, val_dataset, train_val_split)
-        self.num_workers = kwargs.pop("num_workers", os.cpu_count())
-        print(f"Using {self.num_workers} workers for data loading.")
         self.kwargs = kwargs
         
     def train_dataloader(self):
         return DataLoader(
             dataset = self.train_dataset, 
-            shuffle = True, 
-            drop_last=True,
-            num_workers=self.num_workers,
             **self.kwargs,
             )
         
     def val_dataloader(self):
+        kwargs = self.kwargs.copy()
+        # remove the shuffle and drop_last for validation dataloader
+        for key in ['shuffle', 'drop_last']:
+            if key in kwargs:
+                kwargs.pop(key)
+            
         return DataLoader(
             dataset = self.val_dataset, 
             shuffle = False, 
             drop_last=True,
-            num_workers=self.num_workers,
-            **self.kwargs,
+            **kwargs,
             )
         
 class RandomPairDataset(Dataset):
@@ -61,7 +64,7 @@ class RandomPairDataset(Dataset):
         return len(self.x0_dataset)
     
     def shuffle_x1_indices(self):
-        print("Shuffling x1 dataset indices for random pairing...", flush=True)
+        logger.info("Shuffling x1 dataset indices for random pairing...")
         self.x1_indices = torch.randperm(len(self.x1_dataset))
     
     def __getitem__(self, idx):

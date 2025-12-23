@@ -1,0 +1,46 @@
+_target_: src.data_modules.BaseDM
+
+dataset:
+  _target_: torch.utils.data.ConcatDataset
+  datasets:
+    - _target_: src.dataset.AllVCTK
+      length_seconds: 4.096
+      sample_rate: 16000
+      train: True
+    - _target_: src.dataset.VCTKRIR
+      length_seconds: 4.096
+      sample_rate: 16000
+      train: True
+    - _target_: src.dataset.VCTKWHAM
+      length_seconds: 4.096
+      sample_rate: 16000
+      train: True
+    - _target_: src.dataset.ClippedVCTK
+      length_seconds: 4.096
+      sample_rate: 16000
+      no_clip_prob: 0.0
+      gain_range: [5, 30]
+      train: True
+        
+
+val_dataset:
+  _target_: torch.utils.data.ConcatDataset
+  datasets:
+    - _target_: src.dataset.AllVCTK
+      length_seconds: 4.096
+      sample_rate: 16000
+      train: False
+    - _target_: src.dataset.VCTKRIR
+      length_seconds: 4.096
+      sample_rate: 16000
+      train: False
+    - _target_: src.dataset.VCTKWHAM
+      length_seconds: 4.096
+      sample_rate: 16000
+      train: False
+    - _target_: src.dataset.ClippedVCTK
+      length_seconds: 4.096
+      sample_rate: 16000
+      no_clip_prob: 0.0
+      gain_range: [5, 30]
+      train: False

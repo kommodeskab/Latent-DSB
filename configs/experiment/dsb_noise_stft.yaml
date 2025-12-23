@@ -8,6 +8,7 @@ defaults:
 
 project_name: 'dsb'
 task_name: 'dsb noise stft'
+compile: False
 
 AUDIO_LENGTH: 4.096
 
@@ -17,64 +18,83 @@ callbacks:
     num_steps: 50
     scheduler_type: 'cosine'
     what_media: 'audio'
+    sample_rate: 16000
+  eval_callback:
+    _target_: src.callbacks.EvalMetricCallback
+    what_test: 'noise'
+    dataset_size: 128
 
 data:
-  x0_trainset:
-    _target_: src.dataset.AllVCTK
-    length_seconds: ${AUDIO_LENGTH}
-    sample_rate: 16000
-    train: True
+  dataset:
+    _target_: src.dataset.DSBDataset
+    cache_size: 512
 
-  x0_valset:
-    _target_: src.dataset.AllVCTK
-    length_seconds: ${AUDIO_LENGTH}
-    sample_rate: 16000
-    train: False
+    x0_dataset:
+      _target_: src.dataset.AllVCTK
+      length_seconds: ${AUDIO_LENGTH}
+      sample_rate: 16000
+      train: True
 
-  x1_trainset:
-    _target_: src.dataset.VCTKWHAM
-    length_seconds: ${AUDIO_LENGTH}
-    sample_rate: 16000
-    train: True
+    x1_dataset:
+      _target_: src.dataset.VCTKWHAM
+      length_seconds: ${AUDIO_LENGTH}
+      sample_rate: 16000
+      train: True
 
-  x1_valset:
-    _target_: src.dataset.VCTKWHAM
-    length_seconds: ${AUDIO_LENGTH}
-    sample_rate: 16000
-    train: False
+  val_dataset:
+    _target_: src.dataset.DSBDataset
+    cache_size: 0
+  
+    x0_dataset:
+      _target_: src.dataset.AllVCTK
+      length_seconds: ${AUDIO_LENGTH}
+      sample_rate: 16000
+      train: False
 
-  num_workers: 24
-  batch_size: 16
+    x1_dataset:
+      _target_: src.dataset.VCTKWHAM
+      length_seconds: ${AUDIO_LENGTH}
+      sample_rate: 16000
+      train: False
+
+  num_workers: 12
+  batch_size: 4
+  shuffle: False
+  drop_last: True
 
 model:
-  epsilon: 1.0
-  pretraining_steps: 75000
-  inference_steps: 10
-  compile: True
-  p_cache: 0.5
-  cache_size: 3036
+  pretraining_steps: 150000
+  inference_steps: 20
+  cache_batch_size: 64
+  populate_every_n_steps: 4096
 
   model:
     _target_: src.networks.dhariwal.UNetModel
-    image_size: 256
     in_channels: 2
     out_channels: 2
     model_channels: 64
     num_res_blocks: 2
-    attention_resolutions: [16, 8]
-    dropout: 0.1
+    attention_resolutions: [8]
+    dropout: 0.0
     channel_mult: [1, 2, 4, 6]
     num_classes: 2
     num_heads: 4
 
+  scheduler:
+    _target_: src.lightning_modules.dsb_scheduler.DSBScheduler
+    epsilon: 2.0
+    condition_on_start: False
+    target: 'drift'
+
   loss_fn:
-    _target_: src.losses.SmooothL1Loss
+    _target_: src.losses.MSELoss
 
   encoder_decoder: 
     _target_: src.networks.STFTEncoderDecoder
     n_fft: 510
     hop_length: 128
-    p: 0.25
+    alpha: 0.25
+    beta: 1.0
 
   optimizer:
     _target_: torch.optim.AdamW
@@ -97,10 +117,10 @@ trainer:
   enable_checkpointing: True
   log_every_n_steps: 1
   reload_dataloaders_every_n_epochs: 1
-  val_check_interval: 3000
+  val_check_interval: 5000
   check_val_every_n_epoch: !!null
   gradient_clip_val: 1.0
   max_epochs: -1
   max_steps: 300000
-  precision: 'bf16'
+  precision: 'bf16-mixed'
   limit_val_batches: 20

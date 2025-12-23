@@ -4,24 +4,24 @@
 #BSUB -J dsb_noise_stft
 
 # select gpu, choose gpuv100, gpua100 or p1 (h100)
-#BSUB -q p1
+#BSUB -q gpua100
 
 # number of GPUs to use
 #BSUB -gpu "num=1:mode=exclusive_process"
 
 # number of cores to use
-#BSUB -n 24
+#BSUB -n 12
 
 # gb memory per core
-#BSUB -R "rusage[mem=1G]"
+#BSUB -R "rusage[mem=2G]"
 # cores is on the same slot
 #BSUB -R "span[hosts=1]"
 
 # walltime
-#BSUB -W 71:59
+#BSUB -W 23:59
 #BSUB -o hpc/output_%J.out 
 #BSUB -e hpc/error_%J.err 
 
 module load python3/3.11.9
 source .venv/bin/activate
-python3 train.py +experiment=dsb_noise_stft trainer.log_every_n_steps=200
+python3 train.py +experiment=dsb_noise_stft trainer.log_every_n_steps=200 continue_from_id=131225234349

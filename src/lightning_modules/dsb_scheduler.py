@@ -36,10 +36,14 @@ class DSBScheduler(BaseScheduler):
     def __init__(
         self, 
         epsilon : float,
+        target: Literal['drift', 'scaled_drift', 'terminal'] = 'drift',
+        condition_on_start: bool = False,
         **kwargs
         ):
         super().__init__()
         self.epsilon = epsilon
+        self.target = target
+        self.condition_on_start = condition_on_start
         
     def get_conditional(self, direction: DIRECTIONS, batch_size: int, device: torch.device) -> Tensor:
         if direction == 'forward':
@@ -50,10 +54,17 @@ class DSBScheduler(BaseScheduler):
         return direction
     
     def sample_training_batch(self, x0 : Tensor, x1 : Tensor, direction : DIRECTIONS, timesteps : Optional[Tensor] = None) -> TensorDict:
+        assert direction in get_args(DIRECTIONS), f"Unsupported direction. Use either: {get_args(DIRECTIONS)}"
+        
         batch_size = x0.size(0)
         
         if timesteps is None:
             timesteps = torch.rand(batch_size, device=x0.device)
+            
+        if direction == 'forward':
+            timesteps = timesteps.clamp(max=0.99)
+        else:
+            timesteps = timesteps.clamp(min=0.01)
             
         t = self.to_dim(timesteps, x0.dim())
         mu_t = (1 - t) * x0 + t * x1
@@ -61,29 +72,52 @@ class DSBScheduler(BaseScheduler):
         noise = torch.randn_like(mu_t)
         xt = mu_t + sigma_t ** 0.5 * noise
         
-        if direction == 'backward':
-            drift = (x0 - xt) / t
-        elif direction == 'forward':
-            drift = (x1 - xt) / (1 - t)
-            
+        accumulated_time = (1 - t) if direction == 'forward' else t
+        terminal = x1 if direction == 'forward' else x0
+        
+        if self.target == 'terminal':
+            target = terminal
+        elif self.target == 'drift':
+            target = (terminal - xt) / accumulated_time
+        elif self.target == 'scaled_drift':
+            target = (terminal - xt) / accumulated_time.sqrt()
+        else:
+            raise ValueError(f"Unsupported target type. Use either: {get_args(Literal['drift', 'scaled_drift', 'terminal'])}")
+        
         conditional = self.get_conditional(direction, batch_size, x0.device)
+        
+        if self.condition_on_start:
+            start = x0 if direction == 'forward' else x1
+            xt = torch.cat([xt, start], dim=1)
             
         return {
             "xt": xt,
-            "drift": drift,
+            "target": target,
             "timesteps": timesteps,
             "conditional": conditional,
         }
     
-    def step(self, xt : Tensor, drift : Tensor, tk_plus_one : float, tk : float, direction : DIRECTIONS) -> Tensor:
+    def step(self, xt : Tensor, model_output : Tensor, tk_plus_one : float, tk : float, direction : DIRECTIONS) -> Tensor:
+        assert direction in get_args(DIRECTIONS), f"Unsupported direction. Use either: {get_args(DIRECTIONS)}"
         assert tk_plus_one > tk, f"tk_plus_one ({tk_plus_one}) must be greater than tk ({tk})."
         
         delta_t = tk_plus_one - tk # the step size
-        xnext_mean = xt + delta_t * drift
+        accumulated_time = (1 - tk) if direction == 'forward' else tk_plus_one
+        
+        if self.target == 'terminal':
+            drift = (model_output - xt) / accumulated_time
+        elif self.target == 'drift':
+            drift = model_output
+        elif self.target == 'scaled_drift':
+            drift = model_output / accumulated_time ** 0.5
+        else:
+            raise ValueError(f"Unsupported target type. Use either: {get_args(Literal['drift', 'scaled_drift', 'terminal'])}")
         
         if direction == 'backward':
+            xnext_mean = xt + delta_t * drift
             xnext_var = self.epsilon * delta_t * tk / tk_plus_one
         elif direction == 'forward':
+            xnext_mean = xt + delta_t * drift
             xnext_var = self.epsilon * delta_t * (1 - tk_plus_one) / (1 - tk)
         
         noise = torch.randn_like(xnext_mean)
@@ -120,19 +154,18 @@ class BaggeScheduler(BaseScheduler):
             "timesteps": timesteps,
         }
         
-    def step(self, xt: Tensor, flow: Tensor, noise: Tensor, tk_plus_one: float, tk: float, forward: bool) -> Tensor:
+    def step(self, xt: Tensor, flow: Tensor, noise: Tensor, tk_plus_one: float, tk: float, direction : DIRECTIONS) -> Tensor:
         delta_t = tk_plus_one - tk
         eps = self.epsilon
         
-        if forward:
-            drift = flow - torch.sqrt(eps * tk / (1 - tk)) * noise
+        if direction == 'forward':
+            drift = flow - (eps * tk / (1 - tk)) ** 0.5 * noise
             mu_next = xt + delta_t * drift
             sigma_next = eps * delta_t * (1 - tk_plus_one) / (1 - tk)
-        else:
-            drift = flow + torch.sqrt(eps * (1 - tk) / tk) * noise
+        elif direction == 'backward':
+            drift = flow + (eps * (1 - tk_plus_one) / tk_plus_one) ** 0.5 * noise
             mu_next = xt - delta_t * drift
             sigma_next = eps * delta_t * tk / tk_plus_one
             
-        noise = torch.randn_like(xt)
-        xt_next = mu_next + sigma_next ** 0.5 * noise
+        xt_next = mu_next + sigma_next ** 0.5 * torch.randn_like(xt)
         return xt_next

@@ -22,3 +22,4 @@ from .audio import (
 )
 from .emnist import EMNISTNoLabel
 from .afhq import AFHQDataset
+from .dsb_dataset import DSBDataset

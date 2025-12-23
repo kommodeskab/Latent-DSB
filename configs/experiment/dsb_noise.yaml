@@ -51,7 +51,7 @@ data:
     sample_rate: 16000
     train: False
 
-  num_workers: 24
+  num_workers: 12
   batch_size: 64
 
 model:

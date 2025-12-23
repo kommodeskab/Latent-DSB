@@ -1,0 +1,74 @@
+# @package _global_
+defaults:
+  - override /trainer: gpu
+  - override /data: vae
+  - override /callbacks: vae
+  - override /model: vae
+  - override /logger: default
+
+project_name: 'vae'
+task_name: 'vae-test'
+
+data:
+  num_workers: 12
+  batch_size: 32
+  drop_last: True
+  shuffle: True
+  pin_memory: True
+  persistent_workers: True
+
+model:
+  model:
+    _target_: src.networks.VAENetwork
+    global_std: False
+
+    encoder:
+      _target_: torch.nn.Conv1d
+      in_channels: 1
+      out_channels: 128
+      kernel_size: 128
+      stride: 64
+      padding: 32
+      padding_mode: 'reflect'
+
+    decoder:
+      _target_: torch.nn.ConvTranspose1d
+      in_channels: 64
+      out_channels: 2
+      kernel_size: 128
+      stride: 64
+      padding: 32
+
+  loss_fn:
+    _target_: src.losses.VAELoss
+    beta: 0.001
+    target_kl: 5.0
+
+  optimizer:
+    _target_: torch.optim.AdamW
+    _partial_: True
+    lr: 1e-4
+    weight_decay: 0.0
+
+  lr_scheduler:
+    scheduler:
+      _target_: torch.optim.lr_scheduler.ConstantLR
+      _partial_: True
+      factor: 1.0
+      total_iters: 1
+    monitor: 'val_loss'
+    interval: 'step'
+    frequency: 1
+
+trainer:
+  fast_dev_run: False
+  enable_checkpointing: True
+  log_every_n_steps: 400
+  reload_dataloaders_every_n_epochs: 1
+  val_check_interval: 5000
+  check_val_every_n_epoch: !!null
+  gradient_clip_val: 1.0
+  max_epochs: -1
+  max_steps: -1
+  precision: 'bf16-mixed'
+  limit_val_batches: 100

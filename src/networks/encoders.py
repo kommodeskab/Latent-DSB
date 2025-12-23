@@ -72,12 +72,14 @@ class STFTEncoderDecoder:
         self,
         n_fft : int,
         hop_length : int,
-        p: int = 1,
+        alpha: float = 1/4,
+        beta: float = 4,
     ):
         self.n_fft = n_fft
         self.hop_length = hop_length
         self.win_length = n_fft
-        self.p = p
+        self.alpha = alpha
+        self.beta = beta
         
     def encode(self, audio : Tensor) -> Tensor:
         if not hasattr(self, 'original_length'):
@@ -96,10 +98,8 @@ class STFTEncoderDecoder:
             return_complex=True
             )
         
+        stft = self.beta * stft.abs() ** self.alpha * torch.exp(1j * stft.angle())
         real, imag = stft.real, stft.imag
-        
-        real = real.sign() * real.abs().pow(self.p)
-        imag = imag.sign() * imag.abs().pow(self.p)
 
         out = torch.stack([real, imag], dim=1)
 
@@ -108,10 +108,8 @@ class STFTEncoderDecoder:
     def decode(self, encoded : Tensor) -> Tensor:
         real, imag = encoded[:, 0], encoded[:, 1]
         
-        real = real.sign() * real.abs().pow(1 / self.p)
-        imag = imag.sign() * imag.abs().pow(1 / self.p)
-        
-        stft = real + 1j * imag
+        stft = (real + 1j * imag) / self.beta
+        stft = stft.abs() ** (1 / self.alpha) * torch.exp(1j * stft.angle())
 
         window = torch.hamming_window(self.win_length, device=stft.device)
         audio = torch.istft(
@@ -231,3 +229,76 @@ class HifiGan:
         if self.original_len is not None:
             decoded = torch.nn.functional.pad(decoded, (0, self.original_len - decoded.size(2)), mode='constant', value=0)
         return decoded
+    
+import torch.nn as nn
+import torch
+from torch.distributions import Normal
+from typing import Optional
+
+class VAENetwork(nn.Module):
+    def __init__(
+        self,
+        encoder: nn.Module,
+        decoder: nn.Module,
+        global_std: Optional[bool] = False,
+    ):
+        super(VAENetwork, self).__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.epsilon = 1e-6
+        self.softplus = nn.Softplus()
+        self.global_std = global_std
+        
+        if self.global_std:
+            self.z_std = nn.Parameter(torch.tensor(1.0))
+            self.x_std = nn.Parameter(torch.tensor(1.0))
+        
+    def encode(self, x: torch.Tensor) -> Normal:
+        out: torch.Tensor = self.encoder(x)
+        
+        if self.global_std:
+            mu = out
+            std = self.softplus.forward(self.z_std).clamp(min=self.epsilon).expand_as(mu)
+        else:
+            mu, std = out.chunk(2, dim=1)
+            std = self.softplus.forward(std).clamp(min=self.epsilon)
+        
+        return Normal(mu, std)
+    
+    def decode(self, z: torch.Tensor) -> Normal:
+        out: torch.Tensor = self.decoder(z)
+        
+        if self.global_std:
+            mu = out
+            std = self.softplus.forward(self.x_std).clamp(min=self.epsilon).expand_as(mu)
+        else:
+            mu, std = out.chunk(2, dim=1)
+            std = self.softplus.forward(std).clamp(min=self.epsilon)
+            
+        return Normal(mu, std)
+    
+from src.utils import model_from_id
+
+class PretrainedVAENetwork:
+    def __init__(self, id: str):
+        self.id = id
+        self.model: VAENetwork = model_from_id(self.id, model_keyword="model")
+        self.model.eval()
+        for param in self.model.parameters():
+            param.requires_grad = False
+        
+    @property
+    def device(self):
+        return next(self.model.parameters()).device
+    
+    def encode(self, x: Tensor) -> Tensor:
+        if self.device != x.device:
+            self.model.to(x.device)
+            
+        return self.model.encode(x).rsample()
+    
+    def decode(self, z: Tensor) -> Tensor:
+        if self.device != z.device:
+            self.model.to(z.device)
+            
+        return self.model.decode(z).mean

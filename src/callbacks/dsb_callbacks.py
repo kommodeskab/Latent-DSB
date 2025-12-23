@@ -5,7 +5,86 @@ import torch
 from src.callbacks.utils import get_batch_from_dataset
 from src.callbacks.callbacks import plot_images
 import matplotlib.pyplot as plt
-from typing import Literal
+from typing import Literal, Optional
+from .metrics import SISDRi, DNSMOS, KAD, WER, SRCS, Metric
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+
+class TestDataset(torch.utils.data.Dataset):
+    def __init__(
+        self,
+        what_test : Literal['clip', 'rir', 'noise'],
+        size: int = 128,
+        ):
+        super().__init__()
+        assert what_test in ['clip', 'rir', 'noise']
+        self.path = f"/work3/s214630/data/{what_test}"
+        self.size = size
+        
+    def __len__(self) -> int:
+        return self.size
+    
+    def __getitem__(self, idx : int) -> tuple[torch.Tensor, torch.Tensor]:
+        path = self.path + f"/batch_{idx}"
+        data = torch.load(path, weights_only=True)
+        return data['x0'], data['x1']
+
+class EvalMetricCallback(Callback):
+    def __init__(
+        self, 
+        what_test : Literal['clip', 'rir', 'noise'],
+        dataset_size: int = 128,
+    ):
+        super().__init__()
+        self.what_test = what_test
+        self.metrics: dict[str, Metric] = {
+            'WER' : WER(sample_rate=16_000),
+            'SRCS' : SRCS(sample_rate=16_000),
+            'DNSMOS' : DNSMOS(sample_rate=16_000),
+            'SISDRi' : SISDRi(),
+        }
+        self.eval_dataset = TestDataset(
+            what_test=what_test,
+            size=dataset_size,
+        )
+    
+    def on_validation_epoch_end(self, trainer : Trainer, pl_module : DSB):
+        device = pl_module.device
+        
+        dataloader = DataLoader(
+            self.eval_dataset,
+            batch_size=16,
+            shuffle=False,
+        )
+        for x0, x1 in tqdm(dataloader, desc="Evaluating metrics"):
+            x0, x1 = x0.to(device), x1.to(device)
+            seq_len = int(16_000 * 4.096)
+            x0 = x0[:, :, :seq_len]
+            x1 = x1[:, :, :seq_len]
+            
+            x1_encoded = pl_module.encode(x1)
+            x0_encoded_hat = pl_module.sample(
+                x1_encoded, 
+                direction='backward',
+                scheduler_type='cosine',
+                num_steps=30,
+                return_trajectory=False,
+                verbose=False,
+            )
+            x0_hat = pl_module.decode(x0_encoded_hat)
+            
+            for metric_name, metric in self.metrics.items():
+                if metric_name in ['WER', 'SRCS']:
+                    metric.update(x0_hat, x0)
+                elif metric_name in ['DNSMOS']:
+                    metric.update(x0_hat)
+                elif metric_name in ['SISDRi']:
+                    metric.update(x0_hat, x0, x1)
+            
+        for metric_name, metric in self.metrics.items():
+            value, _ = metric.compute()
+            pl_module.log(f'Eval/{metric_name}', value)
+            metric.reset()
 
 class DSBCallback(Callback):
     def __init__(
@@ -13,21 +92,22 @@ class DSBCallback(Callback):
         num_steps : int = 50,
         scheduler_type : str = 'cosine',
         what_media : Literal['image', 'audio'] = 'image',
+        sample_rate: Optional[int] = None,
     ):
         super().__init__()
         self.num_steps = num_steps
         self.scheduler_type = scheduler_type
         self.what_media = what_media
+        self.sample_rate = sample_rate
         
     def on_train_start(self, trainer : Trainer, pl_module : DSB):
-        self.datamodule : FlowMatchingDM = trainer.datamodule
-        self.num_workers = self.datamodule.num_workers
+        self.datamodule = pl_module.datamodule
         
         logger = pl_module.logger
         num_samples = 16
         
-        self.x0_batch = get_batch_from_dataset(self.datamodule.x0_valset, num_samples, shuffle=False)
-        self.x1_batch = get_batch_from_dataset(self.datamodule.x1_valset, num_samples, shuffle=False)
+        self.x0_batch = get_batch_from_dataset(pl_module.valset.x0_dataset, num_samples, shuffle=False)
+        self.x1_batch = get_batch_from_dataset(pl_module.valset.x1_dataset, num_samples, shuffle=False)
 
         x0_encoded = pl_module.encode(self.x0_batch[:1].to(pl_module.device)).cpu()
         x1_encoded = pl_module.encode(self.x1_batch[:1].to(pl_module.device)).cpu()
@@ -50,6 +130,8 @@ class DSBCallback(Callback):
                     axs[i].imshow(encoding[i].cpu().numpy())
                     axs[i].set_title(f'Channel {i}')
                     axs[i].axis('off')
+                    # add a colorbar
+                    plt.colorbar(axs[i].images[0], ax=axs[i])
                     
                 logger.log_image(
                     key = title,
@@ -69,7 +151,6 @@ class DSBCallback(Callback):
             plt.close('all')
             
         elif self.what_media == 'audio':
-            self.sample_rate : int = self.datamodule.original_dataset.sample_rate
             x0_audio = [audio.cpu().flatten().numpy() for audio in self.x0_batch]
             x1_audio = [audio.cpu().flatten().numpy() for audio in self.x1_batch]
             audios = x0_audio + x1_audio
@@ -141,7 +222,7 @@ class DSBCallback(Callback):
                 caption = caption,
                 step = step,
             )
-        
-    def on_validation_end(self, trainer : Trainer, pl_module : DSB):
+                    
+    def on_validation_epoch_end(self, trainer : Trainer, pl_module : DSB):
         self.visualize_samples(pl_module)
         

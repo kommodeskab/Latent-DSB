@@ -4,7 +4,9 @@ import numpy as np
 import torch as th
 import torch.nn as nn
 import torch.nn.functional as F
+import logging
 
+logger = logging.getLogger(__name__)
 
 # PyTorch 1.7 has SiLU, but we support PyTorch 1.5.
 class SiLU(nn.Module):
@@ -574,32 +576,35 @@ class UNetModel(nn.Module):
 
     def __init__(
         self,
-        image_size,
-        in_channels,
-        model_channels,
-        out_channels,
-        num_res_blocks,
-        attention_resolutions,
-        dropout=0,
-        channel_mult=(1, 2, 4, 8),
-        conv_resample=True,
-        dims=2,
-        num_classes=None,
-        use_checkpoint=False,
-        use_fp16=False,
-        num_heads=1,
-        num_head_channels=-1,
-        num_heads_upsample=-1,
-        use_scale_shift_norm=False,
-        resblock_updown=False,
-        use_new_attention_order=False,
+        in_channels: int,
+        model_channels: int,
+        out_channels: int,
+        num_res_blocks: int,
+        attention_resolutions: tuple[int],
+        dropout: float = 0,
+        channel_mult: tuple[int] = (1, 2, 4, 8),
+        conv_resample: bool = True,
+        dims: int = 2,
+        num_classes: int | None =None,
+        use_checkpoint: bool = False,
+        num_heads: int = 1,
+        num_outputs: int = 1,
+        num_head_channels: int = -1,
+        num_heads_upsample: int = -1,
+        use_scale_shift_norm: bool = False,
+        resblock_updown: bool = False,
+        use_new_attention_order: bool = False,
+        **kwargs,
     ):
         super().__init__()
+        
+        logger.info("UNetModel received unused kwargs in UNetModel: %s", str(kwargs))
 
         if num_heads_upsample == -1:
             num_heads_upsample = num_heads
+            
+        out_channels = out_channels * num_outputs
 
-        self.image_size = image_size
         self.in_channels = in_channels
         self.model_channels = model_channels
         self.out_channels = out_channels
@@ -610,8 +615,8 @@ class UNetModel(nn.Module):
         self.conv_resample = conv_resample
         self.num_classes = num_classes
         self.use_checkpoint = use_checkpoint
-        self.dtype = th.float16 if use_fp16 else th.float32
         self.num_heads = num_heads
+        self.num_outputs = num_outputs
         self.num_head_channels = num_head_channels
         self.num_heads_upsample = num_heads_upsample
 
@@ -763,7 +768,7 @@ class UNetModel(nn.Module):
             zero_module(conv_nd(dims, input_ch, out_channels, 3, padding=1)),
         )
 
-    def forward(self, x, timesteps, y=None):
+    def forward(self, x: th.Tensor, timesteps: th.Tensor, y: th.Tensor | None = None) -> th.Tensor | tuple[th.Tensor, ...]:
         """
         Apply the model to an input batch.
 
@@ -772,8 +777,8 @@ class UNetModel(nn.Module):
         :param y: an [N] Tensor of labels, if class-conditional.
         :return: an [N x C x ...] Tensor of outputs.
         """
-        orig_dim = x.dim()
-        if orig_dim == 3:
+        dim = x.dim()
+        if dim != 4:
             x = x.unsqueeze(1)
             
         assert (y is not None) == (
@@ -786,8 +791,6 @@ class UNetModel(nn.Module):
         if self.num_classes is not None:
             assert y.shape == (x.shape[0],)
             emb = emb + self.label_emb(y)
-        # remove dtype conversion, this happens in lightning
-        # h = x.type(self.dtype)
         h = x
         for module in self.input_blocks:
             h = module(h, emb)
@@ -799,9 +802,12 @@ class UNetModel(nn.Module):
         h = h.type(x.dtype)
         
         out = self.out(h)
-
-        if orig_dim == 3:
+        
+        if dim != 4:
             out = out.squeeze(1)
+        
+        if self.num_outputs != 1:
+            return th.chunk(out, chunks=self.num_outputs, dim=1)
 
         return out
 

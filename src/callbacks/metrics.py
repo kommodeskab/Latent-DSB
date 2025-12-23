@@ -21,7 +21,10 @@ class Metric:
     
     def update(self, *args, **kwargs) -> None: ...
     
-    def compute(self) -> float:
+    def reset(self) -> None:
+        self.values = []
+    
+    def compute(self) -> tuple[float, float]:
         vals = torch.tensor(self.values)
         mean, std = vals.mean(), vals.std()
         return mean.item(), std.item()
@@ -94,7 +97,7 @@ class MelCepstralDistance(Metric):
 
         return mcd
 
-class SISDRi:
+class SISDRi(Metric):
     def __init__(self):
         self.values = []
     
@@ -134,7 +137,7 @@ class MOS:
         return mos
     
 class KAD(ResampleMixin):
-    def __init__(self, sample_rate : int, device : str = 'cuda'):
+    def __init__(self, sample_rate : int):
         super().__init__()
         self.alpha = 100
         self.sigma = 1
@@ -145,12 +148,18 @@ class KAD(ResampleMixin):
         self.generated_embeddings = []
         self.real_embeddings = []
         
-        self.device = device
-        self.model = ClapAudioModelWithProjection.from_pretrained("laion/clap-htsat-fused").to(device)
+        self.model = ClapAudioModelWithProjection.from_pretrained("laion/clap-htsat-fused")
         self.processor = ClapProcessor.from_pretrained("laion/clap-htsat-fused")
         self.model.eval()
         
+    @property
+    def device(self) -> torch.device:
+        return next(self.model.parameters()).device
+        
     def embed(self, audio : Tensor) -> Tensor:
+        if self.device != audio.device:
+            self.model = self.model.to(audio.device)
+        
         audio = self.resample(audio.cpu())
         with torch.no_grad():
             inputs = self.processor(audios=audio, return_tensors="pt", sampling_rate=48000).to(self.device)
@@ -208,19 +217,22 @@ class KAD(ResampleMixin):
 
     
 class WER(Metric, ResampleMixin):
-    def __init__(self, sample_rate : int, device : str):
+    def __init__(self, sample_rate : int):
         # initialize models for transcription
         from transformers import WhisperProcessor, WhisperForConditionalGeneration
-        self.device = device
         self.sample_rate = sample_rate
         self.target_sample_rate = 16000 # Whisper model expects 16kHz
         self.processor = WhisperProcessor.from_pretrained("openai/whisper-small")
-        self.model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-small").to(self.device)
+        self.model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-small")
         self.model.config.forced_decoder_ids = None
         self.model.eval()
         self.real_transcriptions = []
         self.generated_transcriptions = []
         self.values = []
+        
+    @property
+    def device(self) -> torch.device:
+        return next(self.model.parameters()).device
     
     @staticmethod
     def normalize_text(s : str) -> str:
@@ -247,6 +259,9 @@ class WER(Metric, ResampleMixin):
         return transcriptions
     
     def update(self, generated : Tensor, real : Tensor) -> None:
+        if generated.device != self.device:
+            self.model = self.model.to(generated.device)
+        
         real = self.resample(real)
         generated = self.resample(generated)
         real_transcriptions = self.batch_transcribe(real)
@@ -259,15 +274,17 @@ class WER(Metric, ResampleMixin):
             self.values.append(wer.item())
 
 class DNSMOS(Metric, ResampleMixin):
-    def __init__(self, sample_rate : int = 16000, device : str = 'cuda'):
+    def __init__(self, sample_rate : int = 16000):
         self.sample_rate = sample_rate
         self.target_sample_rate = 16000
-        self.device = device
         self.values = []
     
     @torch.no_grad()
     def evaluate(self, samples : Tensor) -> Tensor:
-        mos = deep_noise_suppression_mean_opinion_score(samples, fs=self.target_sample_rate, personalized=False, device=self.device)
+        if samples.dim() == 3:
+            samples = samples.mean(dim=1)
+            
+        mos = deep_noise_suppression_mean_opinion_score(samples, fs=self.target_sample_rate, personalized=False, device=samples.device)
         return mos[:, 3] # the 4th column is the mean opinion score
     
     def update(self, samples : Tensor) -> None:
@@ -276,16 +293,20 @@ class DNSMOS(Metric, ResampleMixin):
         self.values.extend(mos.tolist())
         
 class SRCS(Metric, ResampleMixin):
-    def __init__(self, sample_rate : int, device : str):
+    def __init__(self, sample_rate : int):
         import logging
         logging.getLogger('nemo_logger').setLevel(logging.ERROR)
         self.sample_rate = sample_rate
         self.target_sample_rate = 16000
         from nemo.collections.asr.models import EncDecSpeakerLabelModel
-        self.model : EncDecSpeakerLabelModel = EncDecSpeakerLabelModel.from_pretrained("nvidia/speakerverification_en_titanet_large")
-        self.model = self.model.to(device)
+        self.model: EncDecSpeakerLabelModel = EncDecSpeakerLabelModel.from_pretrained("nvidia/speakerverification_en_titanet_large")
+        self.model = self.model
         self.model.freeze()
         self.values = []
+        
+    @property
+    def device(self) -> torch.device:
+        return next(self.model.parameters()).device
     
     @torch.no_grad()
     def get_embedding(self, audio : Tensor) -> Tensor:
@@ -297,6 +318,9 @@ class SRCS(Metric, ResampleMixin):
         return emb
     
     def update(self, generated : Tensor, real : Tensor):
+        if generated.device != self.device:
+            self.model = self.model.to(generated.device)
+            
         assert real.shape == generated.shape, f"Shapes of real and generated tensors must match: {real.shape} != {generated.shape}"
         real_emb = self.get_embedding(real) # shape = (batch_size, 192)
         generated_emb = self.get_embedding(generated) # shape = (batch_size, 192)

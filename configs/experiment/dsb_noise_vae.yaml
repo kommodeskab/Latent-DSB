@@ -7,8 +7,7 @@ defaults:
   - override /logger: default
 
 project_name: 'dsb'
-task_name: 'clip'
-compile: False
+task_name: 'dsb noise vae'
 
 AUDIO_LENGTH: 4.096
 
@@ -22,7 +21,10 @@ callbacks:
   eval_callback:
     _target_: src.callbacks.EvalMetricCallback
     what_test: 'clip'
-    dataset_size: 128
+    dataset_size: 32
+
+  log_grads:
+    log_every_n_steps: 1
 
 data:
   dataset:
@@ -36,12 +38,10 @@ data:
       train: True
 
     x1_dataset:
-      _target_: src.dataset.ClippedVCTK
+      _target_: src.dataset.VCTKWHAM
       length_seconds: ${AUDIO_LENGTH}
       sample_rate: 16000
       train: True
-      no_clip_prob: 0.0
-      gain_range: [5, 30]
 
   val_dataset:
     _target_: src.dataset.DSBDataset
@@ -54,12 +54,10 @@ data:
       train: False
 
     x1_dataset:
-      _target_: src.dataset.ClippedVCTK
+      _target_: src.dataset.VCTKWHAM
       length_seconds: ${AUDIO_LENGTH}
       sample_rate: 16000
       train: False
-      no_clip_prob: 0.0
-      gain_range: [5, 30]
 
   num_workers: 12
   batch_size: 4
@@ -67,22 +65,25 @@ data:
   drop_last: True
 
 model:
-  pretraining_steps: 150000
+  _target_: src.lightning_modules.DSB
+
+  pretraining_steps: 100000
   inference_steps: 20
   cache_batch_size: 64
   populate_every_n_steps: 4096
 
   model:
-    _target_: src.networks.dhariwal.UNetModel
-    in_channels: 2
-    out_channels: 2
-    model_channels: 64
-    num_res_blocks: 2
-    attention_resolutions: [8]
+    _target_: src.networks.ConditionalTimeSeriesTransformer
+    input_dim: 256
+    d_model: 512
+    nhead: 8
+    num_layers: 20
+    causal: False
     dropout: 0.0
-    channel_mult: [1, 2, 4, 6]
     num_classes: 2
-    num_heads: 4
+
+  loss_fn:
+    _target_: src.losses.SmoothL1Loss
 
   scheduler:
     _target_: src.lightning_modules.dsb_scheduler.DSBScheduler
@@ -90,15 +91,9 @@ model:
     condition_on_start: False
     target: 'drift'
 
-  loss_fn:
-    _target_: src.losses.MSELoss
-
   encoder_decoder: 
-    _target_: src.networks.STFTEncoderDecoder
-    n_fft: 510
-    hop_length: 128
-    alpha: 0.25
-    beta: 1.0
+    _target_: src.networks.PretrainedVAENetwork
+    id: "271125053433"
 
   optimizer:
     _target_: torch.optim.AdamW
@@ -121,10 +116,10 @@ trainer:
   enable_checkpointing: True
   log_every_n_steps: 1
   reload_dataloaders_every_n_epochs: 1
-  val_check_interval: 5000
+  val_check_interval: 3000
   check_val_every_n_epoch: !!null
   gradient_clip_val: 1.0
   max_epochs: -1
   max_steps: 300000
-  precision: 'bf16-mixed'
+  precision: 'bf16'
   limit_val_batches: 20

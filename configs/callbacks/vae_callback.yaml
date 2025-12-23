@@ -1,0 +1,2 @@
+vae_callback:
+  _target_: src.callbacks.VAECallback

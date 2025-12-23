@@ -5,14 +5,12 @@ from datetime import datetime
 import glob
 from typing import Any
 import wandb
-from torch import Tensor
-from typing import Dict
 import contextlib
 import random
 import numpy as np
 import torch
-
-Data = Dict[str, Tensor]
+from hydra.utils import instantiate
+import torch.nn as nn
 
 @contextlib.contextmanager
 def temporary_seed(seed : int):
@@ -138,10 +136,21 @@ def config_from_id(experiment_id : str) -> dict:
 
 def model_config_from_id(experiment_id : str, model_keyword : str) -> dict:
     config = config_from_id(experiment_id)
-    if 'PretrainedModel' in config['model'][model_keyword]['_target_']:
-        new_id = config['model'][model_keyword]['experiment_id']
-        return model_config_from_id(new_id, model_keyword)
     return config['model'][model_keyword]
+
+def model_from_id(id: str, model_keyword : str) -> nn.Module:
+    config = config_from_id(id)
+    model_config = config['model']
+    module: nn.Module = instantiate(model_config)
+    
+    ckpt_path = get_ckpt_path(id, last=True)
+    ckpt = torch.load(ckpt_path, map_location='cpu', weights_only=True)
+    module.load_state_dict(ckpt['state_dict'])
+    
+    model = getattr(module, model_keyword)
+    print(f"Loaded model '{model_keyword}' from experiment id {id} at checkpoint {ckpt_path}.")
+    
+    return model
             
 if __name__ == "__main__":
     what_logs_to_delete()

@@ -1,4 +1,4 @@
-_target_: src.data_modules.FlowMatchingDM
+_target_: src.data_modules.BaseDM
 
 batch_size: 64
-num_workers: 4
+num_workers: 12

@@ -1,6 +1,5 @@
 import torch
 from argparse import ArgumentParser
-from src.lightning_modules.dsb import get_dsb_iterations, load_dsb_model
 from GFB import GFB
 from SPADE import SPADE
 from WPE import WPE
@@ -111,7 +110,7 @@ elif 'DSB' in experiment_id:
     _, experiment_id = experiment_id.split('_')
     
     dsb = load_dsb_model(experiment_id)
-    dsb.scheduler.noise_factor = noise_factor
+    dsb.scheduler.epsilon = noise_factor
     
     from src.networks import STFTEncoderDecoder, HifiGan
     if isinstance(dsb.encoder_decoder, STFTEncoderDecoder):
@@ -136,28 +135,7 @@ elif experiment_id == 'SPADE':
     timeschedule = None
 
 else:
-    print(f"Using DSB model with experiment_id: {experiment_id}")
-    if dsb_iteration is None:
-        dsb_iterations = get_dsb_iterations(experiment_id)
-        dsb_iteration = max(dsb_iterations)
-        params['dsb_iteration'] = dsb_iteration
-        print(f"Using DSB model with iteration: {dsb_iteration}")
-        
-    dsb = load_dsb_model(experiment_id, dsb_iteration)
-    dsb.eval()
-    if num_steps is not None:
-        print(f"Setting num_steps to {num_steps}")
-        dsb.scheduler.set_timesteps(num_steps)
-    
-    from src.networks import STFTEncoderDecoder, HifiGan
-    if isinstance(dsb.encoder_decoder, STFTEncoderDecoder):
-        length_seconds = 4.096
-    elif isinstance(dsb.encoder_decoder, HifiGan):
-        length_seconds = 4.47
-    else:
-        raise ValueError(f"Unknown encoder_decoder type: {type(dsb.encoder_decoder)}")
-        
-    timeschedule = dsb.scheduler.gammas_bar
+    raise ValueError(f"Unknown experiment_id: {experiment_id}")
 
 dsb.to(device)
 

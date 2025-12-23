@@ -7,71 +7,96 @@ defaults:
   - override /logger: default
 
 project_name: 'dsb'
-task_name: 'dsb rir stft'
+task_name: 'rir'
+compile: False
 
 AUDIO_LENGTH: 4.096
 
 callbacks:
   dsb_callback:
     _target_: src.callbacks.DSBCallback
-    cache_size: 3840
-    validation_cache_size: 32
-    cache_batch_size: 64
-    steps_before_cache: 150000
-    refresh_every_n_steps: 19200
     num_steps: 50
-    cache_num_steps: 25
     scheduler_type: 'cosine'
-    plot_every_n_steps: 10000
-    enable_checkpointing: True
     what_media: 'audio'
+    sample_rate: 16000
+  eval_callback:
+    _target_: src.callbacks.EvalMetricCallback
+    what_test: 'rir'
+    dataset_size: 128
 
 data:
-  x0_dataset:
-    _target_: src.dataset.AllVCTK
-    length_seconds: ${AUDIO_LENGTH}
-    sample_rate: 16000
-    train: True
+  dataset:
+    _target_: src.dataset.DSBDataset
+    cache_size: 512
 
-  x0_valset:
-    _target_: src.dataset.AllVCTK
-    length_seconds: 4.096
-    sample_rate: 16000
-    train: False
+    x0_dataset:
+      _target_: src.dataset.AllVCTK
+      length_seconds: ${AUDIO_LENGTH}
+      sample_rate: 16000
+      train: True
 
-  x1_dataset:
-    _target_: src.dataset.VCTKRIR
-    length_seconds: ${AUDIO_LENGTH}
-    sample_rate: 16000
-    train: True
+    x1_dataset:
+      _target_: src.dataset.VCTKRIR
+      length_seconds: ${AUDIO_LENGTH}
+      sample_rate: 16000
+      train: True
 
-  x1_valset:
-    _target_: src.dataset.VCTKRIR
-    length_seconds: 4.096
-    sample_rate: 16000
-    train: False
+  val_dataset:
+    _target_: src.dataset.DSBDataset
+    cache_size: 0
+  
+    x0_dataset:
+      _target_: src.dataset.AllVCTK
+      length_seconds: ${AUDIO_LENGTH}
+      sample_rate: 16000
+      train: False
 
-  num_workers: 24
-  batch_size: 8
+    x1_dataset:
+      _target_: src.dataset.VCTKRIR
+      length_seconds: ${AUDIO_LENGTH}
+      sample_rate: 16000
+      train: False
+
+  num_workers: 12
+  batch_size: 4
+  shuffle: False
+  drop_last: True
 
 model:
-  epsilon: 2.0
+  pretraining_steps: 150000
+  inference_steps: 20
+  cache_batch_size: 64
+  populate_every_n_steps: 4096
 
   model:
     _target_: src.networks.dhariwal.UNetModel
-    image_size: 32
-    in_channels: 2
-    out_channels: 2
+    in_channels: 3
+    out_channels: 3
     model_channels: 64
     num_res_blocks: 2
-    attention_resolutions: [16, 8]
-    dropout: 0.1
-    channel_mult: [1, 2, 4, 8]
+    attention_resolutions: [8]
+    dropout: 0.0
+    channel_mult: [1, 2, 4, 6]
     num_classes: 2
     num_heads: 4
-  
-  encoder_decoder:
-    _target_: src.networks.STFTEncoderDecoder
+
+  scheduler:
+    _target_: src.lightning_modules.dsb_scheduler.DSBScheduler
+    epsilon: 2.0
+    condition_on_start: False
+    target: 'drift'
+
+  loss_fn:
+    _target_: src.losses.SmoothL1Loss
+
+  encoder_decoder: 
+    # _target_: src.networks.STFTEncoderDecoder
+    # n_fft: 510
+    # hop_length: 128
+    # alpha: 0.25
+    # beta: 1.0
+
+    _target_: src.networks.PolarSTFTEncoderDecoder
     n_fft: 510
     hop_length: 128
 
@@ -93,13 +118,13 @@ model:
 
 trainer:
   fast_dev_run: False
-  enable_checkpointing: False
+  enable_checkpointing: True
   log_every_n_steps: 1
   reload_dataloaders_every_n_epochs: 1
-  val_check_interval: 3000
+  val_check_interval: 5000
   check_val_every_n_epoch: !!null
   gradient_clip_val: 1.0
   max_epochs: -1
   max_steps: 300000
-  precision: 'bf16'
-  limit_val_batches: 10
+  precision: 'bf16-mixed'
+  limit_val_batches: 20

@@ -1,6 +1,8 @@
 from src.networks.simple_models import SimpleNetwork, SimpleNetworkImages
-from src.networks.unets import UNet1D, UNet2D, UNet1D50
-from src.networks.basetorchmodule import PretrainedModel
-from src.networks.encoders import IdentityEncoderDecoder, BaseEncoderDecoder, STFTEncoderDecoder, HifiGan, StableDiffusionXL, PolarSTFTEncoderDecoder, OpenSoundEncoder
+from src.networks.encoders import IdentityEncoderDecoder, BaseEncoderDecoder, STFTEncoderDecoder, HifiGan, StableDiffusionXL, PolarSTFTEncoderDecoder, OpenSoundEncoder, PretrainedVAENetwork
 from src.networks.gfb import STFTbackbone, AltSTFTbackbone
 from src.networks.dhariwal import UNetModel
+from src.networks.encoders import VAENetwork
+from src.networks.unet_1d import UNet1D
+from src.networks.huggingface import HuggingfaceUNet1D
+from src.networks.transformer import ConditionalTimeSeriesTransformer

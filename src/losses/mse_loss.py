@@ -1,8 +1,9 @@
 import torch.nn as nn
 import torch
 from omegaconf.listconfig import ListConfig
+from src.losses import BaseLoss
 
-class MSELoss(nn.Module):
+class MSELoss(BaseLoss):
     def __init__(self):
         super().__init__()
         self.mse_loss = nn.MSELoss()
@@ -12,7 +13,7 @@ class MSELoss(nn.Module):
         loss = self.mse_loss.forward(x_hat, x)
         return {"loss": loss}
 
-class SmooothL1Loss(nn.Module):
+class SmoothL1Loss(nn.Module):
     def __init__(self, beta: float = 1.0):
         super().__init__()
         self.smooth_l1_loss = nn.SmoothL1Loss(beta=beta)

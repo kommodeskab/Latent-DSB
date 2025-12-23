@@ -6,18 +6,26 @@ import torch
 from contextlib import contextmanager
 import random
 import numpy as np
+from torch.optim import Optimizer
+from typing import Optional
+from functools import partial
+from torch.optim.lr_scheduler import LRScheduler
+from src.data_modules import BaseDM
 
 class BaseLightningModule(pl.LightningModule):
-    def __init__(self):
+    def __init__(
+        self,
+        optimizer: Optional[partial[Optimizer]] = None,
+        lr_scheduler: Optional[dict[str, partial[LRScheduler] | str]] = None,
+        ):
         super().__init__()
+        self.partial_optimizer = optimizer
+        self.partial_lr_scheduler = lr_scheduler
         
-    def _convert_dict_losses(self, losses, suffix = "", prefix = ""):
-        if suffix:
-            losses = {f"{k}/{suffix}": v for k, v in losses.items()}
-        if prefix:
-            losses = {f"{prefix}/{k}": v for k, v in losses.items()}
-        return losses
-    
+    @property
+    def datamodule(self) -> BaseDM:
+        return self.trainer.datamodule
+        
     @property
     def logger(self) -> WandbLogger:
         return self.trainer.logger
@@ -67,3 +75,27 @@ class BaseLightningModule(pl.LightningModule):
 
         # Apply initialization to both networks
         model.apply(initialize)
+        
+    def common_step(self, batch: torch.Tensor, batch_idx: int) -> dict[str, torch.Tensor]:
+        raise NotImplementedError("This method should be implemented in subclasses.")
+    
+    def training_step(self, batch: torch.Tensor, batch_idx: int) -> dict[str, torch.Tensor]:
+        return self.common_step(batch, batch_idx)
+    
+    def validation_step(self, batch: torch.Tensor, batch_idx: int) -> dict[str, torch.Tensor]:
+        with self.fix_validation_seed():
+            return self.common_step(batch, batch_idx)
+        
+    def configure_optimizers(self):
+        assert self.partial_optimizer is not None, "Optimizer must be provided during training."
+        assert self.partial_lr_scheduler is not None, "Learning rate scheduler must be provided during training."
+        
+        optim = self.partial_optimizer(self.parameters())
+        scheduler = self.partial_lr_scheduler.pop('scheduler')(optim)
+        return {
+            'optimizer': optim,
+            'lr_scheduler':  {
+                'scheduler': scheduler,
+                **self.partial_lr_scheduler
+            }
+        }
