@@ -80,22 +80,6 @@ def get_ckpt_path(experiment_id : str, last : bool = True, filename : str | None
     assert os.path.exists(path), f"Checkpoint not found at {path}"
     return path
 
-def filter_dict_by_prefix(d : dict[str, Any], prefixs : list[str], remove_prefix : bool = False) -> dict:
-    """
-    Only keep the key-value pairs in the dictionary if the key starts with any of the strings in prefix list.
-    If remove_prefix is True, the prefix will be removed from the key.
-    """
-    new_dict = {}
-    for k, v in d.items():
-        for prefix in prefixs:
-            if k.startswith(prefix):
-                if remove_prefix:
-                    new_dict[k[len(prefix):]] = v
-                else:
-                    new_dict[k] = v
-                break
-    return new_dict
-
 def what_logs_to_delete():
     project_names = wandb.Api().projects()
     project_names = [project.name for project in project_names]

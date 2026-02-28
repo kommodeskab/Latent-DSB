@@ -24,9 +24,9 @@ class VAECallback(Callback):
                 z_mu, z_std = q_z.mean[i], q_z.stddev[i]
                 fig, axs = plt.subplots(2, 1, figsize=(6, 4))
                 axs: list[plt.Axes]
-                axs[0].imshow(z_mu.cpu().float().numpy(), aspect='auto', cmap='viridis')
+                axs[0].imshow(z_mu.cpu().float().numpy(), aspect='auto', cmap='viridis', interpolation='none')
                 axs[0].set_title('Latent Mean (q_z.mu)')
-                axs[1].imshow(z_std.cpu().float().numpy(), aspect='auto', cmap='viridis')
+                axs[1].imshow(z_std.cpu().float().numpy(), aspect='auto', cmap='viridis', interpolation='none')
                 axs[1].set_title('Latent Stddev (q_z.stddev)')
                 
                 for ax in axs:

@@ -127,7 +127,7 @@ class DSBCallback(Callback):
                     axs = [axs]
                 
                 for i in range(n_channels):
-                    axs[i].imshow(encoding[i].cpu().numpy())
+                    axs[i].imshow(encoding[i].cpu().numpy(), interpolation='none')
                     axs[i].set_title(f'Channel {i}')
                     axs[i].axis('off')
                     # add a colorbar

@@ -68,3 +68,46 @@ class DSBDataset(IterableDataset):
                 x1_f, x1_b = self.random_sample(self.x1_dataset), self.random_sample(self.x1_dataset)
                 x0_f, x0_b = self.random_sample(self.x0_dataset), self.random_sample(self.x0_dataset)
                 yield x0_f, x1_f, x0_b, x1_b
+                
+class _Helper(Dataset):
+    def __init__(
+        self,
+        dataset: Dataset,
+        x0: bool,
+    ):
+        super().__init__()
+        self.dataset = dataset
+        self.x0 = x0
+    
+    def __len__(self) -> int:
+        return len(self.dataset)
+    
+    def __getitem__(self, idx: int) -> Tensor:
+        x0, x1 = self.dataset[idx]
+        return x0 if self.x0 else x1
+
+class PairedDSBDataset(Dataset):
+    def __init__(
+        self,
+        trainset: Dataset,
+    ):
+        super().__init__()
+        # this is done to be compatible with dsb callbacks
+        self.x0_dataset = _Helper(trainset, x0 = True)
+        self.x1_dataset = _Helper(trainset, x0 = False)
+        self.trainset = trainset
+        
+    def __len__(self) -> int:
+        return len(self.trainset)
+    
+    def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        x0, x1 = self.trainset[idx]
+        return x0, x1, x0, x1
+    
+    @property
+    def forward_cache(self) -> Cache:
+        raise NotImplementedError("PairedDSBDataset does not use forward_cache")
+    
+    @property
+    def backward_cache(self) -> Cache:
+        raise NotImplementedError("PairedDSBDataset does not use backward_cache")

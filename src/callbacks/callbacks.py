@@ -20,7 +20,7 @@ def plot_images(samples : Tensor, height : int | None = None, width : int | None
     for i in range(height):
         for j in range(width):
             ax = axs[i, j] if height > 1 else axs[j]
-            ax.imshow(samples[i * height + j], cmap=cmap)
+            ax.imshow(samples[i * height + j], cmap=cmap, interpolation='none')
             ax.axis('off')
     return fig
 
@@ -62,7 +62,7 @@ def visualize_encodings(encodings : Tensor) -> tuple[Figure, Figure]:
     norm = plt.Normalize(vmin=v_min, vmax=v_max)
     cmap = 'gray' if n_channels == 1 else 'viridis'
     for i in range(n_channels):
-        im = axs[i].imshow(encodings[i], cmap=cmap, norm=norm)
+        im = axs[i].imshow(encodings[i], cmap=cmap, norm=norm, interpolation='none')
         axs[i].axis('off')
     cbar = fig.colorbar(im, ax=axs, orientation='horizontal', fraction=0.046, pad=0.04)
     cbar.set_label('Intensity')

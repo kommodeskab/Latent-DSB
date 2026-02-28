@@ -1,13 +1,13 @@
 # @package _global_
 defaults:
   - override /trainer: gpu
-  - override /data: dsb
+  - override /data: lombard
   - override /callbacks: dsb
   - override /model: dsb
   - override /logger: default
 
 project_name: 'dsb'
-task_name: 'rir'
+task_name: 'lombard'
 compile: False
 
 AUDIO_LENGTH: 4.096
@@ -19,10 +19,6 @@ callbacks:
     scheduler_type: 'cosine'
     what_media: 'audio'
     sample_rate: 16000
-  eval_callback:
-    _target_: src.callbacks.EvalMetricCallback
-    what_test: 'rir'
-    dataset_size: 128
 
 data:
   dataset:
@@ -36,10 +32,10 @@ data:
       train: True
 
     x1_dataset:
-      _target_: src.dataset.VCTKRIR
+      _target_: src.dataset.AllLombardDataset
       length_seconds: ${AUDIO_LENGTH}
       sample_rate: 16000
-      train: True
+      split: 'train'
 
   val_dataset:
     _target_: src.dataset.DSBDataset
@@ -52,53 +48,49 @@ data:
       train: False
 
     x1_dataset:
-      _target_: src.dataset.VCTKRIR
+      _target_: src.dataset.AllLombardDataset
       length_seconds: ${AUDIO_LENGTH}
       sample_rate: 16000
-      train: False
+      split: 'validation'
 
-  num_workers: 12
+  num_workers: 16
   batch_size: 4
   shuffle: False
   drop_last: True
 
 model:
-  pretraining_steps: 150000
+  pretraining_steps: 150000 # only pretrain
   inference_steps: 20
   cache_batch_size: 64
   populate_every_n_steps: 4096
 
   model:
     _target_: src.networks.dhariwal.UNetModel
-    in_channels: 3
-    out_channels: 3
+    in_channels: 2
+    out_channels: 2
     model_channels: 64
     num_res_blocks: 2
-    attention_resolutions: []
-    dropout: 0.0
-    channel_mult: [1, 1, 1, 1]
+    attention_resolutions: [16, 8]
+    dropout: 0.1
+    channel_mult: [1, 2, 4, 8]
     num_classes: 2
     num_heads: 4
 
   scheduler:
     _target_: src.lightning_modules.dsb_scheduler.DSBScheduler
-    epsilon: 2.0
+    epsilon: 0.5
     condition_on_start: False
     target: 'drift'
 
   loss_fn:
-    _target_: src.losses.SmoothL1Loss
+    _target_: src.losses.MSELoss
 
   encoder_decoder: 
-    # _target_: src.networks.STFTEncoderDecoder
-    # n_fft: 510
-    # hop_length: 128
-    # alpha: 0.25
-    # beta: 1.0
-
-    _target_: src.networks.PolarSTFTEncoderDecoder
+    _target_: src.networks.STFTEncoderDecoder
     n_fft: 510
     hop_length: 128
+    alpha: 0.25
+    beta: 1.0
 
   optimizer:
     _target_: torch.optim.AdamW

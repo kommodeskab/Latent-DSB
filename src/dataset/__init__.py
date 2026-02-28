@@ -1,4 +1,6 @@
 from .audio import (
+    BaseAudioDataset,
+    BaseConcatAudio,
     EarsGender, 
     VCTK,
     VoxCeleb, 
@@ -22,4 +24,5 @@ from .audio import (
 )
 from .emnist import EMNISTNoLabel
 from .afhq import AFHQDataset
-from .dsb_dataset import DSBDataset
+from .dsb_dataset import DSBDataset, PairedDSBDataset
+from .lombard import LombardGridDataset, LombardNijmegenDataset, AllLombardDataset
