@@ -1,0 +1,22 @@
+# @package _global_
+
+defaults:
+  - override /trainer: gpu
+  - override /data: noisy
+  - override /callbacks: standard
+  - override /model: dsb
+  - override /logger: default
+
+project_name: 'dummy_experiment'
+task_name: 'dummy_task'
+compile: False # we can only compile on GPU
+phase: 'train'
+
+audio_length: 32768 # 2**15 samples = 2.048 seconds at 16 kHz
+
+data:
+  batch_size: 1
+
+trainer:
+  log_every_n_steps: 10
+  max_epochs: 3

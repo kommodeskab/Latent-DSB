@@ -1,0 +1,77 @@
+_target_: src.data_modules.BaseDM
+
+trainset:
+  _target_: src.datasets.UnpairedDataset
+
+  dataset0:
+    _target_: src.datasets.AugmentedAudioDataset
+
+    base_dataset:
+      _target_: src.datasets.VCTK
+      split: train
+
+    augmentations:
+      - _target_: src.augmentations.ResampleAugmentation
+        new_sample_rate: 16_000
+      - _target_: src.augmentations.CutAndFitAugmentation
+        target_length: ${audio_length}
+        deterministic: True
+
+  dataset1:
+    _target_: src.datasets.AugmentedAudioDataset
+
+    base_dataset:
+      _target_: src.datasets.VCTK
+      split: train
+
+    augmentations:
+      - _target_: src.augmentations.ResampleAugmentation
+        new_sample_rate: 16_000
+      - _target_: src.augmentations.CutAndFitAugmentation
+        target_length: ${audio_length}
+        deterministic: True
+      - _target_: src.augmentations.AddNoiseAugmentation
+        noise_dataset:
+          _target_: src.datasets.WHAM
+          split: train
+        min_snr: 0
+        max_snr: 20
+        deterministic: True
+
+valset:
+  _target_: src.datasets.UnpairedDataset
+
+  dataset0:
+    _target_: src.datasets.AugmentedAudioDataset
+
+    base_dataset:
+      _target_: src.datasets.VCTK
+      split: val
+
+    augmentations:
+      - _target_: src.augmentations.ResampleAugmentation
+        new_sample_rate: 16_000
+      - _target_: src.augmentations.CutAndFitAugmentation
+        target_length: ${audio_length}
+        deterministic: True
+
+  dataset1:
+    _target_: src.datasets.AugmentedAudioDataset
+
+    base_dataset:
+      _target_: src.datasets.VCTK
+      split: val
+
+    augmentations:
+      - _target_: src.augmentations.ResampleAugmentation
+        new_sample_rate: 16_000
+      - _target_: src.augmentations.CutAndFitAugmentation
+        target_length: ${audio_length}
+        deterministic: True
+      - _target_: src.augmentations.AddNoiseAugmentation
+        noise_dataset:
+          _target_: src.datasets.WHAM
+          split: val
+        min_snr: 0
+        max_snr: 20
+        deterministic: True

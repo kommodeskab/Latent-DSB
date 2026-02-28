@@ -6,4 +6,4 @@ fast_dev_run: False
 num_sanity_val_steps: 0
 val_check_interval: 1.0
 profiler: 'simple'
-enable_checkpointing: False
+enable_checkpointing: True

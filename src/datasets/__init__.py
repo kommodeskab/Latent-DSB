@@ -2,3 +2,8 @@ from .basedataset import BaseDataset as BaseDataset
 from .dummy import DummyDataset as DummyDataset
 from .cached import CachedDataset as CachedDataset
 from .cached import LazyCachedDataset as LazyCachedDataset
+from .vctk import VCTK as VCTK
+from .wham import WHAM as WHAM
+from .audio import AudioDataset as AudioDataset
+from .augmented import AugmentedAudioDataset as AugmentedAudioDataset
+from .unpaired import UnpairedDataset as UnpairedDataset
