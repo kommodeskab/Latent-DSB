@@ -1,2 +1,0 @@
-fm_callback:
-  _target_: src.callbacks.FlowMatchingCB

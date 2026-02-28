@@ -1,2 +1,0 @@
-timer:
-  _target_: pytorch_lightning.callbacks.Timer
