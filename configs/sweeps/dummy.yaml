@@ -1,0 +1,30 @@
+name: example_sweep
+project: sweeps # optional: specify a project name. could be anything
+method: grid # or bayes for continous parameters. Use Bayes when paramteres are a mix of continuous and discrete
+
+# the metric to monitor
+metric:
+  goal: minimize
+  name: val_loss
+
+# the parameters to sweep over
+# notice: these parameters must exist in the config file used for the experiment
+parameters:
+  data.batch_size:
+    values: [8, 16, 32]
+
+command:
+  # the standard command to run main.py
+  - ${env}
+  - python
+  - main.py
+
+  # add any additional args here such as the experiment name
+  # not too elegant but this is the best solution that I know
+  - experiment=dummy
+  - +trainer.max_steps=1000
+
+  # pass in the sweep parameters
+  # this is where the magic happens
+  # wandb automatically fills in the parameters here according to the sweep configuration
+  - ${args_no_hyphens}

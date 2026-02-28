@@ -1,0 +1,3 @@
+save_dir: logs
+offline: False
+log_model: False

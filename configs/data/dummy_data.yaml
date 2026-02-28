@@ -1,0 +1,13 @@
+_target_: src.data_modules.BaseDM
+
+trainset:
+  _target_: src.datasets.dummy.DummyDataset
+  size: 10000
+
+valset:
+  _target_: src.datasets.dummy.DummyDataset
+  size: 2000
+
+testset:
+  _target_: src.datasets.dummy.DummyDataset
+  size: 2000

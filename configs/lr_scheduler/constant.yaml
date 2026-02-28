@@ -1,0 +1,8 @@
+scheduler:
+  _target_: torch.optim.lr_scheduler.ConstantLR
+  _partial_: True
+  factor: 1.0
+  total_iters: 1
+monitor: 'val_loss'
+interval: 'step'
+frequency: 1

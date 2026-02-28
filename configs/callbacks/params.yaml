@@ -1,0 +1,3 @@
+parameter_count:
+  _target_: src.callbacks.ParameterCountCallback
+  depth: 3

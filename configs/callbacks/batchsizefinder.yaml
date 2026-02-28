@@ -1,0 +1,3 @@
+batch_size_finder:
+  _target_: pytorch_lightning.callbacks.BatchSizeFinder
+  mode: 'binsearch'
