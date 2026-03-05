@@ -13,9 +13,17 @@ LRSchedulerType = Optional[dict[str, partial[LRScheduler] | str]]
 ImageType = list[Tensor | Figure | np.ndarray]
 
 
-class UnpairedBatch(TypedDict):
+class DegradedAudioSample(TypedDict):
+    original_waveform: Tensor
+    degraded_waveform: Tensor
+    sample_rate: int
+
+
+class UnpairedAudioBatch(TypedDict):
     x0: Tensor
     x1: Tensor
+    x1_clean: Tensor
+    sample_rate: list[int]
 
 
 class SchedulerBatch(TypedDict):
@@ -30,17 +38,18 @@ class AudioSample(TypedDict):
     A sample from an audio dataset, containing an audio input and an optional label.
     """
 
-    input: Tensor
+    waveform: Tensor
     sample_rate: int
 
 
-class AudioBatch(TypedDict):
+class AudioBatch(AudioSample):
     """
     A batch of samples from an audio dataset, containing a
     batch of audio inputs and an optional batch of labels.
     """
 
-    ...
+    input: Tensor
+    sample_rate: list[int]
 
 
 class Sample(TypedDict):

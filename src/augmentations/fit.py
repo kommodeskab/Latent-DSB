@@ -20,7 +20,7 @@ class CutAndFitAugmentation(BaseAugmentation):
         self.deterministic = deterministic
 
     def __call__(self, sample: AudioSample) -> AudioSample:
-        input = sample["input"]
+        input = sample["waveform"]
         length = input.shape[-1]
 
         if length == self.target_length:
@@ -39,7 +39,7 @@ class CutAndFitAugmentation(BaseAugmentation):
                 right_padding = padding - left_padding
                 padded_input = torch.nn.functional.pad(input, (left_padding, right_padding))
 
-            return AudioSample(input=padded_input, sample_rate=sample["sample_rate"])
+            return AudioSample(waveform=padded_input, sample_rate=sample["sample_rate"])
 
         else:
             # length > target_length, need to cut
@@ -52,16 +52,16 @@ class CutAndFitAugmentation(BaseAugmentation):
                 start = torch.randint(0, length - self.target_length + 1, (1,)).item()
                 cut_input = input[..., start : start + self.target_length]
 
-            return AudioSample(input=cut_input, sample_rate=sample["sample_rate"])
+            return AudioSample(waveform=cut_input, sample_rate=sample["sample_rate"])
 
 
 if __name__ == "__main__":
     # Example usage
     sample = AudioSample(
-        input=torch.randn(1, 16000),  # 1 second of audio at 16kHz
+        waveform=torch.randn(1, 16000),  # 1 second of audio at 16kHz
         sample_rate=16000,
     )
 
     augmentation = CutAndFitAugmentation(target_length=8000, deterministic=False)
     augmented_sample = augmentation(sample)
-    print(augmented_sample["input"].shape)  # should be (1, 8000)
+    print(augmented_sample["waveform"].shape)  # should be (1, 8000)

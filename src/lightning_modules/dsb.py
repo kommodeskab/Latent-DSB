@@ -1,6 +1,6 @@
 from torch import Tensor
 import torch
-from src import UnpairedBatch, ModelOutput, StepOutput, SchedulerBatch
+from src import UnpairedAudioBatch, ModelOutput, StepOutput, SchedulerBatch
 from src.lightning_modules.baselightningmodule import BaseLightningModule
 from torch.nn import Module
 from torch.optim import Optimizer
@@ -52,7 +52,7 @@ class DSB(BaseLightningModule):
     def decode(self, z: Tensor) -> Tensor:
         return self.encoder_decoder.decode(z)
 
-    def common_step(self, batch: UnpairedBatch, batch_idx: int) -> StepOutput:
+    def common_step(self, batch: UnpairedAudioBatch, batch_idx: int) -> StepOutput:
         x0, x1 = batch["x0"], batch["x1"]
         x0, x1 = self.encode(x0), self.encode(x1)
 
@@ -85,8 +85,12 @@ class DSB(BaseLightningModule):
         scheduler_type: SCHEDULER_TYPES = "linear",
         return_trajectory: bool = False,
         verbose: bool = True,
+        encode: bool = False,
     ) -> Tensor:
         self.model.eval()
+
+        if encode:
+            x_start = self.encode(x_start)
 
         batch_size = x_start.shape[0]
         device = x_start.device
@@ -102,13 +106,14 @@ class DSB(BaseLightningModule):
         for tk_plus_one, tk in tqdm(timeschedule, desc="Sampling...", leave=False, disable=not verbose):
             t = torch.full((batch_size,), tk_plus_one if direction == "backward" else tk, device=device)
             x_in = torch.cat([x, x_start], dim=1) if self.scheduler.condition_on_start else x
-            model_output = self.forward(SchedulerBatch(xt=x_in, timesteps=t, conditional=c))
+            with torch.no_grad():
+                model_output = self.forward(SchedulerBatch(xt=x_in, timesteps=t, conditional=c))
             x = self.scheduler.step(x, model_output["output"], tk_plus_one, tk, direction)
-            trajectory.append(x)
+            trajectory.append(self.decode(x) if encode else x)
 
         self.model.train()
 
         if return_trajectory:
             return torch.stack(trajectory, dim=0)
 
-        return x
+        return trajectory[-1]

@@ -1,77 +1,71 @@
 _target_: src.data_modules.BaseDM
 
 trainset:
-  _target_: src.datasets.UnpairedDataset
+  _target_: src.datasets.UnpairedAudioDataset
 
-  dataset0:
-    _target_: src.datasets.AugmentedAudioDataset
+  dataset:
+    _target_: src.datasets.NoisyDegradedDataset
+    min_snr: 0
+    max_snr: 20
+    deterministic: False
 
-    base_dataset:
-      _target_: src.datasets.VCTK
-      split: train
+    clean_dataset:
+      _target_: src.datasets.AugmentedAudioDataset
 
-    augmentations:
-      - _target_: src.augmentations.ResampleAugmentation
-        new_sample_rate: 16_000
-      - _target_: src.augmentations.CutAndFitAugmentation
-        target_length: ${audio_length}
-        deterministic: True
+      dataset:
+        _target_: src.datasets.VCTK
+        split: train
+      augmentations:
+        - _target_: src.augmentations.ResampleAugmentation
+          new_sample_rate: 16_000
+        - _target_: src.augmentations.CutAndFitAugmentation
+          target_length: ${audio_length}
+          deterministic: False
 
-  dataset1:
-    _target_: src.datasets.AugmentedAudioDataset
+    noise_dataset:
+      _target_: src.datasets.AugmentedAudioDataset
 
-    base_dataset:
-      _target_: src.datasets.VCTK
-      split: train
-
-    augmentations:
-      - _target_: src.augmentations.ResampleAugmentation
-        new_sample_rate: 16_000
-      - _target_: src.augmentations.CutAndFitAugmentation
-        target_length: ${audio_length}
-        deterministic: True
-      - _target_: src.augmentations.AddNoiseAugmentation
-        noise_dataset:
-          _target_: src.datasets.WHAM
-          split: train
-        min_snr: 0
-        max_snr: 20
-        deterministic: True
+      dataset:
+        _target_: src.datasets.WHAM
+        split: train
+      augmentations:
+        - _target_: src.augmentations.ResampleAugmentation
+          new_sample_rate: 16_000
+        - _target_: src.augmentations.CutAndFitAugmentation
+          target_length: ${audio_length}
+          deterministic: False
 
 valset:
-  _target_: src.datasets.UnpairedDataset
+  _target_: src.datasets.UnpairedAudioDataset
 
-  dataset0:
-    _target_: src.datasets.AugmentedAudioDataset
+  dataset:
+    _target_: src.datasets.NoisyDegradedDataset
+    min_snr: 0
+    max_snr: 20
+    deterministic: True
 
-    base_dataset:
-      _target_: src.datasets.VCTK
-      split: val
+    clean_dataset:
+      _target_: src.datasets.AugmentedAudioDataset
 
-    augmentations:
-      - _target_: src.augmentations.ResampleAugmentation
-        new_sample_rate: 16_000
-      - _target_: src.augmentations.CutAndFitAugmentation
-        target_length: ${audio_length}
-        deterministic: True
+      dataset:
+        _target_: src.datasets.VCTK
+        split: val
+      augmentations:
+        - _target_: src.augmentations.ResampleAugmentation
+          new_sample_rate: 16_000
+        - _target_: src.augmentations.CutAndFitAugmentation
+          target_length: ${audio_length}
+          deterministic: True
 
-  dataset1:
-    _target_: src.datasets.AugmentedAudioDataset
+    noise_dataset:
+      _target_: src.datasets.AugmentedAudioDataset
 
-    base_dataset:
-      _target_: src.datasets.VCTK
-      split: val
-
-    augmentations:
-      - _target_: src.augmentations.ResampleAugmentation
-        new_sample_rate: 16_000
-      - _target_: src.augmentations.CutAndFitAugmentation
-        target_length: ${audio_length}
-        deterministic: True
-      - _target_: src.augmentations.AddNoiseAugmentation
-        noise_dataset:
-          _target_: src.datasets.WHAM
-          split: val
-        min_snr: 0
-        max_snr: 20
-        deterministic: True
+      dataset:
+        _target_: src.datasets.WHAM
+        split: val
+      augmentations:
+        - _target_: src.augmentations.ResampleAugmentation
+          new_sample_rate: 16_000
+        - _target_: src.augmentations.CutAndFitAugmentation
+          target_length: ${audio_length}
+          deterministic: True

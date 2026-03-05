@@ -1,0 +1,8 @@
+defaults:
+  - learningratemonitor
+  - logloss
+  - modelcheckpoint
+  - loggrad
+  - batchespersecond
+  - params
+  - metrics

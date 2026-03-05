@@ -19,11 +19,11 @@ class WHAM(BaseDataset):
         sample = self.dataset[index]
         input = torch.from_numpy(sample["audio"]["array"]).unsqueeze(0).float()
         sample_rate = sample["audio"]["sampling_rate"]
-        return AudioSample(input=input, sample_rate=sample_rate)
+        return AudioSample(waveform=input, sample_rate=sample_rate)
 
 
 if __name__ == "__main__":
     dataset = WHAM("train")
-    input = dataset[0]["input"]
+    input = dataset[0]["waveform"]
     print(input.shape)
     print(type(input))

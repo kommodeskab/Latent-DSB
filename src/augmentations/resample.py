@@ -12,12 +12,12 @@ class ResampleAugmentation(BaseAugmentation):
             return sample
 
         resampled_waveform = resample(
-            sample["input"],
+            sample["waveform"],
             orig_freq=sample["sample_rate"],
             new_freq=self.new_sample_rate,
         )
 
         return AudioSample(
-            input=resampled_waveform,
+            waveform=resampled_waveform,
             sample_rate=self.new_sample_rate,
         )

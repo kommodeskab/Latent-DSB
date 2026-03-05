@@ -48,7 +48,7 @@ class ParameterCountCallback(Callback):
             table = wandb.Table(data=plot_data, columns=["module", "parameters"])
 
             # Log a specific bar chart for this depth
-            wandb.log(
+            pl_module.logger.log_metrics(
                 {
                     f"Parameters/Depth {depth}": wandb.plot.bar(
                         table, "module", "parameters", title=f"Parameters at depth {depth}"

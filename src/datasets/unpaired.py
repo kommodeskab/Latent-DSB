@@ -1,31 +1,40 @@
-from src.datasets import BaseDataset
-from src import UnpairedBatch
+from src.datasets.audio import BaseDataset
+from src.datasets.degraded import DegradedDataset
+from src import UnpairedAudioBatch
+from src.utils import temporary_seed
+from contextlib import nullcontext
 
 
-class UnpairedDataset(BaseDataset):
+class UnpairedAudioDataset(BaseDataset):
     """
-    Given two datasets, return a random pair of samples.
-    The datasets samples deterministcally form dataset0 and randomly from dataset1.
-    The length of the dataset is defined as the length of dataset0, and dataset1 is sampled with replacement.
+    Given some degraded dataset, return a random "coupling", i.e. two random samples from the dataset,
+    where one (x0) is the original and the other (x1) is the degraded version.
+    The dataset also returns the clean version of x1 (x1_clean). This is useful for calculating some metrics.
     """
 
-    def __init__(
-        self,
-        dataset0: BaseDataset,
-        dataset1: BaseDataset,
-    ):
+    def __init__(self, dataset: DegradedDataset, deterministic: bool = False):
         super().__init__()
-        self.dataset0 = dataset0
-        self.dataset1 = dataset1
+        self.dataset = dataset
+        self.deterministic = deterministic
 
     def __len__(self) -> int:
-        return len(self.dataset0)
+        return len(self.dataset)
 
-    def __getitem__(self, idx: int) -> UnpairedBatch:
-        x0 = self.dataset0[idx]
-        x1 = self.dataset1.sample()
+    def __getitem__(self, idx: int) -> UnpairedAudioBatch:
+        x0 = self.dataset[idx]
+        context = temporary_seed(idx) if self.deterministic else nullcontext()
+        with context:  # ensure that the random coupling is deterministic if desired
+            x1 = self.dataset.sample()
 
-        return UnpairedBatch(
-            x0=x0["input"],
-            x1=x1["input"],
+        # x1 is a sample from the same dataset. yes, there is a slight possibility that
+        # x1 is the same sample as x0, but that's fine since
+        # the dataset is large and this is just a random coupling.
+
+        sr0 = x0["sample_rate"]
+
+        return UnpairedAudioBatch(
+            x0=x0["original_waveform"],
+            x1=x1["degraded_waveform"],
+            x1_clean=x1["original_waveform"],
+            sample_rate=sr0,
         )

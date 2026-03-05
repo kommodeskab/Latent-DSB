@@ -3,16 +3,16 @@
 defaults:
   - override /trainer: gpu
   - override /data: noisy
-  - override /callbacks: standard
+  - override /callbacks: dsb
   - override /model: dsb
   - override /logger: default
 
-project_name: 'dummy_experiment'
-task_name: 'dummy_task'
-compile: False # we can only compile on GPU
+project_name: 'unpaired-audio-diffusion'
+task_name: 'test'
+compile: False
 phase: 'train'
 
-audio_length: 32768 # 2**15 samples = 2.048 seconds at 16 kHz
+audio_length: 32768
 
 data:
   batch_size: 1
