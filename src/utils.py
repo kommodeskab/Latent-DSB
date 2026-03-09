@@ -37,14 +37,18 @@ def temporary_seed(seed: int):
     random_state = random.getstate()
     numpy_state = np.random.get_state()
     torch_state = torch.random.get_rng_state()
-    cuda_state = torch.cuda.get_rng_state() if torch.cuda.is_available() else None
+
+    # CUDA RNG state is unsafe to access from forked DataLoader workers.
+    in_worker = torch.utils.data.get_worker_info() is not None
+    use_cuda_state = torch.cuda.is_available() and torch.cuda.is_initialized() and not in_worker
+    cuda_state = torch.cuda.get_rng_state() if use_cuda_state else None
 
     try:
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
-        if cuda_state is not None:
-            torch.cuda.set_rng_state(cuda_state)
+        if use_cuda_state:
+            torch.cuda.manual_seed_all(seed)
         yield
 
     finally:

@@ -12,7 +12,7 @@ task_name: 'test'
 compile: False
 phase: 'train'
 
-audio_length: 32768
+audio_length: 35680
 
 data:
   batch_size: 2

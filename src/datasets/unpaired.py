@@ -21,10 +21,10 @@ class UnpairedAudioDataset(BaseDataset):
         return len(self.dataset)
 
     def __getitem__(self, idx: int) -> UnpairedAudioBatch:
-        x0 = self.dataset[idx]
+        x1 = self.dataset[idx]
         context = temporary_seed(idx) if self.deterministic else nullcontext()
         with context:  # ensure that the random coupling is deterministic if desired
-            x1 = self.dataset.sample()
+            x0 = self.dataset.sample()
 
         # x1 is a sample from the same dataset. yes, there is a slight possibility that
         # x1 is the same sample as x0, but that's fine since

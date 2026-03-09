@@ -580,7 +580,6 @@ class UNetModel(nn.Module):
         num_classes: int | None = None,
         use_checkpoint: bool = False,
         num_heads: int = 1,
-        num_outputs: int = 1,
         num_head_channels: int = -1,
         num_heads_upsample: int = -1,
         use_scale_shift_norm: bool = False,
@@ -591,8 +590,6 @@ class UNetModel(nn.Module):
 
         if num_heads_upsample == -1:
             num_heads_upsample = num_heads
-
-        out_channels = out_channels * num_outputs
 
         self.in_channels = in_channels
         self.model_channels = model_channels
@@ -605,7 +602,6 @@ class UNetModel(nn.Module):
         self.num_classes = num_classes
         self.use_checkpoint = use_checkpoint
         self.num_heads = num_heads
-        self.num_outputs = num_outputs
         self.num_head_channels = num_head_channels
         self.num_heads_upsample = num_heads_upsample
 
@@ -764,9 +760,6 @@ class UNetModel(nn.Module):
         :param y: an [N] Tensor of labels, if class-conditional.
         :return: an [N x C x ...] Tensor of outputs.
         """
-        dim = x.dim()
-        if dim != 4:
-            x = x.unsqueeze(1)
 
         assert (y is not None) == (
             self.num_classes is not None
@@ -789,12 +782,6 @@ class UNetModel(nn.Module):
         h = h.type(x.dtype)
 
         out = self.out(h)
-
-        if dim != 4:
-            out = out.squeeze(1)
-
-        if self.num_outputs != 1:
-            return th.chunk(out, chunks=self.num_outputs, dim=1)
 
         return out
 

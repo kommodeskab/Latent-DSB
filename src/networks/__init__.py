@@ -3,3 +3,5 @@ from .dummy import DummyNetwork as DummyNetwork
 from .dhariwal import UNetModel as UNetModel
 from src.networks.encoders import PolarSTFTEncoderDecoder as PolarSTFTEncoderDecoder
 from src.networks.encoders import STFTEncoderDecoder as STFTEncoderDecoder
+from .encoders import HifiGan as HifiGan
+from .transformer import AudioDiffusionTransformer as AudioDiffusionTransformer

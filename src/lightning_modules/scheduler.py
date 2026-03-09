@@ -7,13 +7,14 @@ from src import SchedulerBatch
 
 DIRECTIONS = Literal["forward", "backward"]
 SCHEDULER_TYPES = Literal["linear", "cosine"]
+TARGETS = Literal["drift", "scaled_drift", "terminal"]
 
 
 class DSBScheduler:
     def __init__(
         self,
         epsilon: float,
-        target: Literal["drift", "scaled_drift", "terminal"] = "drift",
+        target: TARGETS = "drift",
         condition_on_start: bool = False,
     ):
         super().__init__()
@@ -45,8 +46,8 @@ class DSBScheduler:
             return torch.ones((batch_size,), dtype=torch.long, device=device)
         elif direction == "backward":
             return torch.zeros((batch_size,), dtype=torch.long, device=device)
-
-        return direction
+        else:
+            raise ValueError(f"Unsupported direction. Use either: {get_args(DIRECTIONS)}")
 
     def _sample_training_batch(
         self, x0: Tensor, x1: Tensor, direction: DIRECTIONS, timesteps: Optional[Tensor] = None
@@ -89,7 +90,7 @@ class DSBScheduler:
             conditional=conditional,
         )
 
-    def sample_training_batch(self, x0_b, x1_b, x0_f, x1_f) -> SchedulerBatch:
+    def sample_training_batch(self, x0_b: Tensor, x1_b: Tensor, x0_f: Tensor, x1_f: Tensor) -> SchedulerBatch:
         b_batch = self._sample_training_batch(x0_b, x1_b, direction="backward")
         f_batch = self._sample_training_batch(x0_f, x1_f, direction="forward")
 
@@ -117,11 +118,9 @@ class DSBScheduler:
         elif self.target == "drift":
             drift = model_output
         elif self.target == "scaled_drift":
-            drift = model_output / accumulated_time**0.5
+            drift = model_output / (accumulated_time**0.5)
         else:
-            raise ValueError(
-                f"Unsupported target type. Use either: {get_args(Literal['drift', 'scaled_drift', 'terminal'])}"
-            )
+            raise ValueError(f"Unsupported target type. Use either: {get_args(TARGETS)}")
 
         if direction == "backward":
             xnext_mean = xt + delta_t * drift

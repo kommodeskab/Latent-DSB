@@ -23,7 +23,7 @@ class BatchesPerSecondCallback(Callback):
     def _track_bps(self, phase: Literal["train", "val", "test"], pl_module: pl.LightningModule):
         info = self.info[phase]
         before = info["last_time"]
-        now = time.time()
+        now = time.perf_counter()  # monotonic clock for accurate elapsed time measurement
 
         if before is None:
             # if this is the first batch, just set the time

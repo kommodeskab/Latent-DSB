@@ -17,7 +17,7 @@ unpaired_audio_metrics:
       key: x1_clean
       where: batch
       max_samples: 8
-      once: False
+      once: True
     # then log the enhanced audios in extras...
     - _target_: src.callbacks.metrics.LogAudioMetric
       key: x0_hat

@@ -7,3 +7,4 @@ from .wandb_watch import WandbWatchCallback as WandbWatchCallback
 from .log_graph import LogGraphCallback as LogGraphCallback
 from .stop_training import StopTrainingCallback as StopTrainingCallback
 from .metrics_callback import MetricsCallback as MetricsCallback
+from .scheduler_callback import VisualizeSchedulerCallback as VisualizeSchedulerCallback

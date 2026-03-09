@@ -1,0 +1,20 @@
+_target_: src.lightning_modules.DSB
+
+defaults:
+  - /encoders@encoder_decoder: identity
+  - /networks@model: transformer
+  - /losses@loss_fn: mse
+  - /optimizer: adamw
+  - /lr_scheduler: constant
+
+pretraining_steps: 100_000
+inference_steps: 4
+
+encoder_decoder:
+  scaling_factor: 20 # original signal can "disappear" into noise, so we scale it up to make it more visible to the model
+
+scheduler:
+  _target_: src.lightning_modules.DSBScheduler
+  epsilon: 1.0
+  target: scaled_drift
+  condition_on_start: False

@@ -34,6 +34,10 @@ class DSB(BaseLightningModule):
         self.loss_fn = loss_fn
         self.scheduler = scheduler
 
+    def to(self, device: torch.device):
+        self.encoder_decoder.to(device)
+        return super().to(device)
+
     @property
     def pretraining(self) -> bool:
         return self.global_step < self.pretraining_steps
@@ -61,8 +65,8 @@ class DSB(BaseLightningModule):
             x0_f, x1_f = x0, x1
         else:
             x0_b, x1_f = x0, x1
-            x1_b = self.sample(x0_b, direction="forward", num_steps=self.inference_steps)
-            x0_f = self.sample(x1_f, direction="backward", num_steps=self.inference_steps)
+            x1_b = self.sample(x0_b, direction="forward", num_steps=self.inference_steps, verbose=False)
+            x0_f = self.sample(x1_f, direction="backward", num_steps=self.inference_steps, verbose=False)
 
         scheduler_batch = self.scheduler.sample_training_batch(x0_b, x1_b, x0_f, x1_f)
         model_output = self.forward(scheduler_batch)
@@ -84,10 +88,11 @@ class DSB(BaseLightningModule):
         num_steps: int,
         scheduler_type: SCHEDULER_TYPES = "linear",
         return_trajectory: bool = False,
-        verbose: bool = True,
+        verbose: bool = False,
         encode: bool = False,
     ) -> Tensor:
-        self.model.eval()
+        training = self.training  # Store the original training mode
+        self.eval()  # Ensure the model is in eval mode for sampling
 
         if encode:
             x_start = self.encode(x_start)
@@ -96,12 +101,15 @@ class DSB(BaseLightningModule):
         device = x_start.device
         c = self.scheduler.get_conditional(direction, batch_size, device)
         timeschedule = self.scheduler.get_timeschedule(num_steps, scheduler_type)
+        # timeschedule is a list of tuples (tk_plus_one, tk) where tk_plus_one is the next timestep and tk is the current timestep, for example:
+        # [(0.0, 0.5), (0.5, 1.0)] for a linear scheduler with 2 steps, where we first go from t=1.0 to t=0.5 and then from t=0.5 to t=0.0
 
-        if direction == "forward":
+        if direction == "backward":
+            # normally, the timeschedule goes from t=0 to t=1, but for backward sampling we want to go from t=1 to t=0
             timeschedule = timeschedule[::-1]
 
         x = x_start.clone()
-        trajectory = [x]
+        trajectory = [self.decode(x) if encode else x]
 
         for tk_plus_one, tk in tqdm(timeschedule, desc="Sampling...", leave=False, disable=not verbose):
             t = torch.full((batch_size,), tk_plus_one if direction == "backward" else tk, device=device)
@@ -111,9 +119,10 @@ class DSB(BaseLightningModule):
             x = self.scheduler.step(x, model_output["output"], tk_plus_one, tk, direction)
             trajectory.append(self.decode(x) if encode else x)
 
-        self.model.train()
-
         if return_trajectory:
             return torch.stack(trajectory, dim=0)
+
+        if training:  # Restore the original training mode
+            self.train()
 
         return trajectory[-1]

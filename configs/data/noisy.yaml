@@ -1,5 +1,10 @@
 _target_: src.data_modules.BaseDM
 
+batch_size: 4
+num_workers: 4
+pin_memory: False
+persistent_workers: True
+
 trainset:
   _target_: src.datasets.UnpairedAudioDataset
 
@@ -21,6 +26,8 @@ trainset:
         - _target_: src.augmentations.CutAndFitAugmentation
           target_length: ${audio_length}
           deterministic: False
+        - _target_: src.augmentations.LoudnessAugmentation
+          loudness_db: -20.0
 
     noise_dataset:
       _target_: src.datasets.AugmentedAudioDataset
@@ -34,6 +41,8 @@ trainset:
         - _target_: src.augmentations.CutAndFitAugmentation
           target_length: ${audio_length}
           deterministic: False
+        - _target_: src.augmentations.LoudnessAugmentation
+          loudness_db: -20.0
 
 valset:
   _target_: src.datasets.UnpairedAudioDataset
@@ -56,6 +65,8 @@ valset:
         - _target_: src.augmentations.CutAndFitAugmentation
           target_length: ${audio_length}
           deterministic: True
+        - _target_: src.augmentations.LoudnessAugmentation
+          loudness_db: -20.0
 
     noise_dataset:
       _target_: src.datasets.AugmentedAudioDataset
@@ -69,3 +80,5 @@ valset:
         - _target_: src.augmentations.CutAndFitAugmentation
           target_length: ${audio_length}
           deterministic: True
+        - _target_: src.augmentations.LoudnessAugmentation
+          loudness_db: -20.0

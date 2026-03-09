@@ -39,15 +39,6 @@ class EMACallback(Callback):
     def on_before_zero_grad(self, trainer: pl.Trainer, pl_module: BaseLightningModule, optimizer: Optimizer):
         self.ema.update()
 
-    def on_save_checkpoint(self, trainer: pl.Trainer, pl_module: BaseLightningModule, checkpoint: dict):
-        logger.info("Saving EMA state dict to checkpoint.")
-        checkpoint["ema_state_dict"] = self.ema.state_dict()
-
-    def on_load_checkpoint(self, trainer: pl.Trainer, pl_module: BaseLightningModule, checkpoint: dict):
-        if "ema_state_dict" in checkpoint:
-            logger.info("Loading EMA state dict from checkpoint.")
-            self.ema.load_state_dict(checkpoint["ema_state_dict"])
-
     def on_validation_start(self, trainer: pl.Trainer, pl_module: BaseLightningModule):
         logger.info("Applying EMA weights for validation.")
         self.ema.store()

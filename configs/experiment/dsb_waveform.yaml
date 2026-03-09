@@ -4,7 +4,7 @@ defaults:
   - override /trainer: gpu
   - override /data: noisy
   - override /callbacks: dsb
-  - override /model: dsb_hifigan
+  - override /model: dsb_waveform
   - override /logger: default
 
 project_name: 'unpaired-audio-diffusion'
@@ -12,7 +12,7 @@ task_name: 'test'
 compile: False
 phase: 'train'
 
-audio_length: 32768
+audio_length: 32000
 
 data:
   batch_size: 2
