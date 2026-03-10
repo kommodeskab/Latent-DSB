@@ -1,18 +1,19 @@
-/outputs
 /logs
-/data
-/multirun
-/.vscode
-inception-2015-12-05.pt
+/outputs
 /hpc
-/gifs
-/open-sound-vae
-make_gifs.py
-/test_results
-GFB.py
-checkpoint_299999_speech_clipping_IndepCoupling.pt
-checkpoint_299999_speech_reverb_IndepCoupling.pt
-pretrained_models
+/playgrounds
+/data
+/wandb
+/configs/experiment/test*
+/configs/my_experiment/*
+/latex/refs.bib
+
+
+# ruff cache
+/.ruff_cache
+
+# VS Code
+/.vscode
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -1,0 +1,15 @@
+# @package _global_
+defaults:
+  - override /trainer: cpu
+  - override /logger: default
+  - override /callbacks: ???
+  - override /model: ???
+  - override /data: ???
+
+project_name: 'template'
+task_name: 'test'
+
+trainer:
+  log_every_n_steps: 5
+  limit_train_batches: 100
+  limit_val_batches: 5

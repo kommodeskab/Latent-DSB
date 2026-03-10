@@ -1,0 +1,40 @@
+unpaired_audio_metrics:
+  _target_: src.callbacks.MetricsCallback
+  metrics:
+    # -- logging audios --
+    # first log all audios in UnpairedAudioBatch...
+    - _target_: src.callbacks.metrics.LogAudioMetric
+      key: x0
+      where: batch
+      max_samples: 8
+      once: True
+    - _target_: src.callbacks.metrics.LogAudioMetric
+      key: x1
+      where: batch
+      max_samples: 8
+      once: True
+    - _target_: src.callbacks.metrics.LogAudioMetric
+      key: x1_clean
+      where: batch
+      max_samples: 8
+      once: True
+    # then log the enhanced audios in extras...
+    - _target_: src.callbacks.metrics.LogAudioMetric
+      key: x0_hat
+      where: extras
+      max_samples: 8
+      once: False # log this every validation step, not just once
+
+    # -- perceptual metrics --
+    - _target_: src.callbacks.metrics.DNSMOS
+      output_key: x0_hat
+
+    # -- distortion metrics --
+    - _target_: src.callbacks.metrics.SISDRi
+      clean_key: x1_clean
+      degraded_key: x1
+      output_key: x0_hat
+
+  extras:
+    - _target_: src.callbacks.extras.GenerateSamplesExtra
+      num_steps: 10

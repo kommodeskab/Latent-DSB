@@ -1,6 +1,0 @@
-defaults:
-  - learningratemonitor
-  - richmodelsummary
-  - timer
-  - modelcheckpoint
-  - flowmatching

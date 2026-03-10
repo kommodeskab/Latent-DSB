@@ -1,6 +1,7 @@
-from src.networks.simple_models import SimpleNetwork, SimpleNetworkImages
-from src.networks.unets import UNet1D, UNet2D, UNet1D50
-from src.networks.basetorchmodule import PretrainedModel
-from src.networks.encoders import IdentityEncoderDecoder, BaseEncoderDecoder, STFTEncoderDecoder, HifiGan, StableDiffusionXL, PolarSTFTEncoderDecoder, OpenSoundEncoder
-from src.networks.gfb import STFTbackbone, AltSTFTbackbone
-from src.networks.dhariwal import UNetModel
+from .pretrained import PretrainedModel as PretrainedModel
+from .dummy import DummyNetwork as DummyNetwork
+from .dhariwal import UNetModel as UNetModel
+from src.networks.encoders import PolarSTFTEncoderDecoder as PolarSTFTEncoderDecoder
+from src.networks.encoders import STFTEncoderDecoder as STFTEncoderDecoder
+from .encoders import HifiGan as HifiGan
+from .transformer import AudioDiffusionTransformer as AudioDiffusionTransformer

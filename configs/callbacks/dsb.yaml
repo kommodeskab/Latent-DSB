@@ -1,4 +1,12 @@
 defaults:
   - learningratemonitor
-  - richmodelsummary
-  - timer
+  - logloss
+  - modelcheckpoint
+  - loggrad
+  - batchespersecond
+  - params
+  - train_metrics
+  # - ema
+
+scheduler:
+  _target_: src.callbacks.VisualizeSchedulerCallback

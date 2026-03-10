@@ -1,0 +1,2 @@
+log_grads_callback:
+  _target_: src.callbacks.LogGradsCallback

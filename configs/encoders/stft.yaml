@@ -1,0 +1,5 @@
+_target_: src.networks.STFTEncoderDecoder
+n_fft: 510
+hop_length: 128
+alpha: 0.25
+beta: 4.0

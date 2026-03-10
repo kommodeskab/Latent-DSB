@@ -1,3 +1,4 @@
-from .base_loss import BaseLoss
-from .mse_loss import MSELoss, MultiChannelMSELoss
-from .stft_loss import STFTLoss
+from .baseloss import BaseLossFunction as BaseLossFunction
+from .mse import MSELoss as MSELoss
+from .l1 import L1Loss as L1Loss
+from .l1 import SmoothL1Loss as SmoothL1Loss

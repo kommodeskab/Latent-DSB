@@ -1,0 +1,22 @@
+# @package _global_
+
+defaults:
+  - override /trainer: cpu
+  - override /data: dummy_data
+  - override /callbacks: standard
+  - override /model: dummy_model
+  - override /logger: default
+
+project_name: 'dummy_experiment'
+task_name: 'dummy_task'
+compile: False # we can only compile on GPU
+phase: 'train'
+
+# we can also override specific parameters here if needed
+# for example
+data:
+  batch_size: 16
+
+trainer:
+  log_every_n_steps: 100
+  max_epochs: 3

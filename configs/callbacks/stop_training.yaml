@@ -1,0 +1,7 @@
+stop_training:
+  _target_: src.callbacks.StopTrainingCallback
+  key: "val_loss"
+  value: 100_000 # log some very high value to mark run as "bad"
+  max_num_params: 200_000_000
+  max_batch_time: 0.4
+  catch_oom: True

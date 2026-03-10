@@ -1,0 +1,2 @@
+batches_per_second:
+  _target_: src.callbacks.BatchesPerSecondCallback

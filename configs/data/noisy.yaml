@@ -1,0 +1,86 @@
+_target_: src.data_modules.BaseDM
+
+batch_size: 4
+num_workers: 4
+pin_memory: False
+persistent_workers: True
+
+trainset:
+  _target_: src.datasets.UnpairedAudioDataset
+
+  dataset:
+    _target_: src.datasets.NoisyDegradedDataset
+    min_snr: 0
+    max_snr: 20
+    deterministic: False
+
+    clean_dataset:
+      _target_: src.datasets.AugmentedAudioDataset
+
+      dataset:
+        _target_: src.datasets.VCTK
+        split: train
+      augmentations:
+        - _target_: src.augmentations.ResampleAugmentation
+          new_sample_rate: 16_000
+        - _target_: src.augmentations.CutAndFitAugmentation
+          target_length: ${audio_length}
+          deterministic: False
+        - _target_: src.augmentations.LoudnessAugmentation
+          loudness_db: -20.0
+
+    noise_dataset:
+      _target_: src.datasets.AugmentedAudioDataset
+
+      dataset:
+        _target_: src.datasets.WHAM
+        split: train
+      augmentations:
+        - _target_: src.augmentations.ResampleAugmentation
+          new_sample_rate: 16_000
+        - _target_: src.augmentations.CutAndFitAugmentation
+          target_length: ${audio_length}
+          deterministic: False
+        - _target_: src.augmentations.LoudnessAugmentation
+          loudness_db: -20.0
+
+valset:
+  _target_: src.datasets.UnpairedAudioDataset
+
+  dataset:
+    _target_: src.datasets.NoisyDegradedDataset
+    min_snr: 0
+    max_snr: 20
+    deterministic: True
+
+    clean_dataset:
+      _target_: src.datasets.AugmentedAudioDataset
+
+      dataset:
+        _target_: src.datasets.VCTK
+        split: val
+      augmentations:
+        - _target_: src.augmentations.ResampleAugmentation
+          new_sample_rate: 16_000
+        - _target_: src.augmentations.CutAndFitAugmentation
+          target_length: ${audio_length}
+          deterministic: True
+        - _target_: src.augmentations.LoudnessAugmentation
+          loudness_db: -20.0
+
+    noise_dataset:
+      _target_: src.datasets.AugmentedAudioDataset
+
+      dataset:
+        _target_: src.datasets.WHAM
+        split: val
+      augmentations:
+        - _target_: src.augmentations.ResampleAugmentation
+          new_sample_rate: 16_000
+        - _target_: src.augmentations.CutAndFitAugmentation
+          target_length: ${audio_length}
+          deterministic: True
+        - _target_: src.augmentations.LoudnessAugmentation
+          loudness_db: -20.0
+
+# TODO: missing testset

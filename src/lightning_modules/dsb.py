@@ -1,160 +1,128 @@
 from torch import Tensor
 import torch
-from typing import Any
+from src import UnpairedAudioBatch, ModelOutput, StepOutput, SchedulerBatch
 from src.lightning_modules.baselightningmodule import BaseLightningModule
 from torch.nn import Module
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 from tqdm import tqdm
-from lightning.pytorch.utilities import grad_norm
-from torch_ema import ExponentialMovingAverage
 from functools import partial
-from src.lightning_modules.mixins import EncoderDecoderMixin
 from src.networks.encoders import BaseEncoderDecoder
 from typing import Optional
-from src.losses import BaseLoss
-from .dsb_scheduler import DSBScheduler, DIRECTIONS, SCHEDULER_TYPES
+from src.losses import BaseLossFunction
+from .scheduler import DSBScheduler, DIRECTIONS, SCHEDULER_TYPES
 
-class DSB(BaseLightningModule, EncoderDecoderMixin):    
+
+class DSB(BaseLightningModule):
     def __init__(
         self,
-        model : Module,
-        encoder_decoder : BaseEncoderDecoder,
-        loss_fn: Optional[BaseLoss] = None,
-        optimizer : Optional[partial[Optimizer]] = None,
-        lr_scheduler : Optional[dict[str, partial[LRScheduler] | str]] = None,
-        ema_decay : float = 0.999,
-        **scheduler_kwargs,
+        model: Module,
+        encoder_decoder: BaseEncoderDecoder,
+        pretraining_steps: int,
+        inference_steps: int,
+        scheduler: DSBScheduler,
+        loss_fn: Optional[BaseLossFunction] = None,
+        optimizer: Optional[partial[Optimizer]] = None,
+        lr_scheduler: Optional[dict[str, partial[LRScheduler] | str]] = None,
     ):
-        super().__init__()
-        self.save_hyperparameters(ignore=['model', 'encoder_decoder', 'loss_fn', 'optimizer', 'lr_scheduler'])
+        super().__init__(optimizer, lr_scheduler)
+        self.save_hyperparameters(ignore=["model", "encoder_decoder", "loss_fn", "optimizer", "lr_scheduler"])
         self.model = model
         self.encoder_decoder = encoder_decoder
+        self.pretraining_steps = pretraining_steps
+        self.inference_steps = inference_steps
         self.loss_fn = loss_fn
-        self.partial_optimizer = optimizer
-        self.partial_lr_scheduler = lr_scheduler
-        self.scheduler = DSBScheduler(**scheduler_kwargs)
-        self.ema = ExponentialMovingAverage(self.model.parameters(), decay=ema_decay)
-        self.stop_epoch = False
-    
-    def on_before_optimizer_step(self, optimizer : Optimizer) -> None:
-        if self.global_step % 500 == 0:
-            norms = grad_norm(self.model, norm_type=2)
-            self.log_dict(norms)
+        self.scheduler = scheduler
 
-    def on_before_zero_grad(self, optimizer : Optimizer) -> None:
-        self.ema.update()
-        
-    def on_save_checkpoint(self, checkpoint : dict[str, Any]) -> None:
-        checkpoint['ema'] = self.ema.state_dict()
-        
-    def on_load_checkpoint(self, checkpoint : dict[str, Any]) -> None:
-        ema_state_dict = checkpoint['ema']
-        self.ema.load_state_dict(ema_state_dict)
-
-    def state_dict(self) -> dict:
-        state_dict = super().state_dict()
-        # dont save encoder_decoder weights since they are frozen during training
-        state_dict = {k: v for k, v in state_dict.items() if not k.startswith('encoder_decoder.')}
-        return state_dict
-    
-    def load_state_dict(self, state_dict : dict[str, Any], strict = True, assign = False):
-        # add encoder_decoder weights back into the state_dict
-        encoder_state_dict = self.encoder_decoder.state_dict()
-        encoder_state_dict = {f'encoder_decoder.{k}': v for k, v in encoder_state_dict.items()}
-        state_dict.update(encoder_state_dict)
-        return super().load_state_dict(state_dict, strict=strict, assign=assign)
-    
-    def to(self, device : torch.device):
-        # ema parameters have to be manually moved to the device
-        self.ema.to(device)
+    def to(self, device: torch.device):
+        self.encoder_decoder.to(device)
         return super().to(device)
-        
-    def forward(self, x : Tensor, timesteps : Tensor, conditional : Tensor) -> Tensor:
-        return self.model(x, timesteps, conditional)
-    
-    def on_train_batch_start(self, batch, batch_idx):
-        # pytorch lightning logic for restarting epoch
-        if self.stop_epoch:
-            self.stop_epoch = False
-            return -1
-        
-    def _common_step(self, batch : tuple[Tensor, Tensor, tuple[str], Tensor]) -> Tensor:        
-        x0, x1, direction, is_from_cache = batch
-        assert (is_from_cache == is_from_cache[0]).all(), "All tensors in the batch must have the same is_from_cache value."
-        if not is_from_cache[0]:
-            x0, x1 = self.encode_batch(x0, x1)
-        xt, timesteps, conditional, flow = self.scheduler.sample_training_batch(x0, x1, direction)
-        model_output = self(xt, timesteps, conditional)
-        loss = self.loss_fn({'out': model_output, 'target': flow})
-        return loss
-        
-    def training_step(self, batch : tuple[Tensor, Tensor], batch_idx : int) -> Tensor:
-        loss = self._common_step(batch)
-        loss = {f"train_{k}": v for k, v in loss.items()}
-        self.log_dict(loss, prog_bar=True)
-        return loss['train_loss']
-    
-    @torch.no_grad()
-    def validation_step(self, batch : tuple[Tensor, Tensor], batch_idx : int) -> Tensor:
-        with self.fix_validation_seed():
-            with self.ema.average_parameters():
-                loss = self._common_step(batch)
-        loss = {f"val_{k}": v for k, v in loss.items()}
-        self.log_dict(loss, prog_bar=True)
-        return loss['val_loss']
+
+    @property
+    def pretraining(self) -> bool:
+        return self.global_step < self.pretraining_steps
+
+    @property
+    def finetuning(self) -> bool:
+        return not self.pretraining
+
+    def forward(self, batch: SchedulerBatch) -> ModelOutput:
+        output = self.model(batch["xt"], batch["timesteps"], batch["conditional"])
+        return ModelOutput(output=output)
+
+    def encode(self, x: Tensor) -> Tensor:
+        return self.encoder_decoder.encode(x)
+
+    def decode(self, z: Tensor) -> Tensor:
+        return self.encoder_decoder.decode(z)
+
+    def common_step(self, batch: UnpairedAudioBatch, batch_idx: int) -> StepOutput:
+        x0, x1 = batch["x0"], batch["x1"]
+        x0, x1 = self.encode(x0), self.encode(x1)
+
+        if self.pretraining:
+            x0_b, x1_b = x0, x1
+            x0_f, x1_f = x0, x1
+        else:
+            x0_b, x1_f = x0, x1
+            x1_b = self.sample(x0_b, direction="forward", num_steps=self.inference_steps, verbose=False)
+            x0_f = self.sample(x1_f, direction="backward", num_steps=self.inference_steps, verbose=False)
+
+        scheduler_batch = self.scheduler.sample_training_batch(x0_b, x1_b, x0_f, x1_f)
+        model_output = self.forward(scheduler_batch)
+
+        loss_output = self.loss_fn.forward(model_output, scheduler_batch)
+
+        return StepOutput(
+            loss=loss_output["loss"],
+            model_output=model_output,
+            loss_output=loss_output,
+            module=self,
+        )
 
     @torch.no_grad()
-    def sample(self, x_start : Tensor, direction : DIRECTIONS, scheduler_type : SCHEDULER_TYPES, num_steps : int, return_trajectory : bool, verbose : bool = True) -> Tensor:
-        self.model.eval()
-        
+    def sample(
+        self,
+        x_start: Tensor,
+        direction: DIRECTIONS,
+        num_steps: int,
+        scheduler_type: SCHEDULER_TYPES = "linear",
+        return_trajectory: bool = False,
+        verbose: bool = False,
+        encode: bool = False,
+    ) -> Tensor:
+        training = self.training  # Store the original training mode
+        self.eval()  # Ensure the model is in eval mode for sampling
+
+        if encode:
+            x_start = self.encode(x_start)
+
         batch_size = x_start.shape[0]
         device = x_start.device
-        c = self.scheduler.get_conditional(direction, device, batch_size)
-        timeschedule = self.scheduler.get_timeschedule(num_steps, scheduler_type, direction)
+        c = self.scheduler.get_conditional(direction, batch_size, device)
+        timeschedule = self.scheduler.get_timeschedule(num_steps, scheduler_type)
+        # timeschedule is a list of tuples (tk_plus_one, tk) where tk_plus_one is the next timestep and tk is the current timestep, for example:
+        # [(0.0, 0.5), (0.5, 1.0)] for a linear scheduler with 2 steps, where we first go from t=1.0 to t=0.5 and then from t=0.5 to t=0.0
+
+        if direction == "backward":
+            # normally, the timeschedule goes from t=0 to t=1, but for backward sampling we want to go from t=1 to t=0
+            timeschedule = timeschedule[::-1]
+
         x = x_start.clone()
-        trajectory = [x]
+        trajectory = [self.decode(x) if encode else x]
+
         for tk_plus_one, tk in tqdm(timeschedule, desc="Sampling...", leave=False, disable=not verbose):
-            t = torch.full((batch_size,), tk_plus_one if direction == 'backward' else tk, device=device)
-            
-            x_input = torch.cat([x, x_start], dim=1) if self.scheduler.condition_on_start else x
-                
-            with self.ema.average_parameters():
-                flow = self(x_input, t, c)
-                
-            x = self.scheduler.step(x, flow, tk_plus_one, tk, direction)
-            trajectory.append(x)
-            
-        self.model.train()
-            
+            t = torch.full((batch_size,), tk_plus_one if direction == "backward" else tk, device=device)
+            x_in = torch.cat([x, x_start], dim=1) if self.scheduler.condition_on_start else x
+            with torch.no_grad():
+                model_output = self.forward(SchedulerBatch(xt=x_in, timesteps=t, conditional=c))
+            x = self.scheduler.step(x, model_output["output"], tk_plus_one, tk, direction)
+            trajectory.append(self.decode(x) if encode else x)
+
         if return_trajectory:
             return torch.stack(trajectory, dim=0)
-        
-        return x
-            
-    def configure_optimizers(self):
-        assert self.partial_optimizer is not None, "Optimizer must be provided during training."
-        assert self.partial_lr_scheduler is not None, "Learning rate scheduler must be provided during training."
-        
-        optim = self.partial_optimizer(self.model.parameters())
-        scheduler = self.partial_lr_scheduler.pop('scheduler')(optim)
-        return {
-            'optimizer': optim,
-            'lr_scheduler':  {
-                'scheduler': scheduler,
-                **self.partial_lr_scheduler
-            }
-        }
 
-from src.utils import config_from_id, get_ckpt_path
-import hydra
-        
-def load_dsb_model(experiment_id : str) -> DSB:
-    config = config_from_id(experiment_id)
-    model_config = config['model']
-    network = hydra.utils.instantiate(model_config['model'])
-    encoder_decoder = hydra.utils.instantiate(model_config['encoder_decoder'])
-    ckpt_path = get_ckpt_path(experiment_id, last=False, filename="last.ckpt")
-    model = DSB.load_from_checkpoint(ckpt_path, model=network, encoder_decoder=encoder_decoder)
-    model.eval()
-    return model
+        if training:  # Restore the original training mode
+            self.train()
+
+        return trajectory[-1]

@@ -1,14 +1,17 @@
 # @package _global_
 project_name: ???
 task_name: ???
-seed: 42
-compile: True
 continue_from_id: False
+ckpt_filename: null
+seed: 42
+compile: False # compile makes training faster, but has slow startup time. Only works on GPU.
+phase: train
 
 defaults:
+  - _self_
   - trainer: ???
   - data: ???
   - model: ???
   - callbacks: ???
   - logger: ???
-  - _self_
+  - experiment: null
