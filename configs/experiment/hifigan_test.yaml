@@ -1,0 +1,11 @@
+# @package _global_
+
+# exactly the same as hifigan.yaml except for the callbacks, which are set to dsb_test
+# and the phase is set to test
+
+defaults:
+  - hifigan
+  - override /callbacks: dsb_test
+  - _self_
+
+phase: test

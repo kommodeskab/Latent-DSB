@@ -7,11 +7,11 @@ defaults:
   - /optimizer: adamw
   - /lr_scheduler: constant
 
-pretraining_steps: 100_000
+pretraining_steps: 50_000
 inference_steps: 4
 
 scheduler:
   _target_: src.lightning_modules.DSBScheduler
-  epsilon: 2.0
+  epsilon: 4.0
   target: scaled_drift
   condition_on_start: False

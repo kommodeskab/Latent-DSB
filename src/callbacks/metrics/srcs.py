@@ -8,15 +8,18 @@ from torch.nn.functional import cosine_similarity
 from src.lightning_modules import BaseLightningModule
 from src import StepOutput, TensorDict, UnpairedAudioBatch
 from typing import Optional
+import warnings
 
+# ignore warnings from Nemo
+warnings.filterwarnings("ignore", category=SyntaxWarning, module=r"nemo\.collections\.asr\.parts\.utils\.vad_utils")
 logging.getLogger("nemo_logger").setLevel(logging.ERROR)
 
 
 class SRCS(BaseMetric):
     def __init__(
         self,
-        output_key: str,
         clean_key: str,
+        output_key: str,
     ):
         self.target_sample_rate = 16000
         self.model: EncDecSpeakerLabelModel = EncDecSpeakerLabelModel.from_pretrained(
@@ -58,8 +61,12 @@ class SRCS(BaseMetric):
         cos_sim = cosine_similarity(output_emb, clean_emb).tolist()
         self.values.extend(cos_sim)
 
-    def compute(self) -> float:
-        return torch.tensor(self.values).mean().item()
+    def compute(self) -> TensorDict:
+        values = torch.tensor(self.values)
+        return {
+            "mean": values.mean(),
+            "std": values.std(),
+        }
 
     def reset(self) -> None:
         self.values = []

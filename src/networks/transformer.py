@@ -66,13 +66,14 @@ class AudioDiffusionTransformer(nn.Module):
         out_channels: int,
         kernel_size: int,
         stride: int,
-        padding: int,
         model_size: int,
         num_classes: int,
         depth: int,
         num_heads: int,
     ) -> None:
         super().__init__()
+        assert kernel_size % 2 == 0, "Kernel size should be divisible by 2 for proper downsampling/upsampling"
+        padding = kernel_size // 2
 
         max_seq_len = (input_seq_len + 2 * padding - kernel_size) // stride + 1
 

@@ -1,6 +1,6 @@
 import torch
 from torch import Tensor
-from torchmetrics.functional.text import word_error_rate
+from torchmetrics.text import WordErrorRate
 import re
 from .base import BaseMetric
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
@@ -11,10 +11,9 @@ from torchaudio.functional import resample
 
 
 class WER(BaseMetric):
-    def __init__(self, clean_key: str, output_key: str, log_transcriptions: bool = False):
+    def __init__(self, clean_key: str, output_key: str):
         self.clean_key = clean_key
         self.output_key = output_key
-        self.log_transcriptions = log_transcriptions
 
         # initialize models for transcription
         self.target_sample_rate = 16000  # Whisper model expects 16kHz
@@ -24,8 +23,8 @@ class WER(BaseMetric):
         )
         self.model.config.forced_decoder_ids = None
         self.model.eval()
-        self.real_transcriptions = []
-        self.generated_transcriptions = []
+
+        self.wer = WordErrorRate()
 
     def to(self, device: torch.device) -> None:
         self.model.to(device)
@@ -72,26 +71,23 @@ class WER(BaseMetric):
         real_transcriptions = self.transcribe(real)
         generated_transcriptions = self.transcribe(generated)
 
-        self.real_transcriptions.extend(real_transcriptions)
-        self.generated_transcriptions.extend(generated_transcriptions)
+        self.wer.update(
+            preds=generated_transcriptions,
+            target=real_transcriptions,
+        )
 
         self.module = pl_module
 
-    def compute(self) -> float:
-        wer = word_error_rate(preds=self.generated_transcriptions, target=self.real_transcriptions)
+    def compute(self) -> TensorDict:
+        values = self.wer.errors
 
-        if self.log_transcriptions:
-            self.module.logger.log_text(
-                f"WER Transcriptions ({self.name()})",
-                columns=["Real Transcription", "Generated Transcription"],
-                data=list(zip(self.real_transcriptions, self.generated_transcriptions)),
-            )
-
-        return wer.item()
+        return {
+            "mean": values.mean(),
+            "std": values.std(),
+        }
 
     def reset(self) -> None:
-        self.real_transcriptions = []
-        self.generated_transcriptions = []
+        self.wer.reset()
 
     def name(self) -> str:
         return f"WER clean='{self.clean_key}' prediction='{self.output_key}'"

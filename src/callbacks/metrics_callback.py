@@ -63,8 +63,12 @@ class MetricsCallback(Callback):
 
         for metric in self.metrics:
             metric_value = metric.compute()
+
             if metric_value is not None:
-                pl_module.log(f"metrics/{phase}/{metric.name()}", metric_value)
+                pl_module.logger.log_metrics(
+                    {f"metrics/{phase}/{metric.name()}/{k}": v for k, v in metric_value.items()}
+                )
+
             metric.reset()
 
     def on_validation_batch_end(

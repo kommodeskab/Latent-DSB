@@ -45,8 +45,12 @@ class SISDRi(BaseMetric):
         improvement = (sisdr_output - sisdr_degraded).tolist()
         self.values.extend(improvement)
 
-    def compute(self) -> float:
-        return torch.tensor(self.values).mean().item()
+    def compute(self) -> TensorDict:
+        values = torch.tensor(self.values)
+        return {
+            "mean": values.mean(),
+            "std": values.std(),
+        }
 
     def reset(self) -> None:
         self.values = []

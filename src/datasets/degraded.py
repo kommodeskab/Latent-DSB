@@ -54,3 +54,8 @@ class NoisyDegradedDataset(DegradedDataset):
             degraded_waveform=noisy_waveform,
             sample_rate=clean["sample_rate"],
         )
+
+
+# TODO: implement a "ReverberantDegradedDataset" that adds reverb to the clean samples,
+# using some kind of impulse response dataset
+# good idea to find or upload a reverb dataset on HugginFace or similar

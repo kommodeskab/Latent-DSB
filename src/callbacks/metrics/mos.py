@@ -8,7 +8,8 @@ from typing import Optional
 
 
 class DNSMOS(BaseMetric):
-    def __init__(self):
+    def __init__(self, output_key: str):
+        self.output_key = output_key
         self.values = []
 
     @torch.no_grad()
@@ -29,15 +30,19 @@ class DNSMOS(BaseMetric):
         batch_idx: int,
         extras: Optional[TensorDict] = None,
     ):
-        samples = extras["x0_hat"]
+        samples = extras[self.output_key]
         mos = self.evaluate(samples, sample_rate=batch["sample_rate"][0])
         self.values.extend(mos.tolist())
 
-    def compute(self) -> float:
-        return torch.tensor(self.values).mean().item()
+    def compute(self) -> TensorDict:
+        values = torch.tensor(self.values)
+        return {
+            "mean": values.mean(),
+            "std": values.std(),
+        }
 
     def reset(self) -> None:
         self.values = []
 
     def name(self) -> str:
-        return "DNSMOS"
+        return f"DNSMOS for '{self.output_key}'"

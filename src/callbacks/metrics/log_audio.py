@@ -40,7 +40,7 @@ class LogAudioMetric(BaseMetric):
         batch: AudioBatch,
         batch_idx: int,
         extras: Optional[TensorDict] = None,
-    ):
+    ) -> None:
         if self._is_full():
             return
 

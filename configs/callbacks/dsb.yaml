@@ -5,8 +5,8 @@ defaults:
   - loggrad
   - batchespersecond
   - params
-  - metrics
-  - ema
+  - train_metrics
+  # - ema
 
 scheduler:
   _target_: src.callbacks.VisualizeSchedulerCallback
