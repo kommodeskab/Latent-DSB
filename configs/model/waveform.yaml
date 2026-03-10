@@ -3,12 +3,12 @@ _target_: src.lightning_modules.DSB
 defaults:
   - /encoders@encoder_decoder: identity
   - /networks@model: transformer
-  - /losses@loss_fn: mse
+  - /losses@loss_fn: snr
   - /optimizer: adamw
   - /lr_scheduler: constant
 
 pretraining_steps: 100_000
-inference_steps: 4
+inference_steps: 5
 
 encoder_decoder:
   scaling_factor: 20 # original signal can "disappear" into noise, so we scale it up to make it more visible to the model
