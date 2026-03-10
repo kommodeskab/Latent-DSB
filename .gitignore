@@ -13,6 +13,7 @@ GFB.py
 checkpoint_299999_speech_clipping_IndepCoupling.pt
 checkpoint_299999_speech_reverb_IndepCoupling.pt
 pretrained_models
+/playgrounds
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
