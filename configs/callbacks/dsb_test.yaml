@@ -2,3 +2,4 @@ defaults:
   - logloss
   - batchespersecond
   - test_metrics
+  - ema

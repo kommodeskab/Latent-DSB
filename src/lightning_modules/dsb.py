@@ -26,7 +26,7 @@ class DSB(BaseLightningModule):
         lr_scheduler: Optional[dict[str, partial[LRScheduler] | str]] = None,
     ):
         super().__init__(optimizer, lr_scheduler)
-        self.save_hyperparameters(ignore=["model", "encoder_decoder", "loss_fn", "optimizer", "lr_scheduler"])
+        self.save_hyperparameters(ignore=["model", "encoder_decoder", "scheduler", "loss_fn", "optimizer", "lr_scheduler"])
         self.model = model
         self.encoder_decoder = encoder_decoder
         self.pretraining_steps = pretraining_steps
