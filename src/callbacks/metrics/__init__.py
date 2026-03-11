@@ -4,3 +4,4 @@ from .log_audio import LogAudioMetric as LogAudioMetric
 from .mos import DNSMOS as DNSMOS
 from .wer import WER as WER
 from .srcs import SRCS as SRCS
+from .fad import FAD as FAD
