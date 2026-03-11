@@ -22,7 +22,7 @@ class ClapEmbedder:
             audio = resample(audio, orig_freq=sample_rate, new_freq=self.target_sample_rate)
             
         # shape (B, C, T) -> (B, T)
-        audio = audio.mean(dim = 1).squeeze(1)
+        audio = audio.mean(dim = 1)
         
         # Convert to list of numpy arrays to ensure batch processing in transformer processor
         # If passed as a single tensor/array, it might be interpreted as a single multi-channel audio
