@@ -23,6 +23,21 @@ class DSBScheduler:
         self.condition_on_start = condition_on_start
 
     def get_timeschedule(self, num_steps: int, scheduler_type: SCHEDULER_TYPES) -> list[tuple[float, float]]:
+        """
+        Time schedule for the DSB sampling procedure.
+        The time schedule is a list of tuples, where each tuple contains the current time and the next time.
+
+        Args:
+            num_steps (int): The number of steps to sample.
+            scheduler_type (SCHEDULER_TYPES): The type of scheduler to use. Can be either "linear" or "cosine".
+
+        Raises:
+            ValueError: If an unsupported scheduler type is provided. Use either: "linear" or "cosine".
+
+        Returns:
+            list[tuple[float, float]]: The time schedule for the DSB sampling procedure.
+        """
+        
         if scheduler_type == "linear":
             t = torch.linspace(0, 1, num_steps + 1)
         elif scheduler_type == "cosine":
