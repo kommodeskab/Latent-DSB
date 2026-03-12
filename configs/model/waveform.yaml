@@ -15,6 +15,9 @@ encoder_decoder:
 
 scheduler:
   _target_: src.lightning_modules.DSBScheduler
-  epsilon: 1.0
+  epsilon: 3.0
   target: scaled_drift
-  condition_on_start: False
+  condition_on_start: True
+
+model:
+  in_channels: 2

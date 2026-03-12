@@ -6,7 +6,6 @@ defaults:
   - batchespersecond
   - params
   - train_metrics
-  - ema
 
 scheduler:
   _target_: src.callbacks.VisualizeSchedulerCallback
