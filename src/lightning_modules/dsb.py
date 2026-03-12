@@ -12,6 +12,7 @@ from typing import Optional
 from src.losses import BaseLossFunction
 from .scheduler import DSBScheduler, DIRECTIONS, SCHEDULER_TYPES
 from torch_ema import ExponentialMovingAverage
+from contextlib import nullcontext
 
 
 class DSB(BaseLightningModule):
@@ -34,7 +35,7 @@ class DSB(BaseLightningModule):
         self.inference_steps = inference_steps
         self.loss_fn = loss_fn
         self.scheduler = scheduler
-        self.ema = ExponentialMovingAverage(self.parameters(), decay=0.999)
+        self.ema = ExponentialMovingAverage(self.parameters(), decay=0.9999) # keep a moving average of the model parameters for evaluation and sampling
 
     def to(self, device: torch.device):
         self.encoder_decoder.to(device)
@@ -50,7 +51,11 @@ class DSB(BaseLightningModule):
         return not self.pretraining
 
     def forward(self, batch: SchedulerBatch) -> ModelOutput:
-        output = self.model(batch["xt"], batch["timesteps"], batch["conditional"])
+        context = self.ema.average_parameters() if not self.training else nullcontext()
+        
+        with context:
+            output = self.model(batch["xt"], batch["timesteps"], batch["conditional"])
+            
         return ModelOutput(output=output)
 
     def encode(self, x: Tensor) -> Tensor:
@@ -127,21 +132,20 @@ class DSB(BaseLightningModule):
         x = x_start.clone()
         trajectory = [self.decode(x) if encode else x]
 
-        with self.ema.average_parameters(): # Use EMA weights for sampling
-            for tk_plus_one, tk in tqdm(timeschedule, desc="Sampling...", leave=False, disable=not verbose):
-                t = torch.full((batch_size,), tk_plus_one if direction == "backward" else tk, device=device)
-                x_in = torch.cat([x, x_start], dim=1) if self.scheduler.condition_on_start else x
+        for tk_plus_one, tk in tqdm(timeschedule, desc="Sampling...", leave=False, disable=not verbose):
+            t = torch.full((batch_size,), tk_plus_one if direction == "backward" else tk, device=device)
+            x_in = torch.cat([x, x_start], dim=1) if self.scheduler.condition_on_start else x
+            
+            with torch.no_grad():
+                model_output = self.forward(SchedulerBatch(xt=x_in, timesteps=t, conditional=c))
                 
-                with torch.no_grad():
-                    model_output = self.forward(SchedulerBatch(xt=x_in, timesteps=t, conditional=c))
-                    
-                x = self.scheduler.step(x, model_output["output"], tk_plus_one, tk, direction)
-                trajectory.append(self.decode(x) if encode else x)
-
-        if return_trajectory:
-            return torch.stack(trajectory, dim=0)
+            x = self.scheduler.step(x, model_output["output"], tk_plus_one, tk, direction)
+            trajectory.append(self.decode(x) if encode else x)
 
         if training:  # Restore the original training mode
             self.train()
+            
+        if return_trajectory:
+            return torch.stack(trajectory, dim=0)
 
         return trajectory[-1]
