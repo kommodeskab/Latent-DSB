@@ -23,31 +23,31 @@ pip install pre-commit
 - Run an experiment:
 
 ```bash
-python main experiment=<experiment-name>
+python main.py experiment=<experiment-name>
 ```
 
 - Override arguments on the command line:
 
 ```bash
-python main experiment=<experiment-name> data.batch_size=2
+python main.py experiment=<experiment-name> data.batch_size=2
 ```
 
 - Run with compiled model:
 
 ```bash
-python main experiment=<experiment-name> compile=True
+python main.py experiment=<experiment-name> compile=True
 ```
 
 - Continue a previous training run using W&B run ID + checkpoint file:
 
 ```bash
-python main experiment=<experiment-name> continue_from_id=<id> ckpt_filepath=<filepath>
+python main.py experiment=<experiment-name> continue_from_id=<id> ckpt_filepath=<filepath>
 ```
 
 - Start a new run but initialize from another checkpoint:
 
 ```bash
-python main experiment=<experiment-name> ckpt_filepath=<filepath>
+python main.py.py experiment=<experiment-name> ckpt_filepath=<filepath>
 ```
 
 ## Invoke Tasks
