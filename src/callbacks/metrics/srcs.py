@@ -16,6 +16,14 @@ logging.getLogger("nemo_logger").setLevel(logging.ERROR)
 
 
 class SRCS(BaseMetric):
+    """
+    Speaker Recognition Cosine Similarity (SRCS) metric for unpaired audio translation.
+    This metric calculates the cosine similarity between the speaker embeddings of the clean and output audio samples,
+    to validate whether the model is able to preserve the speaker identity during the translation process.
+    It uses a pre-trained speaker verification model from NVIDIA's NeMo toolkit to extract speaker embeddings.
+    """
+    
+    
     def __init__(
         self,
         clean_key: str,

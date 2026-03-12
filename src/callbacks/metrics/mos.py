@@ -8,6 +8,12 @@ from typing import Optional
 
 
 class DNSMOS(BaseMetric):
+    """
+    Mean Opinion Score (MOS) for Deep Noise Suppression (DNS) models.
+    
+    """
+    
+    
     def __init__(self, output_key: str):
         self.output_key = output_key
         self.values = []
@@ -17,7 +23,7 @@ class DNSMOS(BaseMetric):
         mos = deep_noise_suppression_mean_opinion_score(
             samples.squeeze(1), fs=sample_rate, personalized=False, device=self.device
         )
-        return mos.flatten()  # the 4th column is the mean opinion score
+        return mos.flatten()
 
     def to(self, device: torch.device) -> None:
         self.device = device
