@@ -47,7 +47,7 @@ python main.py experiment=<experiment-name> continue_from_id=<id> ckpt_filepath=
 - Start a new run but initialize from another checkpoint:
 
 ```bash
-python main.py.py experiment=<experiment-name> ckpt_filepath=<filepath>
+python main.py experiment=<experiment-name> ckpt_filepath=<filepath>
 ```
 
 ## Invoke Tasks
