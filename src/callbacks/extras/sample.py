@@ -5,6 +5,11 @@ from src.utils import temporary_seed
 
 
 class GenerateSamplesExtra(ExtraMetricOutput):
+    """
+    A callback for generating samples during training, to be used as an "extra" output.
+    """
+    
+    
     def __init__(self, num_steps: int):
         self.num_steps = num_steps
 

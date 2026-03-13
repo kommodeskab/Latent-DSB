@@ -16,6 +16,21 @@ from contextlib import nullcontext
 
 
 class DSB(BaseLightningModule):
+    """
+    A Latent Diffusion Schrödinger Bridge (DSB) model for unpaired audio translation.
+    
+    Args:
+        model (Module): The main network. Should accept as input a tensor x, a tensor of timesteps t, and a tensor of conditionals c.
+        encoder_decoder (BaseEncoderDecoder): An encoder-decoder network for encoding and decoding audio samples to and from the latent space.
+        pretraining_steps (int): The number of training step before switching to "finetuning" mode where the model generates it own training examples.
+        inference_steps (int): The number of steps to use during inference (sampling). Higher = better quality but slower training. Usually around 5 is satisfactory
+        scheduler (DSBScheduler): The DSB scheduler that defines the noise schedule and the sampling procedure. See the scheduler class for more details.
+        loss_fn (Optional[BaseLossFunction]): The loss function to use during training. 
+        optimizer (Optional[partial[Optimizer]]): The optimizer to use during training. 
+        lr_scheduler (Optional[dict[str, partial[LRScheduler] | str]]): The learning rate scheduler to use during training.
+    
+    """
+    
     def __init__(
         self,
         model: Module,
@@ -65,9 +80,25 @@ class DSB(BaseLightningModule):
         return self.encoder_decoder.decode(z)
 
     def common_step(self, batch: UnpairedAudioBatch, batch_idx: int) -> StepOutput:
+        """
+        The training/validation/test step for the DSB model.
+        The DSB model is provided with a UnpairedAudioBatch which consists of two unpaired batches, x0 and x1, from two different domains.
+        
+        During pretraining, the model tries to learn a path between these two random batches. This gives subpair results but is required for the model to converge.
+        During finetuning, the model generates its own training examples by sampling from x0 to x1 and from x1 to x0 using the current model. This allows the model to learn from its own mistakes and improve over time.
+        
+        Args:
+            batch (UnpairedAudioBatch): A batch of unpaired audio samples from two different domains
+            batch_idx (int): The index of the batch in the current epoch.
+        Returns:
+            StepOutput: The output of the training step, containing the loss and any other relevant information
+        
+        """
         x0, x1 = batch["x0"], batch["x1"]
         x0, x1 = self.encode(x0), self.encode(x1)
 
+        # x0_b and x1_b is the (x0, x1) pairs used for training the backward model
+        # x0_f and x1_f is the (x0, x1) pairs used for training the forward model
         if self.pretraining:
             x0_b, x1_b = x0, x1
             x0_f, x1_f = x0, x1
@@ -112,6 +143,22 @@ class DSB(BaseLightningModule):
         verbose: bool = False,
         encode: bool = False,
     ) -> Tensor:
+        """
+        Sampling from the model using the DSB sampling procedure. 
+
+        Args:
+            x_start (Tensor): The starting point. 
+            direction (DIRECTIONS): The direction of sampling.
+            num_steps (int): The number of steps to sample.
+            scheduler_type (SCHEDULER_TYPES, optional): The type of scheduler to use. Defaults to "linear".
+            return_trajectory (bool, optional): Whether to return the entire trajectory. Defaults to False.
+            verbose (bool, optional): Whether to print progress. Defaults to False.
+            encode (bool, optional): Whether to encode the input. Defaults to False.
+
+        Returns:
+            Tensor: The sampled output.
+        """
+        
         training = self.training  # Store the original training mode
         self.eval()  # Ensure the model is in eval mode for sampling
 

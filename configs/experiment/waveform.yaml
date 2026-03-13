@@ -16,7 +16,7 @@ audio_length: 48000
 
 data:
   batch_size: 8
-  num_workers: 8
+  num_workers: 12
 
 trainer:
   log_every_n_steps: 100
