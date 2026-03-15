@@ -3,7 +3,7 @@ _target_: src.lightning_modules.DSB
 defaults:
   - /encoders@encoder_decoder: identity
   - /networks@model: transformer
-  - /losses@loss_fn: snr
+  - /losses@loss_fn: l1
   - /optimizer: adamw
   - /lr_scheduler: constant
 
@@ -16,5 +16,8 @@ encoder_decoder:
 scheduler:
   _target_: src.lightning_modules.DSBScheduler
   epsilon: 1.0
-  target: scaled_drift
+  target: terminal
   condition_on_start: False
+
+model:
+  in_channels: 1
