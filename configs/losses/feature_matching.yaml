@@ -1,0 +1,9 @@
+_target_: src.losses.WeightedLoss
+losses:
+  - _target_: src.losses.L1Loss
+  - _target_: src.losses.FeatureMatchingLoss
+    sample_rate: ${sample_rate}
+    compile: False
+weights:
+  - 1.0
+  - 10.0

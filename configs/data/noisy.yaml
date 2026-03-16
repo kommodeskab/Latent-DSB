@@ -22,7 +22,7 @@ trainset:
         split: train
       augmentations:
         - _target_: src.augmentations.ResampleAugmentation
-          new_sample_rate: 16_000
+          new_sample_rate: ${sample_rate}
         - _target_: src.augmentations.CutAndFitAugmentation
           target_length: ${audio_length}
           deterministic: False
@@ -37,7 +37,7 @@ trainset:
         split: train
       augmentations:
         - _target_: src.augmentations.ResampleAugmentation
-          new_sample_rate: 16_000
+          new_sample_rate: ${sample_rate}
         - _target_: src.augmentations.CutAndFitAugmentation
           target_length: ${audio_length}
           deterministic: False
@@ -61,7 +61,7 @@ valset:
         split: val
       augmentations:
         - _target_: src.augmentations.ResampleAugmentation
-          new_sample_rate: 16_000
+          new_sample_rate: ${sample_rate}
         - _target_: src.augmentations.CutAndFitAugmentation
           target_length: ${audio_length}
           deterministic: True
@@ -76,7 +76,7 @@ valset:
         split: val
       augmentations:
         - _target_: src.augmentations.ResampleAugmentation
-          new_sample_rate: 16_000
+          new_sample_rate: ${sample_rate}
         - _target_: src.augmentations.CutAndFitAugmentation
           target_length: ${audio_length}
           deterministic: True
