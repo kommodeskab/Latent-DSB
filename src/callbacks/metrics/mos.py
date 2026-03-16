@@ -38,7 +38,7 @@ class DNSMOS(BaseMetric):
     ):
         samples = extras[self.output_key]
         mos = self.evaluate(samples, sample_rate=batch["sample_rate"][0])
-        self.values.extend(mos.tolist())
+        self.values.extend(mos.cpu().tolist())
 
     def compute(self) -> TensorDict:
         values = torch.tensor(self.values)

@@ -42,7 +42,7 @@ class SISDRi(BaseMetric):
 
         sisdr_output = scale_invariant_signal_distortion_ratio(output, clean, zero_mean=True)
         sisdr_degraded = scale_invariant_signal_distortion_ratio(degraded, clean, zero_mean=True)
-        improvement = (sisdr_output - sisdr_degraded).tolist()
+        improvement = (sisdr_output - sisdr_degraded).cpu().tolist()
         self.values.extend(improvement)
 
     def compute(self) -> TensorDict:
