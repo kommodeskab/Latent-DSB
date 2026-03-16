@@ -43,10 +43,10 @@ unpaired_audio_metrics:
       clean_key: x1_clean
       output_key: x0_hat
 
-    - _target_: src.callbacks.metrics.FAD
+    - _target_: src.callbacks.metrics.KAD
       output_key: x0_hat
       real_key: x0
-
+      
   extras:
     - _target_: src.callbacks.extras.GenerateSamplesExtra
       num_steps: 10
