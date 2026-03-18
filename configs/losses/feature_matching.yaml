@@ -1,9 +1,12 @@
 _target_: src.losses.WeightedLoss
 losses:
-  - _target_: src.losses.L1Loss
   - _target_: src.losses.FeatureMatchingLoss
-    sample_rate: ${sample_rate}
-    compile: False
+    compile: ${compile}
+    feature_extractor:
+      _target_: src.losses.HubertFeatureExtractor
+      last_n_conv_layers: 3
+      first_n_transformer_layers: 6
+  - _target_: src.losses.L1Loss
 weights:
-  - 1.0
-  - 10.0
+  - 2
+  - 1

@@ -5,3 +5,5 @@ from .l1 import SmoothL1Loss as SmoothL1Loss
 from .snr import SNRLoss as SNRLoss
 from .feature_matching import FeatureMatchingLoss as FeatureMatchingLoss
 from .weighted_loss import WeightedLoss as WeightedLoss
+from .feature_matching import HubertFeatureExtractor as HubertFeatureExtractor
+from .feature_matching import Wav2VecFeatureExtractor as Wav2VecFeatureExtractor
