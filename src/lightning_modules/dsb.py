@@ -10,7 +10,7 @@ from functools import partial
 from src.networks.encoders import BaseEncoderDecoder
 from typing import Optional
 from src.losses import BaseLossFunction
-from .scheduler import DSBScheduler, DIRECTIONS, SCHEDULER_TYPES
+from src.lightning_modules.scheduler import DSBScheduler, DIRECTIONS, SCHEDULER_TYPES
 from torch_ema import ExponentialMovingAverage
 from contextlib import nullcontext
 
@@ -196,3 +196,48 @@ class DSB(BaseLightningModule):
             return torch.stack(trajectory, dim=0)
 
         return trajectory[-1]
+
+
+if __name__ == "__main__":
+    from src.networks.encoders import IdentityEncoderDecoder
+    class DummyNetwork(Module):
+        def __init__(self, output_tensor: Tensor):
+            super().__init__()
+            self.register_buffer("output_tensor", output_tensor)
+            
+        def forward(self, xt: Tensor, timesteps: Tensor, conditional: Tensor) -> Tensor:
+            return self.output_tensor
+    
+    input_tensor = torch.randn(1, 10)
+    output_tensor = torch.randn(1, 10)
+    network = DummyNetwork(output_tensor)
+    encoder_decoder = IdentityEncoderDecoder()
+    scheduler = DSBScheduler(
+        epsilon = 1.0,
+        target = "terminal",
+        condition_on_start = False,
+    )
+    
+    dsb = DSB(
+        model = network,
+        encoder_decoder = encoder_decoder,
+        pretraining_steps = 10, # doesn't matter for this test
+        inference_steps = 10, # doesn't matter for this test
+        scheduler = scheduler,
+        loss_fn = None, # doesn't matter for this test
+        optimizer = None, # doesn't matter for this test
+        lr_scheduler = None, # doesn't matter for this test
+    )
+    
+    for direction in ["forward", "backward"]:
+        sampled_tensor = dsb.sample(
+            x_start = input_tensor,
+            direction = direction,
+            num_steps = 10,
+            scheduler_type = "linear",
+            return_trajectory = False,
+            verbose = False,
+            encode = False,
+        )
+        
+        assert torch.allclose(sampled_tensor, output_tensor), "The sampled tensor should be equal to the output tensor from the dummy network."
