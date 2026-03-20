@@ -24,6 +24,13 @@ class MetricsCallback(Callback):
 
         for extra in self.extras:
             extra.to(pl_module.device)
+            
+    def on_test_start(self, trainer: pl.Trainer, pl_module: BaseLightningModule):
+        for metric in self.metrics:
+            metric.to(pl_module.device)
+
+        for extra in self.extras:
+            extra.to(pl_module.device)
 
     def _add_extras(
         self, pl_module: BaseLightningModule, outputs: StepOutput, batch: Batch, batch_idx: int
@@ -86,7 +93,11 @@ class MetricsCallback(Callback):
         self._compute_metrics(pl_module=pl_module, phase="val")
 
     def on_test_batch_end(
-        self, trainer: pl.Trainer, pl_module: BaseLightningModule, outputs: StepOutput, batch: Batch, batch_idx: int
+        self, trainer: pl.Trainer, 
+        pl_module: BaseLightningModule, 
+        outputs: StepOutput, 
+        batch: Batch, 
+        batch_idx: int
     ) -> None:
         extras = self._add_extras(pl_module=pl_module, outputs=outputs, batch=batch, batch_idx=batch_idx)
         self._add_metrics(pl_module=pl_module, outputs=outputs, batch=batch, batch_idx=batch_idx, extras=extras)
