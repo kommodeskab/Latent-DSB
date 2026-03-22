@@ -57,7 +57,8 @@ def temporary_seed(seed: int):
         torch.random.set_rng_state(torch_state)
         if cuda_state is not None:
             torch.cuda.set_rng_state(cuda_state)
-            
+
+
 def get_context(seed: int, deterministic: bool) -> AbstractContextManager:
     """
     Returns a context manager for setting a temporary random seed if `deterministic` is `True`, otherwise returns a null context manager.

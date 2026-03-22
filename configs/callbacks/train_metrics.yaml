@@ -28,7 +28,7 @@ unpaired_audio_metrics:
     # -- perceptual metrics --
     - _target_: src.callbacks.metrics.DNSMOS
       output_key: x0_hat
-    
+
     - _target_: src.callbacks.metrics.FAD
       output_key: x0_hat
       real_key: x0

@@ -58,7 +58,7 @@ trainset:
       - _target_: src.datasets.degradations.TimeMasking
         max_mask_proportion: 0.2
         deterministic: False
-    
+
 valset:
   _target_: src.datasets.UnpairedAudioDataset
 
@@ -112,7 +112,7 @@ valset:
       - _target_: src.datasets.degradations.TimeMasking
         max_mask_proportion: 0.2
         deterministic: True
-  
+
 testset:
   _target_: src.datasets.UnpairedAudioDataset
 

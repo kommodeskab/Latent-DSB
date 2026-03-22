@@ -23,14 +23,14 @@ class UnpairedAudioDataset(BaseDataset):
     def __getitem__(self, idx: int) -> UnpairedAudioBatch:
         x1 = self.dataset[idx]
         x1_waveform = x1["degraded_waveform"]
-        
+
         if self.paired:
             x0_waveform = x1["original_waveform"]
         else:
             with get_context(idx, self.deterministic):
                 x0 = self.dataset.sample()
             x0_waveform = x0["original_waveform"]
-            
+
         return UnpairedAudioBatch(
             x0=x0_waveform,
             x1=x1_waveform,

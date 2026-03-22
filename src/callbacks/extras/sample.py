@@ -8,7 +8,7 @@ class GenerateSamplesExtra(ExtraMetricOutput):
     """
     A callback for generating samples during training, to be used as an "extra" output.
     """
-    
+
     def __init__(self, key: str, out_key: str, **kwargs):
         super().__init__()
         self.key = key

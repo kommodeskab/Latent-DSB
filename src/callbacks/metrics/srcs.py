@@ -22,8 +22,7 @@ class SRCS(BaseMetric):
     to validate whether the model is able to preserve the speaker identity during the translation process.
     It uses a pre-trained speaker verification model from NVIDIA's NeMo toolkit to extract speaker embeddings.
     """
-    
-    
+
     def __init__(
         self,
         clean_key: str,

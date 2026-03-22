@@ -2,6 +2,7 @@ from src.datasets.audio import AudioDataset
 from src import DegradedAudioSample
 from src.datasets.degradations import BaseDegradation, AddNoise
 
+
 class DegradedDataset(AudioDataset):
     """
     Given a dataset, this dataset applies some kind of degradation to the audio samples.
@@ -22,10 +23,10 @@ class NoisyDegradedDataset(DegradedDataset):
     ):
         self.clean_dataset = clean_dataset
         self.add_noise = AddNoise(
-            noise_dataset = noise_dataset,
-            min_snr = min_snr,
-            max_snr = max_snr,
-            deterministic = deterministic,
+            noise_dataset=noise_dataset,
+            min_snr=min_snr,
+            max_snr=max_snr,
+            deterministic=deterministic,
         )
 
     def __len__(self):
@@ -46,6 +47,7 @@ class NoisyDegradedDataset(DegradedDataset):
 # using some kind of impulse response dataset
 # good idea to find or upload a reverb dataset on HugginFace or similar
 
+
 class VeryDegradedDataset(DegradedDataset):
     def __init__(
         self,
@@ -54,15 +56,15 @@ class VeryDegradedDataset(DegradedDataset):
     ):
         self.clean_dataset = clean_dataset
         self.degradations = degradations
-        
+
     def __len__(self):
         return len(self.clean_dataset)
-    
+
     def __getitem__(self, idx: int) -> DegradedAudioSample:
         clean = self.clean_dataset[idx]
         clean_waveform = clean["waveform"]
         noisy_waveform = clean_waveform.clone()
-        
+
         for degradation in self.degradations:
             noisy_waveform = degradation(noisy_waveform, seed=idx)
 

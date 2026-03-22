@@ -14,8 +14,7 @@ class WER(BaseMetric):
     """
     Word-Error Rate (WER) metric for unpaired audio translation.
     """
-    
-    
+
     def __init__(self, clean_key: str, output_key: str):
         self.clean_key = clean_key
         self.output_key = output_key

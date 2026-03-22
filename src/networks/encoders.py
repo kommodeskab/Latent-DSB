@@ -60,7 +60,7 @@ class STFTEncoderDecoder(BaseEncoderDecoder):
         stft = self.beta * stft.abs() ** self.alpha * torch.exp(1j * stft.angle())
         real, imag = stft.real, stft.imag
         # real.shape = imag.shape = (batch_size, n_freq_bins, n_frames)
-    
+
         if self.image_like:
             # make two channels, i.e. shape (batch_size, 2, n_freq_bins, n_frames)
             out = torch.stack([real, imag], dim=1)
