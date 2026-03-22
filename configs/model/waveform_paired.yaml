@@ -1,4 +1,4 @@
-_target_: src.lightning_modules.DSB
+_target_: src.lightning_modules.PairedDSB
 
 defaults:
   - /encoders@encoder_decoder: identity
@@ -6,9 +6,6 @@ defaults:
   - /losses@loss_fn: l1
   - /optimizer: adamw
   - /lr_scheduler: constant
-
-pretraining_steps: 100_000
-inference_steps: 5
 
 encoder_decoder:
   scaling_factor: 1
@@ -21,3 +18,4 @@ scheduler:
 
 model:
   in_channels: 1
+  num_classes: 0

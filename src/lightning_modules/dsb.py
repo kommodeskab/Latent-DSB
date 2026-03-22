@@ -196,7 +196,45 @@ class DSB(BaseLightningModule):
             return torch.stack(trajectory, dim=0)
 
         return trajectory[-1]
+    
 
+class PairedDSB(DSB):
+    def __init__(
+        self,
+        model: Module,
+        encoder_decoder: BaseEncoderDecoder,
+        scheduler: DSBScheduler,
+        loss_fn: Optional[BaseLossFunction] = None,
+        optimizer: Optional[partial[Optimizer]] = None,
+        lr_scheduler: Optional[dict[str, partial[LRScheduler] | str]] = None,
+    ):
+        super().__init__(model, encoder_decoder, None, None, scheduler, loss_fn, optimizer, lr_scheduler)
+
+    def common_step(self, batch: UnpairedAudioBatch, batch_idx: int) -> StepOutput:
+        x0, x1 = batch["x0"], batch["x1"]
+        x0, x1 = self.encode(x0), self.encode(x1)
+
+        # in the paired setting, we only train the backward model and we use the original x0 and x1 as the training pairs
+        scheduler_batch = self.scheduler._sample_training_batch(x0, x1, direction="backward") 
+        model_output = self.forward(scheduler_batch)
+
+        loss_output = self.loss_fn.forward(model_output, scheduler_batch)
+
+        return StepOutput(
+            loss=loss_output["loss"],
+            model_output=model_output,
+            loss_output=loss_output,
+            module=self,
+        )
+        
+    def forward(self, batch: SchedulerBatch) -> ModelOutput:
+        context = self.ema.average_parameters() if not self.training else nullcontext()
+        
+        with context:
+            # since we are only training the backward model, we don't need the conditional "backward or forward"
+            output = self.model(batch["xt"], batch["timesteps"])
+            
+        return ModelOutput(output=output)
 
 if __name__ == "__main__":
     from src.networks.encoders import IdentityEncoderDecoder

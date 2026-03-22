@@ -96,7 +96,7 @@ testset:
       _target_: src.datasets.AugmentedAudioDataset
 
       dataset:
-        _target_: src.datasets.VCTK
+        _target_: src.datasets.LibriSpeech
         split: val
       augmentations:
         - _target_: src.augmentations.ResampleAugmentation

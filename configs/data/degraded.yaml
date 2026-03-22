@@ -1,0 +1,168 @@
+_target_: src.data_modules.BaseDM
+
+batch_size: 4
+num_workers: 4
+pin_memory: True
+persistent_workers: True
+
+trainset:
+  _target_: src.datasets.UnpairedAudioDataset
+
+  dataset:
+    _target_: src.datasets.VeryDegradedDataset
+
+    clean_dataset:
+      _target_: src.datasets.AugmentedAudioDataset
+
+      dataset:
+        _target_: src.datasets.VCTK
+        split: train
+      augmentations:
+        - _target_: src.augmentations.ResampleAugmentation
+          new_sample_rate: ${sample_rate}
+        - _target_: src.augmentations.CutAndFitAugmentation
+          target_length: ${audio_length}
+          deterministic: False
+        - _target_: src.augmentations.LoudnessAugmentation
+          loudness_db: -20.0
+
+    degradations:
+      - _target_: src.datasets.degradations.FrequencyMasking
+        max_mask_length: 30
+        deterministic: False
+
+      - _target_: src.datasets.degradations.AddNoise
+
+        noise_dataset:
+          _target_: src.datasets.AugmentedAudioDataset
+
+          dataset:
+            _target_: src.datasets.WHAM
+            split: train
+          augmentations:
+            - _target_: src.augmentations.ResampleAugmentation
+              new_sample_rate: ${sample_rate}
+            - _target_: src.augmentations.CutAndFitAugmentation
+              target_length: ${audio_length}
+              deterministic: False
+            - _target_: src.augmentations.LoudnessAugmentation
+              loudness_db: -20.0
+
+        min_snr: 0
+        max_snr: 20
+        deterministic: False
+      - _target_: src.datasets.degradations.AddGaussianNoise
+        min_std: 0.0
+        max_std: 0.1
+        deterministic: False
+      - _target_: src.datasets.degradations.TimeMasking
+        max_mask_proportion: 0.2
+        deterministic: False
+    
+valset:
+  _target_: src.datasets.UnpairedAudioDataset
+
+  dataset:
+    _target_: src.datasets.VeryDegradedDataset
+
+    clean_dataset:
+      _target_: src.datasets.AugmentedAudioDataset
+
+      dataset:
+        _target_: src.datasets.VCTK
+        split: val
+      augmentations:
+        - _target_: src.augmentations.ResampleAugmentation
+          new_sample_rate: ${sample_rate}
+        - _target_: src.augmentations.CutAndFitAugmentation
+          target_length: ${audio_length}
+          deterministic: True
+        - _target_: src.augmentations.LoudnessAugmentation
+          loudness_db: -20.0
+
+    degradations:
+      - _target_: src.datasets.degradations.FrequencyMasking
+        max_mask_length: 30
+        deterministic: False
+
+      - _target_: src.datasets.degradations.AddNoise
+
+        noise_dataset:
+          _target_: src.datasets.AugmentedAudioDataset
+
+          dataset:
+            _target_: src.datasets.WHAM
+            split: val
+          augmentations:
+            - _target_: src.augmentations.ResampleAugmentation
+              new_sample_rate: ${sample_rate}
+            - _target_: src.augmentations.CutAndFitAugmentation
+              target_length: ${audio_length}
+              deterministic: True
+            - _target_: src.augmentations.LoudnessAugmentation
+              loudness_db: -20.0
+
+        min_snr: 0
+        max_snr: 20
+        deterministic: True
+      - _target_: src.datasets.degradations.AddGaussianNoise
+        min_std: 0.0
+        max_std: 0.1
+        deterministic: True
+      - _target_: src.datasets.degradations.TimeMasking
+        max_mask_proportion: 0.2
+        deterministic: True
+  
+testset:
+  _target_: src.datasets.UnpairedAudioDataset
+
+  dataset:
+    _target_: src.datasets.VeryDegradedDataset
+
+    clean_dataset:
+      _target_: src.datasets.AugmentedAudioDataset
+
+      dataset:
+        _target_: src.datasets.LibriSpeech
+        split: val
+      augmentations:
+        - _target_: src.augmentations.ResampleAugmentation
+          new_sample_rate: ${sample_rate}
+        - _target_: src.augmentations.CutAndFitAugmentation
+          target_length: ${audio_length}
+          deterministic: True
+        - _target_: src.augmentations.LoudnessAugmentation
+          loudness_db: -20.0
+
+    degradations:
+      - _target_: src.datasets.degradations.FrequencyMasking
+        max_mask_length: 30
+        deterministic: False
+
+      - _target_: src.datasets.degradations.AddNoise
+
+        noise_dataset:
+          _target_: src.datasets.AugmentedAudioDataset
+
+          dataset:
+            _target_: src.datasets.WHAM
+            split: val
+          augmentations:
+            - _target_: src.augmentations.ResampleAugmentation
+              new_sample_rate: ${sample_rate}
+            - _target_: src.augmentations.CutAndFitAugmentation
+              target_length: ${audio_length}
+              deterministic: True
+            - _target_: src.augmentations.LoudnessAugmentation
+              loudness_db: -20.0
+
+        min_snr: 0
+        max_snr: 20
+        deterministic: True
+      - _target_: src.datasets.degradations.AddGaussianNoise
+        min_std: 0.0
+        max_std: 0.1
+        deterministic: True
+      - _target_: src.datasets.degradations.TimeMasking
+        max_mask_proportion: 0.2
+        deterministic: True
