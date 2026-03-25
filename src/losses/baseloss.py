@@ -11,6 +11,3 @@ class BaseLossFunction(nn.Module):
 
     def __call__(self, model_output: ModelOutput, batch: Batch) -> LossOutput:
         return self.forward(model_output, batch)
-
-    def name(self) -> str:
-        return self.__class__.__name__

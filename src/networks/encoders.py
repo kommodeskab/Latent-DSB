@@ -29,14 +29,12 @@ class STFTEncoderDecoder(BaseEncoderDecoder):
         hop_length: int,
         alpha: float = 1 / 4,
         beta: float = 4,
-        image_like: bool = False,
     ):
         self.n_fft = n_fft
         self.hop_length = hop_length
         self.win_length = n_fft
         self.alpha = alpha
         self.beta = beta
-        self.image_like = image_like
 
     def encode(self, audio: Tensor) -> Tensor:
         if not hasattr(self, "original_length"):
@@ -59,23 +57,16 @@ class STFTEncoderDecoder(BaseEncoderDecoder):
 
         stft = self.beta * stft.abs() ** self.alpha * torch.exp(1j * stft.angle())
         real, imag = stft.real, stft.imag
-        # real.shape = imag.shape = (batch_size, n_freq_bins, n_frames)
 
-        if self.image_like:
-            # make two channels, i.e. shape (batch_size, 2, n_freq_bins, n_frames)
-            out = torch.stack([real, imag], dim=1)
-        else:
-            # stack frequency bins, i.e. shape (batch_size, 2*n_freq_bins, n_frames)
-            out = torch.cat([real, imag], dim=1)
+        out = torch.stack([real, imag], dim=1)
 
         return out
 
     def decode(self, encoded: Tensor) -> Tensor:
-        if self.image_like:
-            real, imag = encoded[:, 0], encoded[:, 1]
-        else:
-            n_freq_bins = encoded.shape[1] // 2
-            real, imag = encoded[:, :n_freq_bins], encoded[:, n_freq_bins:]
+        assert (
+            encoded.shape[1] == 2
+        ), "Expected the second dimension of the encoded tensor to be 2 (real and imaginary parts)"
+        real, imag = encoded[:, 0], encoded[:, 1]
 
         stft = (real + 1j * imag) / self.beta
         stft = stft.abs() ** (1 / self.alpha) * torch.exp(1j * stft.angle())

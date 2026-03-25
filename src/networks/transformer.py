@@ -2,7 +2,6 @@ import math
 import torch
 import torch.nn as nn
 from torch import Tensor
-from typing import Optional
 
 
 def modulate(x: Tensor, shift: Tensor, scale: Tensor) -> Tensor:
@@ -166,7 +165,7 @@ class AudioDiffusionTransformer(nn.Module):
         nn.init.normal_(self.pos_embed, std=0.02)
         nn.init.normal_(self.y_embedder.weight, std=0.02)
 
-    def forward(self, x: Tensor, t: Tensor, y: Optional[Tensor] = None) -> Tensor:
+    def forward(self, x: Tensor, t: Tensor, y: Tensor) -> Tensor:
         x = self.encoder(x)
         x = x.transpose(1, 2)
 
@@ -174,12 +173,8 @@ class AudioDiffusionTransformer(nn.Module):
         x = self.pos_drop(x)
 
         t_emb = self.t_embedder.forward(t)
-
-        if y is not None:
-            y_emb = self.y_embedder.forward(y)
-            c = t_emb + y_emb
-        else:
-            c = t_emb
+        y_emb = self.y_embedder.forward(y)
+        c = t_emb + y_emb
 
         for block in self.blocks:
             x = block(x, c)
