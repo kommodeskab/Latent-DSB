@@ -25,6 +25,13 @@ class MetricsCallback(Callback):
         for extra in self.extras:
             extra.to(pl_module.device)
 
+    def on_test_start(self, trainer: pl.Trainer, pl_module: BaseLightningModule):
+        for metric in self.metrics:
+            metric.to(pl_module.device)
+
+        for extra in self.extras:
+            extra.to(pl_module.device)
+
     def _add_extras(
         self, pl_module: BaseLightningModule, outputs: StepOutput, batch: Batch, batch_idx: int
     ) -> TensorDict:

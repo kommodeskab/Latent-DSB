@@ -37,7 +37,7 @@ class DSBScheduler:
         Returns:
             list[tuple[float, float]]: The time schedule for the DSB sampling procedure.
         """
-        
+
         if scheduler_type == "linear":
             t = torch.linspace(0, 1, num_steps + 1)
         elif scheduler_type == "cosine":
@@ -53,13 +53,13 @@ class DSBScheduler:
     @staticmethod
     def to_dim(x: Tensor, dim: int) -> Tensor:
         """Utility function to ensure that the input tensor has the correct number of dimensions."""
-        
+
         while x.dim() < dim:
             x = x.unsqueeze(-1)
         return x
 
     def get_conditional(self, direction: DIRECTIONS, batch_size: int, device: torch.device) -> Tensor:
-        """Utility function to get the conditional tensor for the DSB sampling procedure. 
+        """Utility function to get the conditional tensor for the DSB sampling procedure.
         This tells the model whether we are sampling in the forward or backward direction, and can be used by the model to condition its predictions accordingly."""
         if direction == "forward":
             return torch.ones((batch_size,), dtype=torch.long, device=device)
@@ -72,21 +72,20 @@ class DSBScheduler:
         self, x0: Tensor, x1: Tensor, direction: DIRECTIONS, timesteps: Optional[Tensor] = None
     ) -> SchedulerBatch:
         """
-        The sampling procedure for the DSB scheduler. 
+        The sampling procedure for the DSB scheduler.
         See this paper for example: https://arxiv.org/pdf/2409.09347
-        
+
         Can be summarized like this:
         Given an initial and final point (x0, x1), we can sample a "intermediate" point at time t called x_t,
         as follows:
         x_t ~ p(x_t | x0, x1) = N(mu_t, sigma_t) where mu_t = (1 - t) * x0 + t * x1 and sigma_t = epsilon * t * (1 - t)
         Where epsilon is a hyperparameter that controls the amount of noise added to the system.
-        
+
         The goal is then to learn a "backward" process, that somehow predicts the terminal point, i.e. where the process should end up
         (x0 if direction == "backward" and x1 if direction == "forward")
-        
+
         """
-        
-        
+
         assert direction in get_args(DIRECTIONS), f"Unsupported direction. Use either: {get_args(DIRECTIONS)}"
 
         batch_size = x0.size(0)
@@ -127,10 +126,10 @@ class DSBScheduler:
 
     def sample_training_batch(self, x0_b: Tensor, x1_b: Tensor, x0_f: Tensor, x1_f: Tensor) -> SchedulerBatch:
         """
-        Same as _sample_training_batch but here we both sample forward and backward process, so that the 
+        Same as _sample_training_batch but here we both sample forward and backward process, so that the
         model learns both objectives at the same time. This is good for gradients
         """
-        
+
         b_batch = self._sample_training_batch(x0_b, x1_b, direction="backward")
         f_batch = self._sample_training_batch(x0_f, x1_f, direction="forward")
 
@@ -149,11 +148,10 @@ class DSBScheduler:
     def step(self, xt: Tensor, model_output: Tensor, tk_plus_one: float, tk: float, direction: DIRECTIONS) -> Tensor:
         """
         The step function for the DSB sampling procedure.
-        i.e. 
+        i.e.
         p(x_{t-1} | x_t) if direction == "backward" and p(x_{t+1} | x_t) if direction == "forward"
         """
-        
-        
+
         assert direction in get_args(DIRECTIONS), f"Unsupported direction. Use either: {get_args(DIRECTIONS)}"
         assert tk_plus_one > tk, f"tk_plus_one ({tk_plus_one}) must be greater than tk ({tk})."
 

@@ -10,10 +10,9 @@ from typing import Optional
 class DNSMOS(BaseMetric):
     """
     Mean Opinion Score (MOS) for Deep Noise Suppression (DNS) models.
-    
+
     """
-    
-    
+
     def __init__(self, output_key: str):
         self.output_key = output_key
         self.values = []

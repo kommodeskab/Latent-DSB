@@ -10,7 +10,7 @@ from functools import partial
 from src.networks.encoders import BaseEncoderDecoder
 from typing import Optional
 from src.losses import BaseLossFunction
-from .scheduler import DSBScheduler, DIRECTIONS, SCHEDULER_TYPES
+from src.lightning_modules.scheduler import DSBScheduler, DIRECTIONS, SCHEDULER_TYPES
 from torch_ema import ExponentialMovingAverage
 from contextlib import nullcontext
 
@@ -18,19 +18,19 @@ from contextlib import nullcontext
 class DSB(BaseLightningModule):
     """
     A Latent Diffusion Schrödinger Bridge (DSB) model for unpaired audio translation.
-    
+
     Args:
         model (Module): The main network. Should accept as input a tensor x, a tensor of timesteps t, and a tensor of conditionals c.
         encoder_decoder (BaseEncoderDecoder): An encoder-decoder network for encoding and decoding audio samples to and from the latent space.
         pretraining_steps (int): The number of training step before switching to "finetuning" mode where the model generates it own training examples.
         inference_steps (int): The number of steps to use during inference (sampling). Higher = better quality but slower training. Usually around 5 is satisfactory
         scheduler (DSBScheduler): The DSB scheduler that defines the noise schedule and the sampling procedure. See the scheduler class for more details.
-        loss_fn (Optional[BaseLossFunction]): The loss function to use during training. 
-        optimizer (Optional[partial[Optimizer]]): The optimizer to use during training. 
+        loss_fn (Optional[BaseLossFunction]): The loss function to use during training.
+        optimizer (Optional[partial[Optimizer]]): The optimizer to use during training.
         lr_scheduler (Optional[dict[str, partial[LRScheduler] | str]]): The learning rate scheduler to use during training.
-    
+
     """
-    
+
     def __init__(
         self,
         model: Module,
@@ -43,14 +43,18 @@ class DSB(BaseLightningModule):
         lr_scheduler: Optional[dict[str, partial[LRScheduler] | str]] = None,
     ):
         super().__init__(optimizer, lr_scheduler)
-        self.save_hyperparameters(ignore=["model", "encoder_decoder", "scheduler", "loss_fn", "optimizer", "lr_scheduler"])
+        self.save_hyperparameters(
+            ignore=["model", "encoder_decoder", "scheduler", "loss_fn", "optimizer", "lr_scheduler"]
+        )
         self.model = model
         self.encoder_decoder = encoder_decoder
         self.pretraining_steps = pretraining_steps
         self.inference_steps = inference_steps
         self.loss_fn = loss_fn
         self.scheduler = scheduler
-        self.ema = ExponentialMovingAverage(self.parameters(), decay=0.9999) # keep a moving average of the model parameters for evaluation and sampling
+        self.ema = ExponentialMovingAverage(
+            self.parameters(), decay=0.9999
+        )  # keep a moving average of the model parameters for evaluation and sampling
 
     def to(self, device: torch.device):
         self.encoder_decoder.to(device)
@@ -67,10 +71,10 @@ class DSB(BaseLightningModule):
 
     def forward(self, batch: SchedulerBatch) -> ModelOutput:
         context = self.ema.average_parameters() if not self.training else nullcontext()
-        
+
         with context:
             output = self.model(batch["xt"], batch["timesteps"], batch["conditional"])
-            
+
         return ModelOutput(output=output)
 
     def encode(self, x: Tensor) -> Tensor:
@@ -83,16 +87,16 @@ class DSB(BaseLightningModule):
         """
         The training/validation/test step for the DSB model.
         The DSB model is provided with a UnpairedAudioBatch which consists of two unpaired batches, x0 and x1, from two different domains.
-        
+
         During pretraining, the model tries to learn a path between these two random batches. This gives subpair results but is required for the model to converge.
         During finetuning, the model generates its own training examples by sampling from x0 to x1 and from x1 to x0 using the current model. This allows the model to learn from its own mistakes and improve over time.
-        
+
         Args:
             batch (UnpairedAudioBatch): A batch of unpaired audio samples from two different domains
             batch_idx (int): The index of the batch in the current epoch.
         Returns:
             StepOutput: The output of the training step, containing the loss and any other relevant information
-        
+
         """
         x0, x1 = batch["x0"], batch["x1"]
         x0, x1 = self.encode(x0), self.encode(x1)
@@ -118,16 +122,16 @@ class DSB(BaseLightningModule):
             loss_output=loss_output,
             module=self,
         )
-        
+
     def on_before_zero_grad(self, optimizer: Optimizer):
         # update ema weights
         self.ema.update()
         return super().on_before_zero_grad(optimizer)
-        
+
     def on_save_checkpoint(self, checkpoint: dict) -> dict:
         # save ema state dict in checkpoint
         checkpoint["ema"] = self.ema.state_dict()
-    
+
     def on_load_checkpoint(self, checkpoint: dict):
         # load ema state dict from checkpoint
         self.ema.load_state_dict(checkpoint["ema"])
@@ -144,10 +148,10 @@ class DSB(BaseLightningModule):
         encode: bool = False,
     ) -> Tensor:
         """
-        Sampling from the model using the DSB sampling procedure. 
+        Sampling from the model using the DSB sampling procedure.
 
         Args:
-            x_start (Tensor): The starting point. 
+            x_start (Tensor): The starting point.
             direction (DIRECTIONS): The direction of sampling.
             num_steps (int): The number of steps to sample.
             scheduler_type (SCHEDULER_TYPES, optional): The type of scheduler to use. Defaults to "linear".
@@ -158,7 +162,7 @@ class DSB(BaseLightningModule):
         Returns:
             Tensor: The sampled output.
         """
-        
+
         training = self.training  # Store the original training mode
         self.eval()  # Ensure the model is in eval mode for sampling
 
@@ -182,17 +186,104 @@ class DSB(BaseLightningModule):
         for tk_plus_one, tk in tqdm(timeschedule, desc="Sampling...", leave=False, disable=not verbose):
             t = torch.full((batch_size,), tk_plus_one if direction == "backward" else tk, device=device)
             x_in = torch.cat([x, x_start], dim=1) if self.scheduler.condition_on_start else x
-            
+
             with torch.no_grad():
                 model_output = self.forward(SchedulerBatch(xt=x_in, timesteps=t, conditional=c))
-                
+
             x = self.scheduler.step(x, model_output["output"], tk_plus_one, tk, direction)
             trajectory.append(self.decode(x) if encode else x)
 
         if training:  # Restore the original training mode
             self.train()
-            
+
         if return_trajectory:
             return torch.stack(trajectory, dim=0)
 
         return trajectory[-1]
+
+
+class PairedDSB(DSB):
+    def __init__(
+        self,
+        model: Module,
+        encoder_decoder: BaseEncoderDecoder,
+        scheduler: DSBScheduler,
+        loss_fn: Optional[BaseLossFunction] = None,
+        optimizer: Optional[partial[Optimizer]] = None,
+        lr_scheduler: Optional[dict[str, partial[LRScheduler] | str]] = None,
+    ):
+        super().__init__(model, encoder_decoder, None, None, scheduler, loss_fn, optimizer, lr_scheduler)
+
+    def common_step(self, batch: UnpairedAudioBatch, batch_idx: int) -> StepOutput:
+        x0, x1 = batch["x0"], batch["x1"]
+        x0, x1 = self.encode(x0), self.encode(x1)
+
+        # in the paired setting, we only train the backward model and we use the original x0 and x1 as the training pairs
+        scheduler_batch = self.scheduler._sample_training_batch(x0, x1, direction="backward")
+        model_output = self.forward(scheduler_batch)
+
+        loss_output = self.loss_fn.forward(model_output, scheduler_batch)
+
+        return StepOutput(
+            loss=loss_output["loss"],
+            model_output=model_output,
+            loss_output=loss_output,
+            module=self,
+        )
+
+    def forward(self, batch: SchedulerBatch) -> ModelOutput:
+        context = self.ema.average_parameters() if not self.training else nullcontext()
+
+        with context:
+            # since we are only training the backward model, we don't need the conditional "backward or forward"
+            output = self.model(batch["xt"], batch["timesteps"])
+
+        return ModelOutput(output=output)
+
+
+if __name__ == "__main__":
+    from src.networks.encoders import IdentityEncoderDecoder
+
+    class DummyNetwork(Module):
+        def __init__(self, output_tensor: Tensor):
+            super().__init__()
+            self.register_buffer("output_tensor", output_tensor)
+
+        def forward(self, xt: Tensor, timesteps: Tensor, conditional: Tensor) -> Tensor:
+            return self.output_tensor
+
+    input_tensor = torch.randn(1, 10)
+    output_tensor = torch.randn(1, 10)
+    network = DummyNetwork(output_tensor)
+    encoder_decoder = IdentityEncoderDecoder()
+    scheduler = DSBScheduler(
+        epsilon=1.0,
+        target="terminal",
+        condition_on_start=False,
+    )
+
+    dsb = DSB(
+        model=network,
+        encoder_decoder=encoder_decoder,
+        pretraining_steps=10,  # doesn't matter for this test
+        inference_steps=10,  # doesn't matter for this test
+        scheduler=scheduler,
+        loss_fn=None,  # doesn't matter for this test
+        optimizer=None,  # doesn't matter for this test
+        lr_scheduler=None,  # doesn't matter for this test
+    )
+
+    for direction in ["forward", "backward"]:
+        sampled_tensor = dsb.sample(
+            x_start=input_tensor,
+            direction=direction,
+            num_steps=10,
+            scheduler_type="linear",
+            return_trajectory=False,
+            verbose=False,
+            encode=False,
+        )
+
+        assert torch.allclose(
+            sampled_tensor, output_tensor
+        ), "The sampled tensor should be equal to the output tensor from the dummy network."

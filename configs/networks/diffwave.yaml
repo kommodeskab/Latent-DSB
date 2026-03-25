@@ -1,0 +1,5 @@
+_target_: src.networks.DiffWave
+residual_channels: 256
+residual_layers: 45
+dilation_cycle_length: 12
+num_classes: 2

@@ -3,16 +3,16 @@
 defaults:
   - override /trainer: gpu
   - override /data: noisy
-  - override /callbacks: dsb
-  - override /model: waveform
+  - override /callbacks: test_metrics
+  - override /model: gfb
   - override /logger: default
 
-project_name: 'unpaired-audio-diffusion'
-task_name: 'test'
+project_name: 'baselines'
+task_name: 'gfb'
 compile: False
-phase: 'train'
+phase: 'test'
 
-audio_length: 48000
+audio_length: 32768
 sample_rate: 16000
 
 data:

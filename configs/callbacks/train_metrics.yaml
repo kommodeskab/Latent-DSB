@@ -29,12 +29,24 @@ unpaired_audio_metrics:
     - _target_: src.callbacks.metrics.DNSMOS
       output_key: x0_hat
 
+    - _target_: src.callbacks.metrics.FAD
+      output_key: x0_hat
+      real_key: x0
+
     # -- distortion metrics --
     - _target_: src.callbacks.metrics.SISDRi
       clean_key: x1_clean
       degraded_key: x1
       output_key: x0_hat
 
+    - _target_: src.callbacks.metrics.SRCS
+      clean_key: x1_clean
+      output_key: x0_hat
+
   extras:
     - _target_: src.callbacks.extras.GenerateSamplesExtra
+      key: x1
+      out_key: x0_hat
+      direction: backward
       num_steps: 10
+      encode: True

@@ -3,7 +3,6 @@ import hydra
 from omegaconf import DictConfig
 from datetime import datetime
 import wandb
-import contextlib
 import random
 import numpy as np
 import torch
@@ -16,11 +15,12 @@ import logging
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader, Dataset
 from src import Batch
+from contextlib import contextmanager, nullcontext, AbstractContextManager
 
 logger = logging.getLogger(__name__)
 
 
-@contextlib.contextmanager
+@contextmanager
 def temporary_seed(seed: int):
     """
     Context manager for setting a temporary random seed. Sets `random`, `numpy`, `torch` and `torch.cuda` (if available) seeds.
@@ -57,6 +57,20 @@ def temporary_seed(seed: int):
         torch.random.set_rng_state(torch_state)
         if cuda_state is not None:
             torch.cuda.set_rng_state(cuda_state)
+
+
+def get_context(seed: int, deterministic: bool) -> AbstractContextManager:
+    """
+    Returns a context manager for setting a temporary random seed if `deterministic` is `True`, otherwise returns a null context manager.
+
+    Args:
+        seed (int): The temporary random seed to set if `deterministic` is `True`.
+        deterministic (bool): Whether to set the temporary random seed.
+
+    Returns:
+        contextlib.AbstractContextManager: A context manager for setting a temporary random seed if `deterministic` is `True`, otherwise a null context manager.
+    """
+    return temporary_seed(seed) if deterministic else nullcontext()
 
 
 def get_current_time() -> str:
