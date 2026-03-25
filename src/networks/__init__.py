@@ -5,3 +5,4 @@ from src.networks.encoders import PolarSTFTEncoderDecoder as PolarSTFTEncoderDec
 from src.networks.encoders import STFTEncoderDecoder as STFTEncoderDecoder
 from .encoders import HifiGan as HifiGan
 from .transformer import AudioDiffusionTransformer as AudioDiffusionTransformer
+from .diffwave import DiffWave as DiffWave

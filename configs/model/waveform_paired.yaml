@@ -3,19 +3,18 @@ _target_: src.lightning_modules.PairedDSB
 defaults:
   - /encoders@encoder_decoder: identity
   - /networks@model: transformer
-  - /losses@loss_fn: l1
+  - /losses@loss_fn: mse
   - /optimizer: adamw
   - /lr_scheduler: constant
 
 encoder_decoder:
-  scaling_factor: 1
+  scaling_factor: 20
 
 scheduler:
   _target_: src.lightning_modules.DSBScheduler
-  epsilon: 0.05
-  target: drift
+  epsilon: 1.0
+  target: scaled_drift
   condition_on_start: False
 
 model:
-  in_channels: 1
   num_classes: 0
