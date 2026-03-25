@@ -9,7 +9,7 @@ trainset:
   _target_: src.datasets.UnpairedAudioDataset
 
   dataset:
-    _target_: src.datasets.VeryDegradedDataset
+    _target_: src.datasets.DegradedDataset
 
     clean_dataset:
       _target_: src.datasets.AugmentedAudioDataset
@@ -63,7 +63,7 @@ valset:
   _target_: src.datasets.UnpairedAudioDataset
 
   dataset:
-    _target_: src.datasets.VeryDegradedDataset
+    _target_: src.datasets.DegradedDataset
 
     clean_dataset:
       _target_: src.datasets.AugmentedAudioDataset
@@ -117,7 +117,7 @@ testset:
   _target_: src.datasets.UnpairedAudioDataset
 
   dataset:
-    _target_: src.datasets.VeryDegradedDataset
+    _target_: src.datasets.DegradedDataset
 
     clean_dataset:
       _target_: src.datasets.AugmentedAudioDataset

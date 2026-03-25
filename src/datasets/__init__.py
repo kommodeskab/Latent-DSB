@@ -7,5 +7,3 @@ from .audio import AudioDataset as AudioDataset
 from .augmented import AugmentedAudioDataset as AugmentedAudioDataset
 from .unpaired import UnpairedAudioDataset as UnpairedAudioDataset
 from .degraded import DegradedDataset as DegradedDataset
-from .degraded import NoisyDegradedDataset as NoisyDegradedDataset
-from .degraded import VeryDegradedDataset as VeryDegradedDataset
