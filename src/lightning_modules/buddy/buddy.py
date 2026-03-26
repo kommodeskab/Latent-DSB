@@ -16,6 +16,12 @@ load_dotenv()
 
 
 class Buddy(BaseLightningModule):
+    """
+    BUDDy: Single-channel Blind Unsupervised Dereverberation with Diffusion Models
+    Taken from here: https://github.com/sp-uhh/buddy
+    Used as a baseline
+    """
+
     def __init__(self, num_steps: int = 201):
         super().__init__()
 

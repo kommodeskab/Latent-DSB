@@ -1141,6 +1141,14 @@ def download_file(url: str, target_folder: str):
 
 
 class GFB(BaseLightningModule):
+    """
+    Gaussian Flow Bridges for audio domain transfer with unpaired data
+    Taken from here:
+    https://github.com/microsoft/GFB-audio-control
+
+    Used as a baseline.
+    """
+
     def __init__(
         self,
         task: Literal["rir", "clip"],

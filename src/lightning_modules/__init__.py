@@ -5,3 +5,5 @@ from .dsb import DSB as DSB
 from .gfb import GFB as GFB
 from .dsb import PairedDSB as PairedDSB
 from .buddy.buddy import Buddy as Buddy
+from .wpe import WPE as WPE
+from .identity import Identity as Identity
