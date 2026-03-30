@@ -1,7 +1,7 @@
-from src.lightning_modules.buddy.testing.operators.subband_filtering import BlindSubbandFiltering
-from src.lightning_modules.buddy.testing.EulerHeunSamplerDPS import EulerHeunSamplerDPS
-from src.lightning_modules.buddy.networks.ncsnpp import NCSNppTime
-import src.lightning_modules.buddy.utils.training_utils as tr_utils
+from src.lightning_modules.baselines.buddy.testing.operators.subband_filtering import BlindSubbandFiltering
+from src.lightning_modules.baselines.buddy.testing.EulerHeunSamplerDPS import EulerHeunSamplerDPS
+from src.lightning_modules.baselines.buddy.networks.ncsnpp import NCSNppTime
+import src.lightning_modules.baselines.buddy.utils.training_utils as tr_utils
 
 import os
 import torch
@@ -25,6 +25,7 @@ class Buddy(BaseLightningModule):
     def __init__(self, num_steps: int = 201):
         super().__init__()
 
+        # the args used by the authors
         self.args = OmegaConf.create(
             {
                 "dset": {
@@ -68,7 +69,7 @@ class Buddy(BaseLightningModule):
                     "discriminative": False,
                 },
                 "diff_params": {
-                    "_target_": "src.lightning_modules.buddy.diff_params.edm.EDM",
+                    "_target_": "src.lightning_modules.baselines.buddy.diff_params.edm.EDM",
                     "type": "ve_karras",
                     "sde_hp": {"sigma_data": 0.05, "sigma_min": 1e-05, "sigma_max": 10, "rho": 10},
                 },
@@ -250,7 +251,7 @@ class Buddy(BaseLightningModule):
         )
         data_path = os.getenv("DATA_PATH")
         url = "https://drive.google.com/uc?id=1j-BHDqiKxbEfpDUpc1GHZXeoHIA1nIal"
-        output = f"{data_path}/model.pt"
+        output = f"{data_path}/buddy_model.pt"
 
         if not os.path.exists(output):
             gdown.download(url, output, quiet=False)

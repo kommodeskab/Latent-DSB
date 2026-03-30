@@ -1,5 +1,5 @@
-from src.lightning_modules.buddy.utils.losses import get_loss
-from src.lightning_modules.buddy.testing.EulerHeunSampler import EulerHeunSampler
+from src.lightning_modules.baselines.buddy.utils.losses import get_loss
+from src.lightning_modules.baselines.buddy.testing.EulerHeunSampler import EulerHeunSampler
 
 from tqdm import tqdm
 import torch

@@ -4,19 +4,16 @@ defaults:
   - override /trainer: gpu
   - override /data: noisy
   - override /callbacks: test_metrics
-  - override /model: baseline_buddy
+  - override /model: baseline_sgmse
   - override /logger: default
 
 project_name: 'baselines'
-task_name: 'buddy'
+task_name: 'sgmse'
 compile: False
 phase: 'test'
 
-audio_length: 32768
+audio_length: 32000
 sample_rate: 16000
-
-model:
-  num_steps: 10
 
 data:
   batch_size: 8

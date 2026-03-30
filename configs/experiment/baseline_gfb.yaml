@@ -4,7 +4,7 @@ defaults:
   - override /trainer: gpu
   - override /data: noisy
   - override /callbacks: test_metrics
-  - override /model: gfb
+  - override /model: baseline_gfb
   - override /logger: default
 
 project_name: 'baselines'

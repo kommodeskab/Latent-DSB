@@ -1,5 +1,5 @@
 import torch
-from src.lightning_modules.buddy.diff_params.shared import SDE
+from src.lightning_modules.baselines.buddy.diff_params.shared import SDE
 
 
 class EDM(SDE):

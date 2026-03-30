@@ -1,5 +1,5 @@
-import src.lightning_modules.buddy.utils.reverb_utils as reverb_utils
-from src.lightning_modules.buddy.testing.operators.shared import Operator
+import src.lightning_modules.baselines.buddy.utils.reverb_utils as reverb_utils
+from src.lightning_modules.baselines.buddy.testing.operators.shared import Operator
 
 import numpy as np
 import torch

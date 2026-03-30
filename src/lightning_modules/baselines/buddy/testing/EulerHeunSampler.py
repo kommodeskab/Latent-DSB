@@ -1,7 +1,7 @@
 from tqdm import tqdm
 import torch
 
-from src.lightning_modules.buddy.testing.Sampler import Sampler
+from src.lightning_modules.baselines.buddy.testing.Sampler import Sampler
 
 
 class EulerHeunSampler(Sampler):

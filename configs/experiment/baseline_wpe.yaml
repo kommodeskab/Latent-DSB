@@ -4,7 +4,7 @@ defaults:
   - override /trainer: gpu
   - override /data: noisy
   - override /callbacks: test_metrics
-  - override /model: wpe
+  - override /model: baseline_wpe
   - override /logger: default
 
 project_name: 'baselines'
