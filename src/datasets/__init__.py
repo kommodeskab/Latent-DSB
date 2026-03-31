@@ -2,7 +2,7 @@ from .basedataset import BaseDataset as BaseDataset
 from .dummy import DummyDataset as DummyDataset
 from .vctk import VCTK as VCTK
 from .wham import WHAM as WHAM
-from .RIR import RIR as RIR
+from .rir import RIR as RIR
 from .librispeech import LibriSpeech as LibriSpeech
 from .audio import AudioDataset as AudioDataset
 from .augmented import AugmentedAudioDataset as AugmentedAudioDataset
