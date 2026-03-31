@@ -8,8 +8,9 @@ import os
 
 os.environ["HF_DATASETS_AUDIO_BACKEND"] = "soundfile"
 
+
 class RIR(BaseDataset):
-    def __init__(self, split: Literal["train","test","val"],mono=True):
+    def __init__(self, split: Literal["train", "test", "val"], mono=True):
         super().__init__()
         match split:
             case "train":
@@ -18,10 +19,11 @@ class RIR(BaseDataset):
                 split = "test"
             case "val":
                 split = "validation"
-        self.dataset = load_dataset(path="andnymand/RIR-datasets",\
-            name="mono" if mono else "binaural", split=split, cache_dir=self.data_path)
-        #Always say mono = false here - hugging face loads lazily, so it does not slow mono files down, and skips an unnecessary conditional
-        #Also makes troubleshooting more clear later perhaps
+        self.dataset = load_dataset(
+            path="andnymand/RIR-datasets", name="mono" if mono else "binaural", split=split, cache_dir=self.data_path
+        )
+        # Always say mono = false here - hugging face loads lazily, so it does not slow mono files down, and skips an unnecessary conditional
+        # Also makes troubleshooting more clear later perhaps
         self.dataset = self.dataset.cast_column("audio", Audio(mono=False))
 
     def __len__(self) -> int:
@@ -35,11 +37,12 @@ class RIR(BaseDataset):
         sample_rate = sample["audio"]["sampling_rate"]
         return AudioSample(waveform=input, sample_rate=sample_rate)
 
+
 if __name__ == "__main__":
     dataset_train = RIR(split="train")
     dataset_test = RIR(split="test")
     dataset_val = RIR(split="val")
-    dataset_bin = RIR(split="train",mono=False)
+    dataset_bin = RIR(split="train", mono=False)
     train = dataset_train[0]["waveform"]
     test = dataset_test[0]["waveform"]
     val = dataset_val[0]["waveform"]
@@ -48,5 +51,5 @@ if __name__ == "__main__":
     print(test.shape)
     print(val.shape)
     print(bin.shape)
-    print(bin[:,0:6])
+    print(bin[:, 0:6])
     print(type(train))
