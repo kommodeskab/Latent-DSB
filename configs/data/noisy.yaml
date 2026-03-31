@@ -46,7 +46,7 @@ trainset:
 
         min_snr: 0
         max_snr: 20
-        drop_prob: 0.0
+        prob: 1.0
         deterministic: False
 
 valset:
@@ -90,7 +90,7 @@ valset:
 
         min_snr: 0
         max_snr: 20
-        drop_prob: 0.0
+        prob: 1.0
         deterministic: True
 
 testset:
@@ -134,5 +134,5 @@ testset:
 
         min_snr: 0
         max_snr: 20
-        drop_prob: 0.0
+        prob: 1.0
         deterministic: True

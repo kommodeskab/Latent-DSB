@@ -9,8 +9,8 @@ class TimeMasking(BaseDegradation):
     T
     """
 
-    def __init__(self, max_mask_proportion: float, drop_prob: float = 0.0, deterministic: bool = False):
-        super().__init__(prob_prob=drop_prob, deterministic=deterministic)
+    def __init__(self, max_mask_proportion: float, prob: float = 0.0, deterministic: bool = False):
+        super().__init__(prob=prob, deterministic=deterministic)
         assert (
             0 <= max_mask_proportion <= 1
         ), "max_mask_proportion must be between 0 and 1 (representing the proportion of the audio to mask)"

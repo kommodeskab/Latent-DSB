@@ -16,16 +16,16 @@ class AddNoise(BaseDegradation):
         noise_dataset: AudioDataset,
         min_snr: float,
         max_snr: float,
-        drop_prob: float = 0.0,
+        prob: float = 0.0,
         deterministic: bool = False,
     ):
-        super().__init__(prob_prob=drop_prob, deterministic=deterministic)
+        super().__init__(prob=prob, deterministic=deterministic)
         self.noise_dataset = noise_dataset
         self.min_snr = min_snr
         self.max_snr = max_snr
         self.deterministic = deterministic
 
-    def _sample_snr(self) -> float:
+    def _sample_snr(self) -> Tensor:
         return torch.empty(1).uniform_(self.min_snr, self.max_snr)
 
     def fun(self, audio: Tensor) -> Tensor:
