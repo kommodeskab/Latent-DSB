@@ -8,7 +8,7 @@ class AddGaussianNoise(BaseDegradation):
         self,
         min_std: float,
         max_std: float,
-        prob: float = 0.0,
+        prob: float = 1.0,
         deterministic: bool = False,
     ):
         super().__init__(prob=prob, deterministic=deterministic)
