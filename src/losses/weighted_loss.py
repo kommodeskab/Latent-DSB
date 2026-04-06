@@ -24,6 +24,6 @@ class WeightedLoss(BaseLossFunction):
             # the loss outputs might contain other keys than "loss",
             # we also want to log these, therefore, we add the loss name as prefix to the key
             for key, value in loss_output.items():
-                loss[f"{loss_fn.name()}_{key}"] = value
+                loss[f"{loss_fn.__class__.__name__}_{key}"] = value
 
         return LossOutput(**loss)

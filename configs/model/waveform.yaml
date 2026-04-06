@@ -2,7 +2,7 @@ _target_: src.lightning_modules.DSB
 
 defaults:
   - /encoders@encoder_decoder: identity
-  - /networks@model: diffwave
+  - /networks@model: mamba
   - /losses@loss_fn: l1
   - /optimizer: adamw
   - /lr_scheduler: constant
@@ -11,10 +11,10 @@ pretraining_steps: 100_000
 inference_steps: 5
 
 encoder_decoder:
-  scaling_factor: 1
+  scaling_factor: 20
 
 scheduler:
   _target_: src.lightning_modules.DSBScheduler
-  epsilon: 0.05
+  epsilon: 1.0
   target: drift
   condition_on_start: False
