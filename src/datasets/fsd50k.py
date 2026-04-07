@@ -6,6 +6,11 @@ import torch
 
 
 class FSD50K(BaseDataset):
+    """
+    FSD50K (Free Sound Dataset 50K) is a large-scale noise dataset of human-labeled sound events.
+    Available as a HuggingFace dataset: https://huggingface.co/datasets/philgzl/fsd50k
+    """
+
     def __init__(self, split: Literal["train", "val"]):
         super().__init__()
         split = "dev" if split == "train" else "eval"  # naming convention from the HuggingFace dataset
