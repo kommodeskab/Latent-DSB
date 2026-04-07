@@ -19,10 +19,15 @@ class RIR(BaseDataset):
                 split = "test"
             case "val":
                 split = "validation"
-        # Note that mono returns rirs with just one channel - binaural has general multi-channel rirs., most of them 2, some 4, some 16.
+
+        # Note that mono returns rirs with just one channel - binaural has general multi-channel rirs., most of them 2, some 4, some 16, idk.
         self.dataset = load_dataset(
-            path="andnymand/RIR-datasets", name="mono" if mono else "binaural", split=split, cache_dir=self.data_path
+            path="andnymand/RIR-datasets",
+            name="mono" if mono else "binaural",
+            split=split,
+            cache_dir=self.data_path,
         )
+
         # Always say mono = false here - hugging face loads lazily, so it does not slow mono files down, and skips an unnecessary conditional
         # Also makes troubleshooting more clear later perhaps
         self.dataset = self.dataset.cast_column("audio", Audio(mono=False))

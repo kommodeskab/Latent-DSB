@@ -22,15 +22,16 @@ class Reverb(BaseDegradation):
 
     def fun(self, audio: Tensor) -> Tensor:
         RIR: AudioSample = self.RIR_dataset.sample()
+
         # Filter the start of the rir at the rir threshold.
         energy = RIR["waveform"] ** 2
+
         # linear scale threshold
         threshold = energy.max() * (10 ** (self.rir_threshold / 10.0))
+
         # find first sample over threshold. [0] gives first, [-1] gives sample dim index
         delay_idx = (energy >= threshold).nonzero()[0][-1]
         rir = RIR["waveform"][..., delay_idx:]
-        print(rir.shape)
-        print(RIR["waveform"].shape)
         # normalize to original loudness - ensure no energy is added by the rir.
         reverbed_audio = fftconvolve(audio, rir, mode="same")
         power_reverb = torch.mean(reverbed_audio**2)
