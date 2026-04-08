@@ -22,7 +22,7 @@ class DegradedAudioSample(TypedDict):
 class UnpairedAudioBatch(TypedDict):
     x0: Tensor
     x1: Tensor
-    x1_clean: Tensor
+    x1_clean: Optional[Tensor]
     sample_rate: list[int]
 
 

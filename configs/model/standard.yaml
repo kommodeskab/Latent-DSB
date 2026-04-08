@@ -16,5 +16,5 @@ encoder_decoder:
 scheduler:
   _target_: src.lightning_modules.DSBScheduler
   epsilon: 1.0
-  target: drift
+  target: terminal
   condition_on_start: False

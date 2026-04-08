@@ -9,7 +9,7 @@ class TimeMasking(BaseDegradation):
     T
     """
 
-    def __init__(self, max_mask_proportion: float, prob: float = 0.0, deterministic: bool = False):
+    def __init__(self, max_mask_proportion: float, prob: float = 1.0, deterministic: bool = False):
         super().__init__(prob=prob, deterministic=deterministic)
         assert (
             0 <= max_mask_proportion <= 1

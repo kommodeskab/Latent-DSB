@@ -13,7 +13,7 @@ class Clip(BaseDegradation):
         self,
         min_dB: float,
         max_dB: float,
-        prob: float = 0.0,
+        prob: float = 1.0,
         deterministic: bool = False,
         binary_search_iterations: int = 25,
     ):

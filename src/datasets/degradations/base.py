@@ -13,7 +13,7 @@ class BaseDegradation:
         deterministic (bool): Whether to use deterministic behavior for reproducibility.
     """
 
-    def __init__(self, prob: float = 0.0, deterministic: bool = False):
+    def __init__(self, prob: float = 1.0, deterministic: bool = False):
         assert 0 <= prob <= 1, "Probability must be between 0 and 1"
         self.prob = prob
         self.deterministic = deterministic

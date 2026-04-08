@@ -1,0 +1,4 @@
+_target_: src.networks.PretrainedModel
+id: ???
+model_keyword: model
+ckpt_filename: last
