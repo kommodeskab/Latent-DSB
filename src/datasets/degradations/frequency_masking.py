@@ -5,7 +5,7 @@ from src.datasets.degradations import BaseDegradation
 
 
 class FrequencyMasking(BaseDegradation):
-    def __init__(self, max_mask_length: int = 30, n_fft: int = 400, prob: float = 0.0, deterministic: bool = False):
+    def __init__(self, max_mask_length: int = 30, n_fft: int = 400, prob: float = 1.0, deterministic: bool = False):
         super().__init__(prob=prob, deterministic=deterministic)
         self.max_mask_length = max_mask_length
         self.n_fft = n_fft

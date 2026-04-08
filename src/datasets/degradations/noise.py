@@ -16,7 +16,7 @@ class AddNoise(BaseDegradation):
         noise_dataset: AudioDataset,
         min_snr: float,
         max_snr: float,
-        prob: float = 0.0,
+        prob: float = 1.0,
         deterministic: bool = False,
     ):
         super().__init__(prob=prob, deterministic=deterministic)
