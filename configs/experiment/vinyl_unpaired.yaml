@@ -1,16 +1,16 @@
 # @package _global_
 
-# unpaired finetuning denoising with clean: VCTK and noisy: Libri + WHAM
+# unpaired denoising with clean: VCTK, and noisy: Libri + WHAM
 
 defaults:
   - override /trainer: gpu
-  - override /data: noise_unpaired
-  - override /callbacks: dsb
-  - override /model: finetuning
+  - override /data: vinyl_unpaired
+  - override /callbacks: dsb_vinyl
+  - override /model: standard
   - override /logger: default
 
 project_name: 'denoising'
-task_name: 'paired denoising'
+task_name: 'unpaired denoising'
 compile: True
 phase: 'train'
 

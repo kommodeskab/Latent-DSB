@@ -1,6 +1,6 @@
 # @package _global_
 
-# paired denoising with clean: VCTK and noisy: VCTK + WHAM
+# paired pretraining denoising with clean: VCTK and noisy: VCTK + WHAM
 
 defaults:
   - override /trainer: gpu
@@ -24,9 +24,6 @@ data:
 
 model:
   pretraining_steps: 300_000
-
-  scheduler:
-    epsilon: 1.0
 
 trainer:
   max_steps: 400_000

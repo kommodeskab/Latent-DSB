@@ -1,0 +1,11 @@
+defaults:
+  - learningratemonitor
+  - logloss
+  - modelcheckpoint
+  - loggrad
+  - batchespersecond
+  - params
+  - vinyl_metrics
+
+scheduler:
+  _target_: src.callbacks.VisualizeSchedulerCallback

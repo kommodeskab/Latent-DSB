@@ -1,0 +1,44 @@
+_target_: src.data_modules.BaseDM
+
+# UNPAIRED
+# clean data: VCTK
+# degraded data: vinel recordings (also called NewsReports)
+
+defaults:
+  # first, we specify that the degraded dataset should be libri speech...
+  - /datasets@trainset.degraded_dataset: vinyl_train
+  - /datasets@valset.degraded_dataset: vinyl_test
+  - /datasets@testset.degraded_dataset: vinyl_test
+  # and the the clean target dataset should be VCTK
+  - /datasets@trainset.clean_dataset: vctk_train
+  - /datasets@valset.clean_dataset: vctk_test
+  - /datasets@testset.clean_dataset: vctk_test
+
+batch_size: 4
+num_workers: 4
+pin_memory: True
+persistent_workers: True
+
+trainset:
+  _target_: src.datasets.UnpairedAudioDataset
+  x0_key: waveform
+  x1_key: waveform
+  x1_clean_key: None
+  deterministic: False
+  paired: False
+
+valset:
+  _target_: src.datasets.UnpairedAudioDataset
+  x0_key: waveform
+  x1_key: waveform
+  x1_clean_key: None
+  deterministic: True
+  paired: False
+
+testset:
+  _target_: src.datasets.UnpairedAudioDataset
+  x0_key: waveform
+  x1_key: waveform
+  x1_clean_key: None
+  deterministic: True
+  paired: False
