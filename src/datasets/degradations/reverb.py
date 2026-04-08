@@ -33,7 +33,8 @@ class Reverb(BaseDegradation):
         delay_idx = (energy >= threshold).nonzero()[0][-1]
         rir = RIR["waveform"][..., delay_idx:]
         # normalize to original loudness - ensure no energy is added by the rir.
-        reverbed_audio = fftconvolve(audio, rir, mode="same")
+        audio_len = audio.shape[1]
+        reverbed_audio = fftconvolve(audio, rir, mode="full")[..., :audio_len]
         power_reverb = torch.mean(reverbed_audio**2)
         power_original = torch.mean(audio**2)
 
