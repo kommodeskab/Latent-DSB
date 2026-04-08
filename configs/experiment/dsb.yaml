@@ -1,16 +1,16 @@
 # @package _global_
 
-# unpaired dereverberation with VCTK + RIR
+# The standard config for schrödinger bridge experiments
 
 defaults:
   - override /trainer: gpu
-  - override /data: reverb_unpaired
+  - override /data: ???
   - override /callbacks: dsb
   - override /model: standard
   - override /logger: default
 
-project_name: 'dereverberation'
-task_name: 'unpaired dsb'
+project_name: ???
+task_name: ???
 compile: True
 phase: 'train'
 

@@ -1,32 +1,20 @@
 # @package _global_
 
 # unpaired finetuning denoising with clean: VCTK and noisy: Libri + WHAM
+# this model should be initialized with a paired pretraining model
+# and then be finetuned on the unpaired data
 
 defaults:
-  - override /trainer: gpu
+  - dsb
   - override /data: noise_unpaired
-  - override /callbacks: dsb
   - override /model: finetuning
-  - override /logger: default
 
 project_name: 'denoising'
-task_name: 'paired denoising'
-compile: True
-phase: 'train'
-
-train_audio_length: 48000
-test_audio_length: 48000
-sample_rate: 16000
-
-data:
-  batch_size: 8
-  num_workers: 12
+task_name: 'unpaired denoising finetuning'
 
 model:
-  pretraining_steps: 300_000
+  pretraining_steps: 0 # the model is already pretrained, so we go straight to finetuning
 
-trainer:
-  max_steps: 400_000
-  log_every_n_steps: 100
-  max_epochs: -1
-  limit_val_batches: 100
+  model:
+    # this model is a pretrained model. we need to specify which id the pretrained model has
+    id: ???

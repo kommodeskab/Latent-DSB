@@ -2,17 +2,17 @@ _target_: src.data_modules.BaseDM
 
 # UNPAIRED
 # clean data: VCTK
-# degraded data: LibriSpeech + WHAM noise
+# degraded data: LibriSpeech + FSD50K noise
 
 defaults:
   # first, we specify that the degraded dataset should be libri speech...
   - /datasets@trainset.degraded_dataset.dataset: libri_train
   - /datasets@valset.degraded_dataset.dataset: libri_test
   - /datasets@testset.degraded_dataset.dataset: libri_test
-  # ... with WHAM noise added to it
-  - /degradations@trainset.degraded_dataset.degradations: noise_train
-  - /degradations@valset.degraded_dataset.degradations: noise_test
-  - /degradations@testset.degraded_dataset.degradations: noise_test
+  # ... with FSD50K noise added to it
+  - /degradations@trainset.degraded_dataset.degradations: fsd50k_train
+  - /degradations@valset.degraded_dataset.degradations: fsd50k_test
+  - /degradations@testset.degraded_dataset.degradations: fsd50k_test
   # and the the clean target dataset should be VCTK
   - /datasets@trainset.clean_dataset: vctk_train
   - /datasets@valset.clean_dataset: vctk_test

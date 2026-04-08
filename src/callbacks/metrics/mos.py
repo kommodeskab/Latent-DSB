@@ -22,7 +22,7 @@ class DNSMOS(BaseMetric):
         mos = deep_noise_suppression_mean_opinion_score(
             samples.squeeze(1), fs=sample_rate, personalized=False, device=self.device
         )
-        return mos.flatten()
+        return mos[:, -1]
 
     def to(self, device: torch.device) -> None:
         self.device = device
