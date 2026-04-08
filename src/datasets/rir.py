@@ -37,7 +37,7 @@ class RIR(BaseDataset):
 
     def __getitem__(self, index: int) -> AudioSample:
         sample = self.dataset[index]
-        input = torch.from_numpy(sample["audio"]["array"])
+        input = torch.from_numpy(sample["audio"]["array"]).float()
         if input.ndim == 1:
             input = input.unsqueeze(0)
         sample_rate = sample["audio"]["sampling_rate"]

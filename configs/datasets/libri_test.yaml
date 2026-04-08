@@ -1,0 +1,14 @@
+_target_: src.datasets.AugmentedAudioDataset
+
+dataset:
+  _target_: src.datasets.LibriSpeech
+  split: val
+
+augmentations:
+  - _target_: src.augmentations.ResampleAugmentation
+    new_sample_rate: ${sample_rate}
+  - _target_: src.augmentations.CutAndFitAugmentation
+    target_length: ${train_audio_length}
+    deterministic: True
+  - _target_: src.augmentations.LoudnessAugmentation
+    loudness_db: -20.0
