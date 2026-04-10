@@ -25,6 +25,12 @@ data:
 model:
   pretraining_steps: 300_000
 
+  scheduler:
+    epsilon: 2.0
+
+logger:
+  log_model: True
+
 trainer:
   max_steps: 400_000
   log_every_n_steps: 100

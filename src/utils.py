@@ -16,6 +16,9 @@ import pytorch_lightning as pl
 from torch.utils.data import DataLoader, Dataset
 from src import Batch
 from contextlib import contextmanager, nullcontext, AbstractContextManager
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +137,7 @@ def wandb_entity() -> str:
     Returns:
         str: The current WandB entity.
     """
-    return wandb.api.viewer()["entity"]
+    return os.environ.get("WANDB_ENTITY") or wandb.api.viewer()["entity"]
 
 
 def run_from_id(id: str) -> wandb.Run:
