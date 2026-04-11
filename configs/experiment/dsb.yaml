@@ -24,9 +24,10 @@ data:
 
 model:
   pretraining_steps: 300_000
+  coupling_strategy: same # "random" or "same"
 
   scheduler:
-    epsilon: 2.0
+    epsilon: 5.0
 
 logger:
   log_model: True

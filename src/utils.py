@@ -119,7 +119,8 @@ def project_from_id(id: str) -> str:
     Returns:
         str: The project name for the specified run ID.
     """
-    project_names = wandb.Api().projects()
+    entity = wandb_entity()
+    project_names = wandb.Api().projects(entity=entity)
     project_names = [project.name for project in project_names]
     for project_name in project_names:
         runs = wandb.Api().runs(project_name)
