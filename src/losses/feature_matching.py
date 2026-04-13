@@ -6,6 +6,7 @@ from src.losses.baseloss import BaseLossFunction
 from src import AudioBatch, ModelOutput, LossOutput
 import torch.nn as nn
 from typing import Union
+import torch._dynamo as dynamo
 
 
 class Wav2VecFeatureExtractor(nn.Module):
@@ -46,13 +47,14 @@ class HubertFeatureExtractor(nn.Module):
             self.first_n_transformer_layers <= self.n_transformer_layers
         ), f"first_n_transformer_layers must be less than or equal to {self.n_transformer_layers}"
 
+    @dynamo.disable
     def forward(self, audio: Tensor) -> list[Tensor]:
         feature_list = []
 
         assert audio.dim() == 3 and audio.shape[1] == 1, "Audio tensor must have shape (batch_size, 1, sequence_length)"
 
         audio_var = audio.var(dim=-1, unbiased=False, keepdim=True)
-        extract_features = (audio - audio.mean(dim=-1, keepdim=True)) / torch.sqrt(audio_var + 1e-7)
+        extract_features = (audio - audio.mean(dim=-1, keepdim=True)) / torch.sqrt(audio_var + 1e-5)
 
         n_conv_layers = len(self.model.feature_extractor.conv_layers)
         for n, conv_layer in enumerate(self.model.feature_extractor.conv_layers):
