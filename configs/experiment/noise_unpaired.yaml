@@ -3,33 +3,8 @@
 # unpaired denoising with clean: VCTK, and noisy: Libri + WHAM
 
 defaults:
-  - override /trainer: gpu
+  - dsb
   - override /data: noise_unpaired
-  - override /callbacks: dsb
-  - override /model: standard
-  - override /logger: default
 
 project_name: 'denoising'
 task_name: 'unpaired denoising'
-compile: True
-phase: 'train'
-
-train_audio_length: 48000
-test_audio_length: 48000
-sample_rate: 16000
-
-data:
-  batch_size: 8
-  num_workers: 12
-
-model:
-  pretraining_steps: 300_000
-
-  scheduler:
-    epsilon: 1.0
-
-trainer:
-  max_steps: 400_000
-  log_every_n_steps: 100
-  max_epochs: -1
-  limit_val_batches: 100

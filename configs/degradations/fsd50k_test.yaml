@@ -1,0 +1,20 @@
+- _target_: src.datasets.degradations.AddNoise
+  noise_dataset:
+    _target_: src.datasets.AugmentedAudioDataset
+
+    dataset:
+      _target_: src.datasets.FSD50K
+      split: val
+    augmentations:
+      - _target_: src.augmentations.ResampleAugmentation
+        new_sample_rate: ${sample_rate}
+      - _target_: src.augmentations.CutAndFitAugmentation
+        target_length: ${test_audio_length}
+        deterministic: True
+      - _target_: src.augmentations.LoudnessAugmentation
+        loudness_db: -20.0
+
+  min_snr: 0
+  max_snr: 20
+  prob: 1.0
+  deterministic: True

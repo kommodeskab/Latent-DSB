@@ -8,7 +8,7 @@ from torch.optim.lr_scheduler import LRScheduler
 from tqdm import tqdm
 from functools import partial
 from src.networks.encoders import BaseEncoderDecoder
-from typing import Optional
+from typing import Optional, Literal
 from src.losses import BaseLossFunction
 from src.lightning_modules.scheduler import DSBScheduler, DIRECTIONS, SCHEDULER_TYPES
 from torch_ema import ExponentialMovingAverage
@@ -38,6 +38,7 @@ class DSB(BaseLightningModule):
         pretraining_steps: int,
         inference_steps: int,
         scheduler: DSBScheduler,
+        coupling_strategy: Literal["random", "same"] = "random",
         loss_fn: Optional[BaseLossFunction] = None,
         optimizer: Optional[partial[Optimizer]] = None,
         lr_scheduler: Optional[dict[str, partial[LRScheduler] | str]] = None,
@@ -52,6 +53,7 @@ class DSB(BaseLightningModule):
         self.inference_steps = inference_steps
         self.loss_fn = loss_fn
         self.scheduler = scheduler
+        self.coupling_strategy = coupling_strategy
         self.ema = ExponentialMovingAverage(
             self.parameters(), decay=0.9999
         )  # keep a moving average of the model parameters for evaluation and sampling
@@ -104,8 +106,12 @@ class DSB(BaseLightningModule):
         # x0_b and x1_b is the (x0, x1) pairs used for training the backward model
         # x0_f and x1_f is the (x0, x1) pairs used for training the forward model
         if self.pretraining:
-            x0_b, x1_b = x0, x1
-            x0_f, x1_f = x0, x1
+            if self.coupling_strategy == "random":
+                x0_b, x1_b = x0, x1
+                x0_f, x1_f = x0, x1
+            elif self.coupling_strategy == "same":
+                x0_b, x1_b = x0, x0
+                x0_f, x1_f = x1, x1
         else:
             x0_b, x1_f = x0, x1
             x1_b = self.sample(x0_b, direction="forward", num_steps=self.inference_steps, verbose=False)

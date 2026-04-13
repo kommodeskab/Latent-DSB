@@ -6,13 +6,14 @@ _target_: src.data_modules.BaseDM
 
 defaults:
     # the degraded dataset is VCTK with WHAM noise added to it
+    # and the clean dataset is VCTK without noise
   - /datasets@trainset.degraded_dataset.dataset: vctk_train
   - /datasets@valset.degraded_dataset.dataset: vctk_test
   - /datasets@testset.degraded_dataset.dataset: vctk_test
 
-  - /degradations@trainset.degraded_dataset.degradations: noise_train
-  - /degradations@valset.degraded_dataset.degradations: noise_test
-  - /degradations@testset.degraded_dataset.degradations: noise_test
+  - /degradations@trainset.degraded_dataset.degradations: wham_train
+  - /degradations@valset.degraded_dataset.degradations: wham_test
+  - /degradations@testset.degraded_dataset.degradations: wham_test
 
 batch_size: 4
 num_workers: 4

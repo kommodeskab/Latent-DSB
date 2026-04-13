@@ -1,16 +1,16 @@
 # @package _global_
 
-# unpaired dereverberation with VCTK + RIR
+# unpaired denoising with clean: VCTK, and noisy: Libri + WHAM
 
 defaults:
   - override /trainer: gpu
-  - override /data: reverb_unpaired
-  - override /callbacks: dsb
+  - override /data: vinyl_unpaired
+  - override /callbacks: dsb_vinyl
   - override /model: standard
   - override /logger: default
 
-project_name: 'dereverberation'
-task_name: 'unpaired dsb'
+project_name: 'denoising'
+task_name: 'unpaired denoising'
 compile: True
 phase: 'train'
 
@@ -24,9 +24,6 @@ data:
 
 model:
   pretraining_steps: 300_000
-
-  scheduler:
-    epsilon: 1.0
 
 trainer:
   max_steps: 400_000

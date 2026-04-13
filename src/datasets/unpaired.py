@@ -42,6 +42,11 @@ class UnpairedAudioDataset(BaseDataset):
         paired: bool = False,
     ):
         super().__init__()
+        if paired:
+            assert (
+                clean_dataset is None
+            ), "If paired is True, then clean_dataset should not be provided. The clean and degraded waveforms will be sampled from the same index of the degraded_dataset."
+
         self.degraded_dataset = degraded_dataset
         self.clean_dataset = clean_dataset if clean_dataset is not None else degraded_dataset
         self.deterministic = deterministic
@@ -49,11 +54,6 @@ class UnpairedAudioDataset(BaseDataset):
         self.x0_key = x0_key
         self.x1_key = x1_key
         self.x1_clean_key = x1_clean_key
-
-        if paired:
-            assert (
-                clean_dataset is None
-            ), "If paired is True, then clean_dataset should not be provided. The clean and degraded waveforms will be sampled from the same index of the degraded_dataset."
 
     def __len__(self) -> int:
         return len(self.degraded_dataset)
@@ -76,6 +76,8 @@ class UnpairedAudioDataset(BaseDataset):
         return UnpairedAudioBatch(
             x0=clean_waveform,
             x1=degraded_waveform,
-            x1_clean=degraded.get(self.x1_clean_key, None),
+            x1_clean=degraded.get(
+                self.x1_clean_key, -1
+            ),  # if x1_clean_key is not provided, we set it to -1 (like None but dataloader doesn't like None)
             sample_rate=degraded["sample_rate"],
         )
