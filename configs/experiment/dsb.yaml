@@ -14,26 +14,27 @@ task_name: ???
 compile: True
 phase: 'train'
 
-train_audio_length: 48000
+train_audio_length: 16000
 test_audio_length: 48000
 sample_rate: 16000
 
 data:
-  batch_size: 8
+  batch_size: 24
   num_workers: 12
 
 model:
-  pretraining_steps: 300_000
-  coupling_strategy: same # "random" or "same"
+  pretraining_steps: 100_000
+  coupling_strategy: random # "random" or "same"
 
   scheduler:
-    epsilon: 5.0
+    epsilon: 0.1
+    target: terminal
 
 logger:
   log_model: True
 
 trainer:
-  max_steps: 400_000
+  max_steps: 200_000
   log_every_n_steps: 100
   max_epochs: -1
-  limit_val_batches: 100
+  limit_val_batches: 50
