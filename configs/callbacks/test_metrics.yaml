@@ -52,5 +52,5 @@ unpaired_audio_metrics:
       key: x1
       out_key: x0_hat
       direction: backward
-      num_steps: 10
+      num_steps: 20
       encode: True

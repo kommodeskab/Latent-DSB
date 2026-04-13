@@ -8,7 +8,7 @@ defaults:
   - /lr_scheduler: constant
 
 pretraining_steps: 100_000
-inference_steps: 5
+inference_steps: 15
 
 encoder_decoder:
   scaling_factor: 20

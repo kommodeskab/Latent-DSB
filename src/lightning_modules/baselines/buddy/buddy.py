@@ -271,7 +271,10 @@ class Buddy(BaseLightningModule):
     def common_step(self, batch, batch_idx):
         return ...
 
-    def sample(self, x_start: Tensor, **kwargs) -> Tensor:
+    def sample(self, x_start: Tensor, num_steps: int, **kwargs) -> Tensor:
+        assert (
+            num_steps == self.args.tester.sampling_params.T
+        ), "Number of steps must be set to the same value in the callbacks and in the model for consistency"
         output = []
 
         for x in x_start:
