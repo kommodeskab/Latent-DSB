@@ -1177,9 +1177,12 @@ class GFB(BaseLightningModule):
     def common_step(self, batch, batch_idx):
         return ...
 
+    @torch.no_grad()
     def sample(self, x_start: Tensor, num_steps: int, **kwargs) -> Tensor:
-        # normalize between -1 and 1
-        x_start = x_start / (x_start.abs().max() + 1e-5)
+        # normalize each sample in the batch to be between -1 and 1
+        # x_start.shape = (B, C, T)
+        norm_factor = x_start.abs().max(dim=-1, keepdim=True)[0] + 1e-5
+        x_start = x_start / norm_factor
 
         self.model.eval()
         B, C, T = x_start.shape
@@ -1190,18 +1193,17 @@ class GFB(BaseLightningModule):
             cond = torch.tensor([[0.0, 50.0]], device=x_start.device).repeat(B, 1)
         elif self.task == "clip":
             # full declipping:
-            # SDR = 50, which is a very low value, corresponding to very strong clipping
+            # SDR = 50, which is a very high value, corresponding to removing clipping
             cond = torch.tensor([[50.0]], device=x_start.device).repeat(B, 1)
 
-        with torch.no_grad():
-            out, _ = self.diffusion.bridge(
-                x0=x_start,
-                model=self.model,
-                Tsteps=num_steps // 2,
-                cond=cond,
-                cfg=1.0,
-                schedule_type="linear",
-                bridge_end_t=1.0,
-            )
+        out, _ = self.diffusion.bridge(
+            x0=x_start,
+            model=self.model,
+            Tsteps=num_steps // 2,
+            cond=cond,
+            cfg=2.0,
+            schedule_type="linear",
+            bridge_end_t=1.0,
+        )
 
-        return out
+        return out * norm_factor

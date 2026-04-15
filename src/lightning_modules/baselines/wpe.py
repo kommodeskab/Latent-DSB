@@ -13,7 +13,7 @@ class WPE(BaseLightningModule):
 
     def __init__(self):
         super().__init__()
-        self.taps = 10
+        self.taps = 20
         self.delay = 3
         self.iterations = 5
         self.stft_size = 512

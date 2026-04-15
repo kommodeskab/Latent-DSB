@@ -10,8 +10,7 @@ task_name: 'buddy'
 compile: False
 phase: 'test'
 
-test_audio_length: 32768
-sample_rate: 16000
+num_steps: 200
 
 trainer:
   inference_mode: False
