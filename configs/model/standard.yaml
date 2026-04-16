@@ -3,7 +3,7 @@ _target_: src.lightning_modules.DSB
 defaults:
   - /encoders@encoder_decoder: identity
   - /networks@model: mamba
-  - /losses@loss_fn: l1
+  - /losses@loss_fn: feature_matching
   - /optimizer: adamw
   - /lr_scheduler: constant
 
@@ -15,6 +15,6 @@ encoder_decoder:
 
 scheduler:
   _target_: src.lightning_modules.DSBScheduler
-  epsilon: 2.0
-  target: drift
+  epsilon: 1.0
+  target: terminal
   condition_on_start: False

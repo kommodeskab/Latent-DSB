@@ -1,10 +1,10 @@
 # @package _global_
 
-# unpaired dereverbation with clean: VCTK, and reverberant: VCTK + RIR
+# unpaired dereverberation with clean: VCTK, and reverberant: VCTK + RIR
 
 defaults:
   - dsb
   - override /data: reverb_unpaired
 
-project_name: 'dereverbation'
+project_name: 'dereverberation'
 task_name: 'unpaired dsb'
