@@ -1160,7 +1160,7 @@ class GFB(BaseLightningModule):
         data_path = os.getenv("DATA_PATH")
 
         urls = {
-            "rir": "https://github.com/microsoft/GFB-audio-control/releases/download/public_weights/checkpoint_299999_speech_reverb_IndepCoupling.pt",
+            "rir": "https://github.com/microsoft/GFB-audio-control/releases/download/public_weights/checkpoint_299999_speech_reverb_C-OT_NC128.pt",
             "clip": "https://github.com/microsoft/GFB-audio-control/releases/download/public_weights/checkpoint_299999_speech_clipping_IndepCoupling.pt",
         }
 
@@ -1168,7 +1168,18 @@ class GFB(BaseLightningModule):
 
         num_conds = 2 if task == "rir" else 1
         self.model = STFTbackbone(num_cond_params=num_conds)
-        self.diffusion = OTCFM(cfg_value=-999, minibatch_OT=False, order=2, minibatch_OT_args=None)
+        self.diffusion = OTCFM(
+            cfg_value=-999,
+            minibatch_OT=False,
+            order=2,
+            minibatch_OT_args={
+                "chunk_size": 256,
+                "n_noise_samples": 8192,
+                "distance": "l2",
+                "dist_compute_num": 1024,
+                "algorithm": "sinkhorn",
+            },
+        )
         url = urls[self.task]
         path = download_file(url, data_path)
         ckpt = torch.load(path, map_location="cpu", weights_only=False)
@@ -1181,8 +1192,11 @@ class GFB(BaseLightningModule):
     def sample(self, x_start: Tensor, num_steps: int, **kwargs) -> Tensor:
         # normalize each sample in the batch to be between -1 and 1
         # x_start.shape = (B, C, T)
-        norm_factor = x_start.abs().max(dim=-1, keepdim=True)[0] + 1e-5
-        x_start = x_start / norm_factor
+        # normalize each sample in the batch to be between -1 and 1
+        # x_start = x_start / (x_start.abs().max(dim=-1, keepdim=True)[0] + 1e-5)
+
+        sigma_data = 0.05
+        x_start = x_start / sigma_data
 
         self.model.eval()
         B, C, T = x_start.shape
@@ -1206,4 +1220,4 @@ class GFB(BaseLightningModule):
             bridge_end_t=1.0,
         )
 
-        return out * norm_factor
+        return out * sigma_data
