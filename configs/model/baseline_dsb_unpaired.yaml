@@ -1,5 +1,5 @@
 defaults:
-  - standard
+  - dsb
 
 scheduler:
   epsilon: ???
