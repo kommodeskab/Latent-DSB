@@ -1,8 +1,0 @@
-_target_: src.losses.WeightedLoss
-losses:
-  - _target_: src.losses.MultiScaleMelLoss
-    sample_rate: ${sample_rate}
-  - _target_: src.losses.SNRLoss
-weights:
-  - 0.01
-  - 1
