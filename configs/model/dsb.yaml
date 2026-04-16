@@ -7,7 +7,7 @@ defaults:
   - /optimizer: adamw
   - /lr_scheduler: constant
 
-pretraining_steps: 100_000
+pretraining_steps: 200_000
 inference_steps: 10
 
 encoder_decoder:
@@ -16,5 +16,5 @@ encoder_decoder:
 scheduler:
   _target_: src.lightning_modules.DSBScheduler
   epsilon: 0.1
-  target: terminal
+  target: drift
   condition_on_start: False

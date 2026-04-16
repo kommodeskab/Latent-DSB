@@ -8,3 +8,6 @@ defaults:
 
 project_name: 'denoising'
 task_name: 'unpaired denoising'
+
+trainer:
+  val_check_interval: "00:00:30:00"
