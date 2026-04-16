@@ -1,0 +1,16 @@
+# @package _global_
+
+defaults:
+  - test
+  - override /model: baseline_buddy
+  - override /data: reverb_unpaired
+
+project_name: 'baselines'
+task_name: 'buddy'
+compile: False
+phase: 'test'
+
+num_steps: 200
+
+trainer:
+  inference_mode: False

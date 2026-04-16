@@ -1,0 +1,13 @@
+# @package _global_
+
+defaults:
+  - test
+  - override /model: baseline_identity
+  - override /data: reverb_unpaired
+
+project_name: 'baselines'
+task_name: 'identity'
+compile: False
+phase: 'test'
+
+num_steps: 0 # isn't required for identity model

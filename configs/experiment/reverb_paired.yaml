@@ -4,13 +4,13 @@
 
 defaults:
   - override /trainer: gpu
-  - override /data: ???
+  - override /data: reverb_paired
   - override /callbacks: dsb
-  - override /model: dsb
+  - override /model: paired_dsb
   - override /logger: default
 
-project_name: ???
-task_name: ???
+project_name: 'reverberation'
+task_name: 'paired dsb'
 compile: True
 phase: 'train'
 
@@ -23,8 +23,6 @@ data:
   num_workers: 12
 
 model:
-  pretraining_steps: 100_000
-
   scheduler:
     epsilon: 0.1
     target: terminal

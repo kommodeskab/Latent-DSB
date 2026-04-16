@@ -6,7 +6,7 @@ defaults:
   - override /trainer: gpu
   - override /data: vinyl_unpaired
   - override /callbacks: dsb_vinyl
-  - override /model: standard
+  - override /model: dsb
   - override /logger: default
 
 project_name: 'denoising'

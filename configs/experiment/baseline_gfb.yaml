@@ -1,0 +1,13 @@
+# @package _global_
+
+defaults:
+  - test
+  - override /model: baseline_gfb
+  - override /data: reverb_unpaired
+
+project_name: 'baselines'
+task_name: 'gfb'
+compile: False
+phase: 'test'
+
+num_steps: 10
