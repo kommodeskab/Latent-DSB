@@ -53,13 +53,7 @@ def dockermain(c: Context, image_name: str = "", gpu: bool = False, extra: str =
     else:
         if image_name == "":
             image_name = "main-image"
-        c.run(
-            "docker run --rm "
-            "-v $(pwd):/app "
-            "-v uv-venv:/app/.venv "
-            "-v uv-cache:/root/.cache/uv "
-            f"{image_name} {extra}"
-        )
+        c.run(f"docker run --rm -v $(pwd):/app -v uv-venv:/app/.venv -v uv-cache:/root/.cache/uv {image_name} {extra}")
 
 
 @task

@@ -18,6 +18,7 @@ class Reverb(BaseDegradation):
     ):
         super().__init__(prob=prob, deterministic=deterministic)
         self.RIR_dataset = RIR_dataset
+        assert rir_threshold < 0, f"rir_threshold must be negative, currently the value is {rir_threshold}"
         self.rir_threshold = rir_threshold
 
     def fun(self, audio: Tensor) -> Tensor:
