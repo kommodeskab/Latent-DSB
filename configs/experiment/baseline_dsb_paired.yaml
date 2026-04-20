@@ -2,15 +2,15 @@
 
 defaults:
   - test
-  - override /model: baseline_dsb_unpaired
+  - override /model: paired_dsb
   - override /data: reverb_unpaired
 
 project_name: 'baselines'
-task_name: 'dsb reverb'
+task_name: 'dsb paired'
 compile: False
 phase: 'test'
 
-ckpt_filename: "170426112440/model-170426112440:v0"
+ckpt_filename: "160426232651/model-160426232651:v0"
 num_steps: 10
 
 model:
