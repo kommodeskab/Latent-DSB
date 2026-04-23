@@ -1,0 +1,5 @@
+- _target_: src.datasets.degradations.AddGaussianNoise
+  min_std: ${gaussian_std}
+  max_std: ${gaussian_std}
+  prob: 1.0
+  deterministic: True

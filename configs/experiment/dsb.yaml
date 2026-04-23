@@ -14,12 +14,12 @@ task_name: ???
 compile: True
 phase: 'train'
 
-train_audio_length: 16000
+train_audio_length: 48000
 test_audio_length: 48000
 sample_rate: 16000
 
 data:
-  batch_size: 18
+  batch_size: 8
   num_workers: 12
 
 model:
