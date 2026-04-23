@@ -6,11 +6,11 @@ defaults:
   - override /data: reverb_unpaired
 
 project_name: 'baselines'
-task_name: 'dsb paired'
+task_name: 'dsb reverb paired'
 compile: False
 phase: 'test'
 
-ckpt_filename: "160426232651/model-160426232651:v0"
+ckpt_filename: "210426085741/model-210426085741:v0"
 num_steps: 10
 
 model:
