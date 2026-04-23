@@ -40,6 +40,7 @@ class DSB(BaseLightningModule):
         loss_fn: Optional[BaseLossFunction] = None,
         optimizer: Optional[partial[Optimizer]] = None,
         lr_scheduler: Optional[dict[str, partial[LRScheduler] | str]] = None,
+        ema_decay: float = 0.999,
     ):
         super().__init__(optimizer, lr_scheduler)
         self.save_hyperparameters(
@@ -52,7 +53,7 @@ class DSB(BaseLightningModule):
         self.loss_fn = loss_fn
         self.scheduler = scheduler
         self.ema = ExponentialMovingAverage(
-            self.parameters(), decay=0.9999
+            self.parameters(), decay=ema_decay
         )  # keep a moving average of the model parameters for evaluation and sampling
 
     def to(self, device: torch.device):

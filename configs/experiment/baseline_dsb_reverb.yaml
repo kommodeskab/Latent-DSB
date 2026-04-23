@@ -10,10 +10,10 @@ task_name: 'dsb reverb'
 compile: False
 phase: 'test'
 
-ckpt_filename: "170426112440/model-170426112440:v0"
+ckpt_filename: "140426074425/model-140426074425:v0"
 num_steps: 10
 
 model:
   scheduler:
     epsilon: 0.1
-    target: drift
+    target: terminal

@@ -3,9 +3,6 @@ from src.datasets.audio import AudioDataset
 import torch
 from torch import Tensor
 from torchaudio.functional import add_noise
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 class AddNoise(BaseDegradation):
@@ -35,7 +32,6 @@ class AddNoise(BaseDegradation):
         noise = self.noise_dataset.sample()
         # if the noise sample is totally quiet, return the original audio
         if noise["waveform"].abs().max() < 1e-4:
-            logger.warning("Sampled noise is silent, skipping noise addition")
             return audio
 
         assert audio.shape == noise["waveform"].shape, "Audio and noise samples must have the same shape"

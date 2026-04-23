@@ -19,19 +19,19 @@ test_audio_length: 48000
 sample_rate: 16000
 
 data:
-  batch_size: 24
+  batch_size: 18
   num_workers: 12
 
 model:
   scheduler:
     epsilon: 0.1
-    target: terminal
+    target: drift
 
 logger:
   log_model: True
 
 trainer:
-  max_steps: 200_000
+  max_steps: 300_000
   log_every_n_steps: 100
   max_epochs: -1
   limit_val_batches: 50

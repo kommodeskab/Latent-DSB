@@ -9,7 +9,7 @@
       - _target_: src.augmentations.ResampleAugmentation
         new_sample_rate: ${sample_rate}
       - _target_: src.augmentations.CutAndFitAugmentation
-        target_length: ${test_audio_length}
+        target_length: ${train_audio_length}
         deterministic: False
       - _target_: src.augmentations.LoudnessAugmentation
         loudness_db: -20.0

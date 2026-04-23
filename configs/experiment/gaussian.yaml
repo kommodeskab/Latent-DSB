@@ -1,0 +1,19 @@
+# @package _global_
+
+# unpaired gaussian denoising with clean: VCTK, and noisy: VCTK + Gaussian noise
+
+defaults:
+  - dsb
+  - override /data: gaussian
+
+project_name: 'gaussian'
+task_name: 'unpaired gaussian denoising'
+
+gaussian_std: 0.2
+
+model:
+  pretraining_steps: 100_000
+
+trainer:
+  val_check_interval: "00:00:30:00"
+  max_steps: 150_000
