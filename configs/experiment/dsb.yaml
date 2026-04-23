@@ -7,7 +7,6 @@ defaults:
   - override /data: ???
   - override /callbacks: dsb
   - override /model: dsb
-  - override /model: dsb
   - override /logger: default
 
 project_name: ???

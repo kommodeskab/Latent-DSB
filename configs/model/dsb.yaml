@@ -3,7 +3,7 @@ _target_: src.lightning_modules.DSB
 defaults:
   - /encoders@encoder_decoder: identity
   - /networks@model: mamba
-  - /losses@loss_fn: feature_matching
+  - /losses@loss_fn: l1
   - /optimizer: adamw
   - /lr_scheduler: constant
 
