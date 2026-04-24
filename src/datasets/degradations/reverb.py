@@ -14,12 +14,18 @@ class Reverb(BaseDegradation):
     """
 
     def __init__(
-        self, RIR_dataset: AudioDataset, prob: float = 1.0, deterministic: bool = False, rir_threshold: float = -20.0
+        self,
+        RIR_dataset: AudioDataset,
+        prob: float = 1.0,
+        deterministic: bool = False,
+        rir_threshold: float = -20.0,
+        mix: float = 0.5,
     ):
         super().__init__(prob=prob, deterministic=deterministic)
         self.RIR_dataset = RIR_dataset
         assert rir_threshold < 0, f"rir_threshold must be negative, currently the value is {rir_threshold}"
         self.rir_threshold = rir_threshold
+        self.mix = mix
 
     def fun(self, audio: Tensor) -> Tensor:
         RIR: AudioSample = self.RIR_dataset.sample()
@@ -38,8 +44,9 @@ class Reverb(BaseDegradation):
         reverbed_audio = fftconvolve(audio, rir, mode="full")[..., :audio_len]
         power_reverb = torch.mean(reverbed_audio**2)
         power_original = torch.mean(audio**2)
+        reverbed_audio = reverbed_audio * torch.sqrt(power_original / power_reverb)
 
-        return reverbed_audio * torch.sqrt(power_original / power_reverb)
+        return self.mix * reverbed_audio + (1 - self.mix) * audio
 
 
 if __name__ == "__main__":

@@ -1,0 +1,53 @@
+_target_: src.data_modules.BaseDM
+
+# UNPAIRED
+# clean data: VCTK
+# degraded data: VCTK + room impulse responses
+
+defaults:
+    # the degraded dataset is VCTK with room impulse responses added to it
+  - /datasets@trainset.degraded_dataset.dataset: vctk_train
+  - /datasets@valset.degraded_dataset.dataset: vctk_test
+  - /datasets@testset.degraded_dataset.dataset: vctk_test
+
+  - /degradations@trainset.degraded_dataset.degradations: reverb_train
+  - /degradations@valset.degraded_dataset.degradations: reverb_test
+  - /degradations@testset.degraded_dataset.degradations: reverb_test
+
+batch_size: 4
+num_workers: 4
+pin_memory: True
+persistent_workers: True
+
+trainset:
+  _target_: src.datasets.UnpairedAudioDataset
+  x0_key: original_waveform
+  x1_key: degraded_waveform
+  x1_clean_key: original_waveform
+  deterministic: False
+  paired: False
+
+  degraded_dataset: # the original dataset and degradations are specified in the defauls list above but we still need to specify the target here
+    _target_: src.datasets.DegradedDataset
+
+valset:
+  _target_: src.datasets.UnpairedAudioDataset
+  x0_key: original_waveform
+  x1_key: degraded_waveform
+  x1_clean_key: original_waveform
+  deterministic: True
+  paired: False
+
+  degraded_dataset:
+    _target_: src.datasets.DegradedDataset
+
+testset:
+  _target_: src.datasets.UnpairedAudioDataset
+  x0_key: original_waveform
+  x1_key: degraded_waveform
+  x1_clean_key: original_waveform
+  deterministic: True
+  paired: False
+
+  degraded_dataset:
+    _target_: src.datasets.DegradedDataset

@@ -1,0 +1,10 @@
+# @package _global_
+
+# unpaired denoising with clean: VCTK, and noisy: Libri + WHAM
+
+defaults:
+  - dsb
+  - override /data: noise_unpaired
+
+project_name: 'denoising'
+task_name: 'unpaired denoising'

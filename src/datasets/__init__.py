@@ -8,3 +8,7 @@ from .audio import AudioDataset as AudioDataset
 from .augmented import AugmentedAudioDataset as AugmentedAudioDataset
 from .unpaired import UnpairedAudioDataset as UnpairedAudioDataset
 from .degraded import DegradedDataset as DegradedDataset
+from .fsd50k import FSD50K as FSD50K
+from .news_report import NewsReports01 as NewsReports01
+from .news_report import NewsReports02 as NewsReports02
+from .news_report import NewsReports as NewsReports

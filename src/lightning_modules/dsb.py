@@ -12,7 +12,6 @@ from typing import Optional
 from src.losses import BaseLossFunction
 from src.lightning_modules.scheduler import DSBScheduler, DIRECTIONS, SCHEDULER_TYPES
 from torch_ema import ExponentialMovingAverage
-from contextlib import nullcontext
 
 
 class DSB(BaseLightningModule):
@@ -70,11 +69,7 @@ class DSB(BaseLightningModule):
         return not self.pretraining
 
     def forward(self, batch: SchedulerBatch) -> ModelOutput:
-        context = self.ema.average_parameters() if not self.training else nullcontext()
-
-        with context:
-            output = self.model(batch["xt"], batch["timesteps"], batch["conditional"])
-
+        output = self.model(batch["xt"], batch["timesteps"], batch["conditional"])
         return ModelOutput(output=output)
 
     def encode(self, x: Tensor) -> Tensor:
@@ -101,8 +96,6 @@ class DSB(BaseLightningModule):
         x0, x1 = batch["x0"], batch["x1"]
         x0, x1 = self.encode(x0), self.encode(x1)
 
-        # x0_b and x1_b is the (x0, x1) pairs used for training the backward model
-        # x0_f and x1_f is the (x0, x1) pairs used for training the forward model
         if self.pretraining:
             x0_b, x1_b = x0, x1
             x0_f, x1_f = x0, x1
@@ -112,9 +105,9 @@ class DSB(BaseLightningModule):
             x0_f = self.sample(x1_f, direction="backward", num_steps=self.inference_steps, verbose=False)
 
         scheduler_batch = self.scheduler.sample_training_batch(x0_b, x1_b, x0_f, x1_f)
-        model_output = self.forward(scheduler_batch)
+        model_output = self(scheduler_batch)
 
-        loss_output = self.loss_fn.forward(model_output, scheduler_batch)
+        loss_output = self.loss_fn(model_output, scheduler_batch)
 
         return StepOutput(
             loss=loss_output["loss"],
@@ -183,15 +176,15 @@ class DSB(BaseLightningModule):
         x = x_start.clone()
         trajectory = [self.decode(x) if encode else x]
 
-        for tk_plus_one, tk in tqdm(timeschedule, desc="Sampling...", leave=False, disable=not verbose):
-            t = torch.full((batch_size,), tk_plus_one if direction == "backward" else tk, device=device)
-            x_in = torch.cat([x, x_start], dim=1) if self.scheduler.condition_on_start else x
+        with self.ema.average_parameters():
+            for tk_plus_one, tk in tqdm(timeschedule, desc="Sampling...", leave=False, disable=not verbose):
+                t = torch.full((batch_size,), tk_plus_one if direction == "backward" else tk, device=device)
+                x_in = torch.cat([x, x_start], dim=1) if self.scheduler.condition_on_start else x
 
-            with torch.no_grad():
-                model_output = self.forward(SchedulerBatch(xt=x_in, timesteps=t, conditional=c))
+                model_output = self(SchedulerBatch(xt=x_in, timesteps=t, conditional=c))
 
-            x = self.scheduler.step(x, model_output["output"], tk_plus_one, tk, direction)
-            trajectory.append(self.decode(x) if encode else x)
+                x = self.scheduler.step(x, model_output["output"], tk_plus_one, tk, direction)
+                trajectory.append(self.decode(x) if encode else x)
 
         if training:  # Restore the original training mode
             self.train()
@@ -220,9 +213,9 @@ class PairedDSB(DSB):
 
         # in the paired setting, we only train the backward model and we use the original x0 and x1 as the training pairs
         scheduler_batch = self.scheduler._sample_training_batch(x0, x1, direction="backward")
-        model_output = self.forward(scheduler_batch)
+        model_output = self(scheduler_batch)
 
-        loss_output = self.loss_fn.forward(model_output, scheduler_batch)
+        loss_output = self.loss_fn(model_output, scheduler_batch)
 
         return StepOutput(
             loss=loss_output["loss"],
@@ -232,12 +225,7 @@ class PairedDSB(DSB):
         )
 
     def forward(self, batch: SchedulerBatch) -> ModelOutput:
-        context = self.ema.average_parameters() if not self.training else nullcontext()
-
-        with context:
-            # since we are only training the backward model, we don't need the conditional "backward or forward"
-            output = self.model(batch["xt"], batch["timesteps"])
-
+        output = self.model(batch["xt"], batch["timesteps"])
         return ModelOutput(output=output)
 
 

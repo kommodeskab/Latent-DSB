@@ -16,6 +16,9 @@ import pytorch_lightning as pl
 from torch.utils.data import DataLoader, Dataset
 from src import Batch
 from contextlib import contextmanager, nullcontext, AbstractContextManager
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +119,8 @@ def project_from_id(id: str) -> str:
     Returns:
         str: The project name for the specified run ID.
     """
-    project_names = wandb.Api().projects()
+    entity = wandb_entity()
+    project_names = wandb.Api().projects(entity=entity)
     project_names = [project.name for project in project_names]
     for project_name in project_names:
         runs = wandb.Api().runs(project_name)
@@ -134,7 +138,7 @@ def wandb_entity() -> str:
     Returns:
         str: The current WandB entity.
     """
-    return wandb.api.viewer()["entity"]
+    return os.environ.get("WANDB_ENTITY") or wandb.api.viewer()["entity"]
 
 
 def run_from_id(id: str) -> wandb.Run:

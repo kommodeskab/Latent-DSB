@@ -1,0 +1,20 @@
+# @package _global_
+
+# unpaired finetuning denoising with clean: VCTK and noisy: Libri + WHAM
+# this model should be initialized with a paired pretraining model
+# and then be finetuned on the unpaired data
+
+defaults:
+  - dsb
+  - override /data: noise_unpaired
+  - override /model: finetuning
+
+project_name: 'denoising'
+task_name: 'unpaired denoising finetuning'
+
+model:
+  pretraining_steps: 0 # the model is already pretrained, so we go straight to finetuning
+
+  model:
+    # this model is a pretrained model. we need to specify which id the pretrained model has
+    id: ???

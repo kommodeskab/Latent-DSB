@@ -6,18 +6,18 @@ from src.datasets.degradations import BaseDegradation
 class DegradedDataset(BaseDataset):
     def __init__(
         self,
-        clean_dataset: AudioDataset,
+        dataset: AudioDataset,
         degradations: list[BaseDegradation],
     ):
         super().__init__()
-        self.clean_dataset = clean_dataset
+        self.dataset = dataset
         self.degradations = degradations
 
     def __len__(self):
-        return len(self.clean_dataset)
+        return len(self.dataset)
 
     def __getitem__(self, idx: int) -> DegradedAudioSample:
-        clean = self.clean_dataset[idx]
+        clean = self.dataset[idx]
         clean_waveform = clean["waveform"]
         noisy_waveform = clean_waveform.clone()
 

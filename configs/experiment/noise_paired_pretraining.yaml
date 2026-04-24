@@ -1,0 +1,10 @@
+# @package _global_
+
+# paired pretraining denoising with clean: VCTK and noisy: VCTK + WHAM
+
+defaults:
+  - dsb
+  - override /data: noise_paired
+
+project_name: 'denoising'
+task_name: 'paired denoising pretraining'
