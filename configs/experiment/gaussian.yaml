@@ -9,7 +9,12 @@ defaults:
 project_name: 'gaussian'
 task_name: 'unpaired gaussian denoising'
 
+train_audio_length: 16000
+
 gaussian_std: 0.2
+
+data:
+  batch_size: 16
 
 model:
   pretraining_steps: 100_000
