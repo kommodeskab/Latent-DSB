@@ -1,0 +1,21 @@
+- _target_: src.datasets.degradations.Reverb
+  mix: 0.3
+  prob: 1.0
+  deterministic: True
+  rir_threshold: -20
+  RIR_dataset:
+    _target_: src.datasets.AugmentedAudioDataset
+
+    dataset:
+      _target_: src.datasets.RIR
+      split: val
+
+    augmentations:
+      - _target_: src.augmentations.ResampleAugmentation
+        new_sample_rate: ${sample_rate}
+
+- _target_: src.datasets.degradations.Clip
+  min_db: 3
+  max_db: 6
+  prob: 1.0
+  deterministic: True
