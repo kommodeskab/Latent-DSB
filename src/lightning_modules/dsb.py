@@ -17,21 +17,23 @@ from nara_wpe.utils import stft, istft
 import torchaudio.transforms as T
 from scipy.optimize import linear_sum_assignment
 
+
 def optimal_audio_pairing(x0: Tensor, x1: Tensor, sample_rate: int = 16000) -> Tensor:
     B = x0.shape[0]
-    
+
     mel_transform = T.MelSpectrogram(sample_rate=sample_rate, n_mels=64).to(x0.device)
     db_transform = T.AmplitudeToDB(stype="power", top_db=80.0).to(x0.device)
-    
+
     with torch.no_grad():
         feat0 = db_transform(mel_transform(x0)).reshape(B, -1)
         feat1 = db_transform(mel_transform(x1)).reshape(B, -1)
-        
+
         cost_matrix = torch.cdist(feat0, feat1, p=2.0).cpu().numpy()
-        
+
     _, col_ind = linear_sum_assignment(cost_matrix)
     print(col_ind)
     return x0, x1[col_ind]
+
 
 class DSB(BaseLightningModule):
     """
