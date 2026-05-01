@@ -31,7 +31,6 @@ def optimal_audio_pairing(x0: Tensor, x1: Tensor, sample_rate: int = 16000) -> T
         cost_matrix = torch.cdist(feat0, feat1, p=2.0).cpu().numpy()
 
     _, col_ind = linear_sum_assignment(cost_matrix)
-    print(col_ind)
     return x0, x1[col_ind]
 
 
@@ -61,7 +60,7 @@ class DSB(BaseLightningModule):
         loss_fn: Optional[BaseLossFunction] = None,
         optimizer: Optional[partial[Optimizer]] = None,
         lr_scheduler: Optional[dict[str, partial[LRScheduler] | str]] = None,
-        ema_decay: float = 0.999,
+        ema_decay: float = 0.9999,
     ):
         super().__init__(optimizer, lr_scheduler)
         self.save_hyperparameters(
