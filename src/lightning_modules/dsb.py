@@ -42,7 +42,7 @@ class DSB(BaseLightningModule):
         loss_fn: Optional[BaseLossFunction] = None,
         optimizer: Optional[partial[Optimizer]] = None,
         lr_scheduler: Optional[dict[str, partial[LRScheduler] | str]] = None,
-        ema_decay: float = 0.999,
+        ema_decay: float = 0.9999,
     ):
         super().__init__(optimizer, lr_scheduler)
         self.save_hyperparameters(
@@ -232,7 +232,7 @@ class DSBWithWPE(DSB):
         loss_fn: Optional[BaseLossFunction] = None,
         optimizer: Optional[partial[Optimizer]] = None,
         lr_scheduler: Optional[dict[str, partial[LRScheduler] | str]] = None,
-        ema_decay: float = 0.999,
+        ema_decay: float = 0.9999,
     ):
         super().__init__(
             model=model,
