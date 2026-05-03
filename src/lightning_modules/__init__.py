@@ -8,3 +8,4 @@ from .baselines.buddy.buddy import Buddy as Buddy
 from .baselines.wpe import WPE as WPE
 from .baselines.identity import Identity as Identity
 from .baselines.sgmse.baseline import SGMSE as SGMSE
+from .baselines.sepformer import Sepformer as Sepformer
