@@ -56,47 +56,48 @@ def calculate_mamba2_block_flops(module, input, output):
         module.__total_flops__ = 0
     module.__total_flops__ += scan_flops + hidden_flops + mask_flops
 
+
 def calculate_wpe_block_flops(module, input, output):
     """
     Analytically calculates hidden FLOPs for the NARA-WPE algorithm.
     Dynamically adapts to the STFT frame count, including fading pads.
     """
-    x = input[0] 
+    x = input[0]
     B, D, L = x.shape
     stft_size = module.stft_size
     stft_shift = module.stft_shift
     K = module.taps
     iterations = module.iterations
     # Calculate the resulting STFT dimensions
-    F = (stft_size // 2) + 1 
+    F = (stft_size // 2) + 1
     # nara_wpe default fading=True pads both sides by (size - shift)
     pad_width = stft_size - stft_shift
     padded_L = L + 2 * pad_width
     # Calculate exact number of STFT time frames (T)
     T = (padded_L + stft_shift - stft_size) // stft_shift
-    #print(B,F,D,T)
-    
+    # print(B,F,D,T)
+
     K = module.taps
     iterations = module.iterations
-    
-    # Section 4.1 of the paper describes the algorithm. 
+
+    # Section 4.1 of the paper describes the algorithm.
     # https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8578026&tag=1
     # Covariance Matrix (R)
-    r_flops = 8 * F * T * (D * K)**2
-    
+    r_flops = 8 * F * T * (D * K) ** 2
+
     # Cross-Correlation Vector (P)
     p_flops = 8 * F * T * (D**2 * K)
-    
+
     # Matrix Solve (G = R^-1 P)
-    solve_flops = F * ((8/3) * (D * K)**3 + 8 * (D * K)**2 * D)
-    
-    # Filtering 
+    solve_flops = F * ((8 / 3) * (D * K) ** 3 + 8 * (D * K) ** 2 * D)
+
+    # Filtering
     filter_flops = 8 * F * T * (D**2 * K)
-    
+
     # Calculate Total FLOPs
     flops_per_batch = iterations * (r_flops + p_flops + solve_flops + filter_flops)
     total_flops = B * flops_per_batch
-    
+
     # Accumulate
     if not hasattr(module, "__total_flops__"):
         module.__total_flops__ = 0

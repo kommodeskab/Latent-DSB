@@ -2,9 +2,10 @@ from torch.utils.flop_counter import FlopCounterMode
 from torch import Tensor
 from .base import ExtraMetricOutput
 from src.lightning_modules import DSB, WPE
-from src import StepOutput, UnpairedAudioBatch
+from src import UnpairedAudioBatch
 from mamba_ssm import Mamba2
 from src.flop_utils import calculate_mamba2_block_flops, calculate_wpe_block_flops
+
 
 class CountFlopsExtra(ExtraMetricOutput):
     """
@@ -33,7 +34,7 @@ class CountFlopsExtra(ExtraMetricOutput):
                 hooks.append(m.register_forward_hook(calculate_mamba2_block_flops))
                 m.__total_flops__ = 0  # reset for every hook registration
 
-            if isinstance(m, WPE): 
+            if isinstance(m, WPE):
                 hooks.append(m.register_forward_hook(calculate_wpe_block_flops))
                 m.__total_flops__ = 0
 

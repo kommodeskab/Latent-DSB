@@ -38,4 +38,4 @@ class WPE(BaseLightningModule):
         return processed
 
     def sample(self, x_start: torch.Tensor, **kwargs) -> torch.Tensor:
-        return self(x_start,**kwargs)
+        return self(x_start, **kwargs)
