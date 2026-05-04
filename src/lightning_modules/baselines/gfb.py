@@ -1141,6 +1141,14 @@ def download_file(url: str, target_folder: str):
 
 
 class GFB(BaseLightningModule):
+    """
+    Gaussian Flow Bridges for audio domain transfer with unpaired data
+    Taken from here:
+    https://github.com/microsoft/GFB-audio-control
+
+    Used as a baseline.
+    """
+
     def __init__(
         self,
         task: Literal["rir", "clip"],
@@ -1152,7 +1160,7 @@ class GFB(BaseLightningModule):
         data_path = os.getenv("DATA_PATH")
 
         urls = {
-            "rir": "https://github.com/microsoft/GFB-audio-control/releases/download/public_weights/checkpoint_299999_speech_reverb_IndepCoupling.pt",
+            "rir": "https://github.com/microsoft/GFB-audio-control/releases/download/public_weights/checkpoint_299999_speech_reverb_C-OT_NC128.pt",
             "clip": "https://github.com/microsoft/GFB-audio-control/releases/download/public_weights/checkpoint_299999_speech_clipping_IndepCoupling.pt",
         }
 
@@ -1160,7 +1168,18 @@ class GFB(BaseLightningModule):
 
         num_conds = 2 if task == "rir" else 1
         self.model = STFTbackbone(num_cond_params=num_conds)
-        self.diffusion = OTCFM(cfg_value=-999, minibatch_OT=False, order=2, minibatch_OT_args=None)
+        self.diffusion = OTCFM(
+            cfg_value=-999,
+            minibatch_OT=False,
+            order=2,
+            minibatch_OT_args={
+                "chunk_size": 256,
+                "n_noise_samples": 8192,
+                "distance": "l2",
+                "dist_compute_num": 1024,
+                "algorithm": "sinkhorn",
+            },
+        )
         url = urls[self.task]
         path = download_file(url, data_path)
         ckpt = torch.load(path, map_location="cpu", weights_only=False)
@@ -1169,9 +1188,15 @@ class GFB(BaseLightningModule):
     def common_step(self, batch, batch_idx):
         return ...
 
+    @torch.no_grad()
     def sample(self, x_start: Tensor, num_steps: int, **kwargs) -> Tensor:
-        # normalize between -1 and 1
-        x_start = x_start / (x_start.abs().max() + 1e-5)
+        # normalize each sample in the batch to be between -1 and 1
+        # x_start.shape = (B, C, T)
+        # normalize each sample in the batch to be between -1 and 1
+        # x_start = x_start / (x_start.abs().max(dim=-1, keepdim=True)[0] + 1e-5)
+
+        sigma_data = 0.05
+        x_start = x_start / sigma_data
 
         self.model.eval()
         B, C, T = x_start.shape
@@ -1182,18 +1207,17 @@ class GFB(BaseLightningModule):
             cond = torch.tensor([[0.0, 50.0]], device=x_start.device).repeat(B, 1)
         elif self.task == "clip":
             # full declipping:
-            # SDR = 50, which is a very low value, corresponding to very strong clipping
+            # SDR = 50, which is a very high value, corresponding to removing clipping
             cond = torch.tensor([[50.0]], device=x_start.device).repeat(B, 1)
 
-        with torch.no_grad():
-            out, _ = self.diffusion.bridge(
-                x0=x_start,
-                model=self.model,
-                Tsteps=num_steps // 2,
-                cond=cond,
-                cfg=1.0,
-                schedule_type="linear",
-                bridge_end_t=1.0,
-            )
+        out, _ = self.diffusion.bridge(
+            x0=x_start,
+            model=self.model,
+            Tsteps=num_steps // 2,
+            cond=cond,
+            cfg=2.0,
+            schedule_type="linear",
+            bridge_end_t=1.0,
+        )
 
-        return out
+        return out * sigma_data

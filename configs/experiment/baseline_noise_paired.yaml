@@ -1,0 +1,19 @@
+# @package _global_
+
+defaults:
+  - test
+  - override /model: dsb
+  - override /data: noise_unpaired
+
+project_name: 'baselines'
+task_name: 'dsb noise paired'
+compile: False
+phase: 'test'
+
+ckpt_filename: "210426085436/model-210426085436:v0"
+num_steps: 10
+
+model:
+  scheduler:
+    epsilon: 1.0
+    target: drift
