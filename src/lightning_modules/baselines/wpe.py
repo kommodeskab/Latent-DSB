@@ -22,7 +22,7 @@ class WPE(BaseLightningModule):
     def common_step(self, batch, batch_idx):
         return ...
 
-    def sample(self, x_start: torch.Tensor, **kwargs) -> torch.Tensor:
+    def forward(self, x_start: torch.Tensor, **kwargs) -> torch.Tensor:
         device = x_start.device
         processed = []
 
@@ -36,3 +36,6 @@ class WPE(BaseLightningModule):
 
         processed = torch.stack(processed).to(device=device, dtype=torch.float32)
         return processed
+
+    def sample(self, x_start: torch.Tensor, **kwargs) -> torch.Tensor:
+        return self(x_start,**kwargs)
