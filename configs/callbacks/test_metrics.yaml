@@ -6,23 +6,23 @@ unpaired_audio_metrics:
     - _target_: src.callbacks.metrics.LogAudioMetric
       key: x0
       where: batch
-      max_samples: 8
+      max_samples: 16
       once: True
     - _target_: src.callbacks.metrics.LogAudioMetric
       key: x1
       where: batch
-      max_samples: 8
+      max_samples: 16
       once: True
     - _target_: src.callbacks.metrics.LogAudioMetric
       key: x1_clean
       where: batch
-      max_samples: 8
+      max_samples: 16
       once: True
     # then log the enhanced audios in extras...
     - _target_: src.callbacks.metrics.LogAudioMetric
       key: x0_hat
       where: extras
-      max_samples: 8
+      max_samples: 16
       once: False # log this every validation step, not just once
 
     # -- perceptual metrics --
@@ -52,5 +52,5 @@ unpaired_audio_metrics:
       key: x1
       out_key: x0_hat
       direction: backward
-      num_steps: 10
+      num_steps: ${num_steps}
       encode: True

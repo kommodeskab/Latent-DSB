@@ -3,7 +3,7 @@
     _target_: src.datasets.AugmentedAudioDataset
 
     dataset:
-      _target_: src.datasets.FSD50K
+      _target_: src.datasets.WHAM
       split: train
     augmentations:
       - _target_: src.augmentations.ResampleAugmentation
@@ -14,7 +14,23 @@
       - _target_: src.augmentations.LoudnessAugmentation
         loudness_db: -20.0
 
-  min_snr: 0
-  max_snr: 20
+  min_snr: 5
+  max_snr: 5
   prob: 1.0
   deterministic: False
+
+- _target_: src.datasets.degradations.Reverb
+  mix: 0.3
+  prob: 1.0
+  deterministic: False
+  rir_threshold: -20
+  RIR_dataset:
+    _target_: src.datasets.AugmentedAudioDataset
+
+    dataset:
+      _target_: src.datasets.RIR
+      split: train
+
+    augmentations:
+      - _target_: src.augmentations.ResampleAugmentation
+        new_sample_rate: ${sample_rate}

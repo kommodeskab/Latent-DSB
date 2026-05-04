@@ -1,0 +1,20 @@
+_target_: src.lightning_modules.DSB
+
+defaults:
+  - /encoders@encoder_decoder: identity
+  - /networks@model: mamba
+  - /losses@loss_fn: l1
+  - /optimizer: adamw
+  - /lr_scheduler: constant
+
+pretraining_steps: 200_000
+inference_steps: 10
+
+encoder_decoder:
+  scaling_factor: 20
+
+scheduler:
+  _target_: src.lightning_modules.DSBScheduler
+  epsilon: 0.1
+  target: drift
+  condition_on_start: False

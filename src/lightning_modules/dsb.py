@@ -12,6 +12,8 @@ from typing import Optional
 from src.losses import BaseLossFunction
 from src.lightning_modules.scheduler import DSBScheduler, DIRECTIONS, SCHEDULER_TYPES
 from torch_ema import ExponentialMovingAverage
+from nara_wpe.wpe import wpe
+from nara_wpe.utils import stft, istft
 
 
 class DSB(BaseLightningModule):
@@ -40,6 +42,7 @@ class DSB(BaseLightningModule):
         loss_fn: Optional[BaseLossFunction] = None,
         optimizer: Optional[partial[Optimizer]] = None,
         lr_scheduler: Optional[dict[str, partial[LRScheduler] | str]] = None,
+        ema_decay: float = 0.9999,
     ):
         super().__init__(optimizer, lr_scheduler)
         self.save_hyperparameters(
@@ -52,7 +55,7 @@ class DSB(BaseLightningModule):
         self.loss_fn = loss_fn
         self.scheduler = scheduler
         self.ema = ExponentialMovingAverage(
-            self.parameters(), decay=0.9999
+            self.parameters(), decay=ema_decay
         )  # keep a moving average of the model parameters for evaluation and sampling
 
     def to(self, device: torch.device):
@@ -193,6 +196,83 @@ class DSB(BaseLightningModule):
             return torch.stack(trajectory, dim=0)
 
         return trajectory[-1]
+
+
+@torch.compiler.disable
+def wpe_preprocess(sample: Tensor):
+    taps = 20
+    delay = 3
+    iterations = 5
+    stft_size = 512
+    stft_shift = 128
+
+    device = sample.device
+    processed = []
+
+    for frame in sample:
+        frame = frame.cpu().numpy()
+        Y = stft(frame, stft_size, stft_shift)
+        Y = Y.transpose(2, 0, 1)
+        Z = wpe(Y, taps=taps, delay=delay, iterations=iterations, statistics_mode="full")
+        dereverb = istft(Z.transpose(1, 2, 0), size=stft_size, shift=stft_shift)
+        processed.append(torch.tensor(dereverb, device=device))
+
+    processed = torch.stack(processed).to(device=device, dtype=torch.float32)
+    return processed
+
+
+class DSBWithWPE(DSB):
+    def __init__(
+        self,
+        model: Module,
+        encoder_decoder: BaseEncoderDecoder,
+        pretraining_steps: int,
+        inference_steps: int,
+        scheduler: DSBScheduler,
+        loss_fn: Optional[BaseLossFunction] = None,
+        optimizer: Optional[partial[Optimizer]] = None,
+        lr_scheduler: Optional[dict[str, partial[LRScheduler] | str]] = None,
+        ema_decay: float = 0.9999,
+    ):
+        super().__init__(
+            model=model,
+            encoder_decoder=encoder_decoder,
+            pretraining_steps=pretraining_steps,
+            inference_steps=inference_steps,
+            scheduler=scheduler,
+            loss_fn=loss_fn,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            ema_decay=ema_decay,
+        )
+
+    def common_step(self, batch: UnpairedAudioBatch, batch_idx: int) -> StepOutput:
+        batch["x1"] = wpe_preprocess(batch["x1"])
+        return super().common_step(batch, batch_idx)
+
+    @torch.no_grad()
+    def sample(
+        self,
+        x_start: Tensor,
+        direction: DIRECTIONS,
+        num_steps: int,
+        scheduler_type: SCHEDULER_TYPES = "linear",
+        return_trajectory: bool = False,
+        verbose: bool = False,
+        encode: bool = False,
+    ) -> Tensor:
+        if encode and direction == "backward":
+            x_start = wpe_preprocess(x_start)
+
+        return super().sample(
+            x_start=x_start,
+            direction=direction,
+            num_steps=num_steps,
+            scheduler_type=scheduler_type,
+            return_trajectory=return_trajectory,
+            verbose=verbose,
+            encode=encode,
+        )
 
 
 class PairedDSB(DSB):

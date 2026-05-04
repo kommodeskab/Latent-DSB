@@ -1,0 +1,2 @@
+_target_: src.lightning_modules.Buddy
+num_steps: ${num_steps}

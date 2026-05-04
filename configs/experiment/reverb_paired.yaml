@@ -4,27 +4,25 @@
 
 defaults:
   - override /trainer: gpu
-  - override /data: ???
+  - override /data: reverb_paired
   - override /callbacks: dsb
-  - override /model: dsb
+  - override /model: paired_dsb
   - override /logger: default
 
-project_name: ???
-task_name: ???
+project_name: 'reverberation'
+task_name: 'paired dsb'
 compile: True
 phase: 'train'
 
-train_audio_length: 48000
+train_audio_length: 16000
 test_audio_length: 48000
 sample_rate: 16000
 
 data:
-  batch_size: 8
+  batch_size: 18
   num_workers: 12
 
 model:
-  pretraining_steps: 200_000
-
   scheduler:
     epsilon: 0.1
     target: drift
