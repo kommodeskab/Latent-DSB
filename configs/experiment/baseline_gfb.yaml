@@ -3,10 +3,10 @@
 defaults:
   - test
   - override /model: baseline_gfb
-  - override /data: reverb_unpaired
+  - override /data: reverb_unpaired_libri
 
-project_name: 'baselines'
-task_name: 'gfb'
+project_name: 'baselines (libri)'
+task_name: 'gfb (10)'
 compile: False
 phase: 'test'
 

@@ -3,17 +3,17 @@
 defaults:
   - test
   - override /model: baseline_dsb_unpaired
-  - override /data: reverb_unpaired
+  - override /data: reverb_wham_clip
 
 project_name: 'baselines'
-task_name: 'dsb reverb'
+task_name: 'dsb reverb wham clip (50)'
 compile: False
 phase: 'test'
 
-ckpt_filename: "140426074425/model-140426074425:v0"
-num_steps: 10
+ckpt_filename: "020526204026/model-020526204026:v0"
+num_steps: 50
 
 model:
   scheduler:
     epsilon: 0.1
-    target: terminal
+    target: drift
