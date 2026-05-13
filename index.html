@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SE-MSB: End-to-End Unpaired Speech Enhancement using Mamba Schrödinger Bridges</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #f8f9fa;
+            margin: 0;
+            padding: 0;
+        }
+        .header {
+            background: #343a40;
+            color: #fff;
+            padding: 2rem 1rem 1rem 1rem;
+            text-align: center;
+        }
+        .abstract {
+            max-width: 700px;
+            margin: 2rem auto;
+            background: linear-gradient(135deg, #fafdff 0%, #e3f2fd 100%);
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(52,58,64,0.07);
+            border: 1.5px solid #e3f2fd;
+            padding: 2.5rem 2rem 2rem 2rem;
+            font-size: 1.15rem;
+            color: #222;
+            line-height: 1.7;
+            position: relative;
+        }
+        .abstract h3 {
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1976d2;
+            margin-bottom: 1.2rem;
+            letter-spacing: 0.5px;
+        }
+        .abstract p {
+            margin: 0;
+        }
+        .abstract p::first-letter {
+            float: left;
+            font-size: 2.3rem;
+            line-height: 1;
+            font-weight: 700;
+            color: #1976d2;
+            padding-right: 0.18em;
+            padding-left: 2px;
+        }
+        table {
+            max-width: 500px;
+            width: 100%;
+            margin-left: auto;
+            margin-right: auto;
+            margin-top: 2rem;
+            margin-bottom: 2rem;
+            border-collapse: collapse;
+            background: #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 0.7rem;
+            text-align: center;
+            border-bottom: 1px solid #dee2e6;
+        }
+        th {
+            background: #e9ecef;
+        }
+        th.model-ref,
+        td.model-ref {
+            background: #e3f2fd;
+        }
+        th.model-paired,
+        td.model-paired {
+            background: #c1c1c1;
+        }
+        audio {
+            width: 200px;
+            min-width: 40px;
+        }
+        caption {
+            caption-side: top;
+            font-size: 1.3rem;
+            font-weight: 500;
+            color: #343a40;
+            padding: 1rem 0 0.5rem 0;
+            letter-spacing: 0.5px;
+        }
+        .code-btn {
+            display: inline-block;
+            background: #1976d2;
+            color: #fff;
+            font-size: 1.1rem;
+            font-weight: 500;
+            padding: 0.7rem 1.6rem;
+            border-radius: 6px;
+            text-decoration: none;
+            box-shadow: 0 2px 6px rgba(25, 118, 210, 0.08);
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+        .code-btn:hover {
+            background: #1565c0;
+            box-shadow: 0 4px 12px rgba(25, 118, 210, 0.15);
+        }
+        .dsb-star {
+            color: #1976d2;
+            font-weight: bold;
+            font-size: 1.1em;
+            vertical-align: super;
+            margin-left: 2px;
+            letter-spacing: 0.5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>SE-MSB: End-to-End Unpaired Speech Enhancement using Mamba Schrödinger Bridges</h1>
+        <div style="margin-top: 0.7rem; font-size: 1.08rem; color: #fff; font-weight: 500;">
+            Andreas Bagge<br>
+            <a href="mailto:andreas.bagge@wsa.com" style="color:#fff; text-decoration:none;">andreas.bagge@wsa.com</a><br>
+            <span style="color:#fff; font-weight:400;">WSA & Technical University of Denmark</span>
+        </div>
+        <div style="margin-top: 0.7rem; font-size: 1.08rem; color: #fff; font-weight: 500;">
+            Andreas Nymand<br>
+            <a href="mailto:andreas.nymand@wsa.com" style="color:#fff; text-decoration:none;">andreas.nymand@wsa.com</a><br>
+            <span style="color:#fff; font-weight:400;">WSA & Technical University of Denmark</span>
+        </div>
+    </div>
+    <div class="abstract">
+        <h3>Abstract</h3>
+        <p>
+Speech enhancement (SE) models typically rely on supervised learning with paired data examples where clean speech is synthetically degraded. 
+This paradigm limits performance in real-world scenarios where the target environment's specific acoustic characteristics are unknown. 
+We propose a fully unpaired SE framework that uses principled Diffusion Schrödinger Bridges (DSB) to learn a stochastic transport process between a clean and a degraded speech distribution.
+Algorithms for learning transport maps are computationally heavy since they require simulating differential equations during training, usually at each training step.
+Therefore, we propose using a high-efficiency Mamba Diffusion Model designed for end-to-end waveform processing. 
+We compare against state-of-the-art methods for speech enhancement, both paired and unpaired, as well as a classical signal processing algorithm.
+Experimental results show that we are on par or better than the baselines while being orders of magnitude faster during inference. 
+Furthermore, we show that the flexibility of the DSB formulation allows our model to generalize across SE tasks, offering a robust and efficient solution for real-world speech restoration.
+        </p>
+    </div>
+    <div style="text-align:center; margin: 2rem auto;">
+        <img src="audio_samples/algo_illustration.drawio.png" alt="Algorithm Illustration" style="max-width: 800px; width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+    </div>
+    <div style="text-align:center; margin-bottom: 1.5rem;">
+        <a href="https://anonymous.4open.science/r/Latent-DSB/README.md" target="_blank" class="code-btn">View Code on GitHub</a>
+    </div>
+    <div style="text-align:center; margin-bottom: 0.5rem;">
+        <span style="font-size:1.1rem; color:#1976d2; font-weight:500;">* ours</span>
+    </div>
+    <div style="overflow-x: auto; margin: 2rem auto; padding: 1rem 0;">
+        <table>
+            <colgroup>
+                <col style="width: 80px;">
+                <col style="width: 80px;">
+                <col style="width: 1fr;">
+                <col style="width: 1fr;">
+                <col style="width: 1fr;">
+                <col style="width: 1fr;">
+                <col style="width: 1fr;">
+            </colgroup>
+            <caption>Dereverberation</caption>
+            <thead style="background:#e9ecef;">
+                <tr>
+                    <th class="model-ref" style="padding:0.7rem; border-bottom:1px solid #dee2e6;">Original</th>
+                    <th class="model-ref" style="padding:0.7rem; border-bottom:1px solid #dee2e6;">Distorted</th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">SE-MSB<span class="dsb-star">*</span></th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">BUDDy</th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">GFB</th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">WPE</th>
+                    <th class="model-paired" style="padding:0.7rem; border-bottom:1px solid #dee2e6;">SGMSE</th>
+                    <th class="model-paired" style="padding:0.7rem; border-bottom:1px solid #dee2e6;">Paired SE-MSB<span class="dsb-star">*</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Row 0 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/dereverb/reference/clean/1.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/dereverb/reference/degraded/1.wav"></audio></td>
+                    <td><audio controls src="audio_samples/dereverb/dsb50/1.wav"></audio></td>
+                    <td><audio controls src="audio_samples/dereverb/buddy100/1.wav"></audio></td>
+                    <td><audio controls src="audio_samples/dereverb/gfb10/1.wav"></audio></td>
+                    <td><audio controls src="audio_samples/dereverb/wpe/1.wav"></audio></td>
+                    <td class="model-paired"><audio controls src="audio_samples/dereverb/sgmse50/1.wav"></audio></td>
+                    <td class="model-paired"><audio controls src="audio_samples/dereverb/paired50/1.wav"></audio></td>
+                </tr>
+                <!-- Row 1 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/dereverb/reference/clean/2.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/dereverb/reference/degraded/2.wav"></audio></td>
+                    <td><audio controls src="audio_samples/dereverb/dsb50/2.wav"></audio></td>
+                    <td><audio controls src="audio_samples/dereverb/buddy100/2.wav"></audio></td>
+                    <td><audio controls src="audio_samples/dereverb/gfb50/2.wav"></audio></td>
+                    <td><audio controls src="audio_samples/dereverb/wpe/2.wav"></audio></td>
+                    <td class="model-paired"><audio controls src="audio_samples/dereverb/sgmse50/2.wav"></audio></td>
+                    <td class="model-paired"><audio controls src="audio_samples/dereverb/paired50/2.wav"></audio></td>
+                </tr>
+                <!-- Row 2 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/dereverb/reference/clean/3.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/dereverb/reference/degraded/3.wav"></audio></td>
+                    <td><audio controls src="audio_samples/dereverb/dsb50/3.wav"></audio></td>
+                    <td><audio controls src="audio_samples/dereverb/buddy100/3.wav"></audio></td>
+                    <td><audio controls src="audio_samples/dereverb/gfb50/3.wav"></audio></td>
+                    <td><audio controls src="audio_samples/dereverb/wpe/3.wav"></audio></td>
+                    <td class="model-paired"><audio controls src="audio_samples/dereverb/sgmse50/3.wav"></audio></td>
+                    <td class="model-paired"><audio controls src="audio_samples/dereverb/paired50/3.wav"></audio></td>
+                </tr>
+                <!-- Row 3 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/dereverb/reference/clean/4.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/dereverb/reference/degraded/4.wav"></audio></td>
+                    <td><audio controls src="audio_samples/dereverb/dsb50/4.wav"></audio></td>
+                    <td><audio controls src="audio_samples/dereverb/buddy100/4.wav"></audio></td>
+                    <td><audio controls src="audio_samples/dereverb/gfb50/4.wav"></audio></td>
+                    <td><audio controls src="audio_samples/dereverb/wpe/4.wav"></audio></td>
+                    <td class="model-paired"><audio controls src="audio_samples/dereverb/sgmse50/4.wav"></audio></td>
+                    <td class="model-paired"><audio controls src="audio_samples/dereverb/paired50/4.wav"></audio></td>
+                </tr>
+                <!-- Row 4 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/dereverb/reference/clean/5.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/dereverb/reference/degraded/5.wav"></audio></td>
+                    <td><audio controls src="audio_samples/dereverb/dsb50/5.wav"></audio></td>
+                    <td><audio controls src="audio_samples/dereverb/buddy100/5.wav"></audio></td>
+                    <td><audio controls src="audio_samples/dereverb/gfb50/5.wav"></audio></td>
+                    <td><audio controls src="audio_samples/dereverb/wpe/5.wav"></audio></td>
+                    <td class="model-paired"><audio controls src="audio_samples/dereverb/sgmse50/5.wav"></audio></td>
+                    <td class="model-paired"><audio controls src="audio_samples/dereverb/paired50/5.wav"></audio></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
