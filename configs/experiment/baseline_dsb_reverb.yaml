@@ -3,14 +3,14 @@
 defaults:
   - test
   - override /model: baseline_dsb_unpaired
-  - override /data: reverb_wham_clip
+  - override /data: reverb_unpaired_libri
 
-project_name: 'baselines'
-task_name: 'dsb reverb wham clip (50)'
+project_name: 'baselines (libri)'
+task_name: 'dsb reverb unpaired (50)'
 compile: False
 phase: 'test'
 
-ckpt_filename: "020526204026/model-020526204026:v0"
+ckpt_filename: "300426081933/model-300426081933:v0"
 num_steps: 50
 
 model:
