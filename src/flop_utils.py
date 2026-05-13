@@ -31,7 +31,7 @@ def calculate_mamba2_block_flops(module, input, output):
     silu_flops = 5 * batch * seq_len * conv_dim
 
     # below is a gated norm, see ssd_combined in mamba_ssm, line 868
-    rmsnorm_flops = 11 * batch * seq_len * d_ssm
+    rmsnorm_flops = 11 * batch * seq_len * d_ss
 
     hidden_flops = conv_flops + silu_flops + rmsnorm_flops
 

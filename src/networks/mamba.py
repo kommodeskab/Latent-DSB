@@ -103,7 +103,7 @@ class Mamba2DiffusionModel(nn.Module):
         emb = self.timestep_embedder(t)
 
         if y is not None:
-            emb = emb + self.y_embedder(y)
+            emb =   emb + self.y_embedder(y)
 
         for block in self.blocks:
             x = block(x, emb)

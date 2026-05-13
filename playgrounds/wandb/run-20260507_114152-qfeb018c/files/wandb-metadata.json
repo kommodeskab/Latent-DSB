@@ -1,0 +1,40 @@
+{
+  "os": "Linux-7.0.3-1-cachyos-x86_64-with-glibc2.43",
+  "python": "CPython 3.12.12",
+  "startedAt": "2026-05-07T09:41:52.736817Z",
+  "program": "/home/an/Documents/Latent-DSB/playgrounds/test_flop_counter.ipynb",
+  "codePath": "/home/an/Documents/Latent-DSB/playgrounds/test_flop_counter.ipynb",
+  "codePathLocal": "test_flop_counter.ipynb",
+  "git": {
+    "remote": "git@github.com:kommodeskab/Latent-DSB.git",
+    "commit": "77d393b98f123571ca03da84ee1a5629bc547948"
+  },
+  "email": "andnymand@gmail.com",
+  "root": "/home/an/Documents/Latent-DSB/playgrounds",
+  "host": "cachyos",
+  "executable": "/home/an/Documents/Latent-DSB/.venv/bin/python",
+  "cpu_count": 14,
+  "cpu_count_logical": 20,
+  "gpu": "NVIDIA GeForce RTX 3060 Laptop GPU",
+  "gpu_count": 1,
+  "disk": {
+    "/": {
+      "total": "1022060658688",
+      "used": "95486504960"
+    }
+  },
+  "memory": {
+    "total": "41724399616"
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA GeForce RTX 3060 Laptop GPU",
+      "memoryTotal": "6442450944",
+      "cudaCores": 3840,
+      "architecture": "Ampere",
+      "uuid": "GPU-e92b2404-7be1-d579-442b-dd5c67b302ab"
+    }
+  ],
+  "cudaVersion": "13.2",
+  "writerId": "tutgdtczz6rkrq1takue2lkh0egyzyad"
+}

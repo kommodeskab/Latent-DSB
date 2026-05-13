@@ -1,0 +1,52 @@
+_wandb:
+    value:
+        cli_version: 0.23.0
+        e:
+            tutgdtczz6rkrq1takue2lkh0egyzyad:
+                codePath: /home/an/Documents/Latent-DSB/playgrounds/test_flop_counter.ipynb
+                codePathLocal: test_flop_counter.ipynb
+                cpu_count: 14
+                cpu_count_logical: 20
+                cudaVersion: "13.2"
+                disk:
+                    /:
+                        total: "1022060658688"
+                        used: "95486504960"
+                email: andnymand@gmail.com
+                executable: /home/an/Documents/Latent-DSB/.venv/bin/python
+                git:
+                    commit: 77d393b98f123571ca03da84ee1a5629bc547948
+                    remote: git@github.com:kommodeskab/Latent-DSB.git
+                gpu: NVIDIA GeForce RTX 3060 Laptop GPU
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ampere
+                      cudaCores: 3840
+                      memoryTotal: "6442450944"
+                      name: NVIDIA GeForce RTX 3060 Laptop GPU
+                      uuid: GPU-e92b2404-7be1-d579-442b-dd5c67b302ab
+                host: cachyos
+                memory:
+                    total: "41724399616"
+                os: Linux-7.0.3-1-cachyos-x86_64-with-glibc2.43
+                program: /home/an/Documents/Latent-DSB/playgrounds/test_flop_counter.ipynb
+                python: CPython 3.12.12
+                root: /home/an/Documents/Latent-DSB/playgrounds
+                startedAt: "2026-05-07T09:41:52.736817Z"
+                writerId: tutgdtczz6rkrq1takue2lkh0egyzyad
+        m: []
+        python_version: 3.12.12
+        t:
+            "1":
+                - 105
+            "2":
+                - 105
+            "3":
+                - 2
+                - 13
+            "4": 3.12.12
+            "5": 0.23.0
+            "8":
+                - 1
+            "12": 0.23.0
+            "13": linux-x86_64

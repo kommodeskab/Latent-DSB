@@ -6,3 +6,5 @@ from .frequency_masking import FrequencyMasking as FrequencyMasking
 from .reverb import Reverb as Reverb
 from .clipping import Clip as Clip
 from .analog_noise import AnalogNoise as AnalogNoise
+from .analog_distortion import AnalogDistortion as AnalogDistortion
+from .wow_and_flutter import WowAndFlutter as WowAndFlutter
