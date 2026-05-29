@@ -16,6 +16,8 @@ Experimental results show that we are on par or better than the baselines while 
 
 Visit our **[demo website](https://kommodeskab.github.io/Latent-DSB/)** to listen to audio samples.
 
+Model weights are available at **[this link](https://drive.google.com/drive/folders/1UuzY9fwjL8WH0DNxQRVrH5eGf3ClztPX?usp=sharing)**.
+
 ---
 
 ## Quick Start
