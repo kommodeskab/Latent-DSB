@@ -1,6 +1,7 @@
 /logs
 /outputs
 /hpc
+/playgrounds
 /data
 /wandb
 /configs/experiment/test*

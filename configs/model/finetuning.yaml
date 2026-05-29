@@ -1,0 +1,9 @@
+# this is exactly the same as the standard DSB model EXCEPT we can load a pretrained network by specifying the model id
+
+defaults:
+  - standard
+  - override /networks@model: pretrained
+
+model:
+  id: ???
+  model_keyword: model

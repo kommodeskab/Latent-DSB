@@ -1,5 +1,6 @@
 import torch
 from torch import Tensor
+from torchmetrics.text import WordErrorRate
 import re
 from .base import BaseMetric
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
@@ -7,7 +8,6 @@ from typing import Optional
 from src.lightning_modules import BaseLightningModule
 from src import StepOutput, TensorDict, UnpairedAudioBatch
 from torchaudio.functional import resample
-from torchmetrics.functional.text import word_error_rate
 
 
 class WER(BaseMetric):
@@ -27,7 +27,8 @@ class WER(BaseMetric):
         )
         self.model.config.forced_decoder_ids = None
         self.model.eval()
-        self.values = []
+
+        self.wer = WordErrorRate()
 
     def to(self, device: torch.device) -> None:
         self.model.to(device)
@@ -74,13 +75,15 @@ class WER(BaseMetric):
         real_transcriptions = self.transcribe(real)
         generated_transcriptions = self.transcribe(generated)
 
-        wer = word_error_rate(generated_transcriptions, real_transcriptions)
-        self.values.append(wer)
+        self.wer.update(
+            preds=generated_transcriptions,
+            target=real_transcriptions,
+        )
 
         self.module = pl_module
 
     def compute(self) -> TensorDict:
-        values = torch.tensor(self.values)
+        values = self.wer.errors
 
         return {
             "mean": values.mean(),
@@ -88,7 +91,7 @@ class WER(BaseMetric):
         }
 
     def reset(self) -> None:
-        self.values = []
+        self.wer.reset()
 
     def name(self) -> str:
         return f"WER clean='{self.clean_key}' prediction='{self.output_key}'"
