@@ -134,13 +134,13 @@
     <div class="abstract">
         <h3>Abstract</h3>
         <p>
-Speech enhancement (SE) models typically rely on supervised learning with paired data examples where clean speech is synthetically degraded. 
-This paradigm limits performance in real-world scenarios where the target environment's specific acoustic characteristics are unknown. 
+Speech enhancement (SE) models typically rely on supervised learning with paired data examples where clean speech is synthetically degraded.
+This paradigm limits performance in real-world scenarios where the target environment's specific acoustic characteristics are unknown.
 We propose a fully unpaired SE framework that uses principled Diffusion Schrödinger Bridges (DSB) to learn a stochastic transport process between a clean and a degraded speech distribution.
 Algorithms for learning transport maps are computationally heavy since they require simulating differential equations during training, usually at each training step.
-Therefore, we propose using a high-efficiency Mamba Diffusion Model designed for end-to-end waveform processing. 
+Therefore, we propose using a high-efficiency Mamba Diffusion Model designed for end-to-end waveform processing.
 We compare against state-of-the-art methods for speech enhancement, both paired and unpaired, as well as a classical signal processing algorithm.
-Experimental results show that we are on par or better than the baselines while being orders of magnitude faster during inference. 
+Experimental results show that we are on par or better than the baselines while being orders of magnitude faster during inference.
 Furthermore, we show that the flexibility of the DSB formulation allows our model to generalize across SE tasks, offering a robust and efficient solution for real-world speech restoration.
         </p>
     </div>
@@ -173,8 +173,8 @@ Furthermore, we show that the flexibility of the DSB formulation allows our mode
                     <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">BUDDy</th>
                     <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">GFB</th>
                     <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">WPE</th>
-                    <th class="model-paired" style="padding:0.7rem; border-bottom:1px solid #dee2e6;">SGMSE</th>
-                    <th class="model-paired" style="padding:0.7rem; border-bottom:1px solid #dee2e6;">Paired SE-MSB<span class="dsb-star">*</span></th>
+                    <th class="model-paired" style="padding:0.7rem; border-bottom:1px solid #dee2e6;">SGMSE (paired)</th>
+                    <th class="model-paired" style="padding:0.7rem; border-bottom:1px solid #dee2e6;">SE-MSB (paired)<span class="dsb-star">*</span></th>
                 </tr>
             </thead>
             <tbody>
@@ -232,6 +232,69 @@ Furthermore, we show that the flexibility of the DSB formulation allows our mode
                     <td><audio controls src="audio_samples/dereverb/wpe/5.wav"></audio></td>
                     <td class="model-paired"><audio controls src="audio_samples/dereverb/sgmse50/5.wav"></audio></td>
                     <td class="model-paired"><audio controls src="audio_samples/dereverb/paired50/5.wav"></audio></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div style="overflow-x: auto; margin: 2rem auto; padding: 1rem 0;">
+        <table>
+            <colgroup>
+                <col style="width: 80px;">
+                <col style="width: 80px;">
+                <col style="width: 1fr;">
+                <col style="width: 1fr;">
+                <col style="width: 1fr;">
+            </colgroup>
+            <caption>Denoising + Dereverberation + Declipping</caption>
+            <thead style="background:#e9ecef;">
+                <tr>
+                    <th class="model-ref" style="padding:0.7rem; border-bottom:1px solid #dee2e6;">Original</th>
+                    <th class="model-ref" style="padding:0.7rem; border-bottom:1px solid #dee2e6;">Distorted</th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">SE-MSB<span class="dsb-star">*</span></th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">BUDDy</th>
+                    <th style="padding:0.7rem; border-bottom:1px solid #dee2e6;">Sepformer</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Row 0 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/reverb_wham_clip/reference/clean/1.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/reverb_wham_clip/reference/degraded/1.wav"></audio></td>
+                    <td><audio controls src="audio_samples/reverb_wham_clip/dsb50/1.wav"></audio></td>
+                    <td><audio controls src="audio_samples/reverb_wham_clip/buddy100/1.wav"></audio></td>
+                    <td class="model-paired"><audio controls src="audio_samples/reverb_wham_clip/sepformer/1.wav"></audio></td>
+                </tr>
+                <!-- Row 1 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/reverb_wham_clip/reference/clean/2.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/reverb_wham_clip/reference/degraded/2.wav"></audio></td>
+                    <td><audio controls src="audio_samples/reverb_wham_clip/dsb50/2.wav"></audio></td>
+                    <td><audio controls src="audio_samples/reverb_wham_clip/buddy100/2.wav"></audio></td>
+                    <td class="model-paired"><audio controls src="audio_samples/reverb_wham_clip/sepformer/2.wav"></audio></td>
+                </tr>
+                <!-- Row 2 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/reverb_wham_clip/reference/clean/3.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/reverb_wham_clip/reference/degraded/3.wav"></audio></td>
+                    <td><audio controls src="audio_samples/reverb_wham_clip/dsb50/3.wav"></audio></td>
+                    <td><audio controls src="audio_samples/reverb_wham_clip/buddy100/3.wav"></audio></td>
+                    <td class="model-paired"><audio controls src="audio_samples/reverb_wham_clip/sepformer/3.wav"></audio></td>
+                </tr>
+                <!-- Row 3 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/reverb_wham_clip/reference/clean/4.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/reverb_wham_clip/reference/degraded/4.wav"></audio></td>
+                    <td><audio controls src="audio_samples/reverb_wham_clip/dsb50/4.wav"></audio></td>
+                    <td><audio controls src="audio_samples/reverb_wham_clip/buddy100/4.wav"></audio></td>
+                    <td class="model-paired"><audio controls src="audio_samples/reverb_wham_clip/sepformer/4.wav"></audio></td>
+                </tr>
+                <!-- Row 4 -->
+                <tr>
+                    <td class="model-ref"><audio controls src="audio_samples/reverb_wham_clip/reference/clean/5.wav"></audio></td>
+                    <td class="model-ref"><audio controls src="audio_samples/reverb_wham_clip/reference/degraded/5.wav"></audio></td>
+                    <td><audio controls src="audio_samples/reverb_wham_clip/dsb50/5.wav"></audio></td>
+                    <td><audio controls src="audio_samples/reverb_wham_clip/buddy100/5.wav"></audio></td>
+                    <td class="model-paired"><audio controls src="audio_samples/reverb_wham_clip/sepformer/5.wav"></audio></td>
                 </tr>
             </tbody>
         </table>
