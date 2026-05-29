@@ -1,1 +1,26 @@
-# TODO
+- _target_: src.datasets.degradations.AnalogDistortion
+  prob: 1.0
+  deterministic: True
+- _target_: src.datasets.degradations.AnalogNoise
+  noise_type: "Click"
+  prob: 1.0
+  deterministic: True
+- _target_: src.datasets.degradations.AnalogNoise
+  noise_type: "Crackle"
+  prob: 1.0
+  deterministic: True
+- _target_: src.datasets.degradations.AnalogNoise
+  noise_type: "Scratch"
+  prob: 1.0
+  deterministic: True
+- _target_: src.datasets.degradations.AnalogNoise
+  noise_type: "Tick"
+  prob: 1.0
+  deterministic: True
+- _target_: src.datasets.degradations.AnalogNoise
+  noise_type: "Thump"
+  prob: 1.0
+  deterministic: True
+- _target_: src.datasets.degradations.WowAndFlutter
+  prob: 1.0
+  deterministic: True

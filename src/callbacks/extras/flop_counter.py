@@ -1,10 +1,12 @@
 from torch.utils.flop_counter import FlopCounterMode
 from torch import Tensor
 from .base import ExtraMetricOutput
-from src.lightning_modules import DSB, WPE
+from src.lightning_modules import DSB
 from src import UnpairedAudioBatch
 from mamba_ssm import Mamba2
 from src.flop_utils import calculate_mamba2_block_flops, calculate_wpe_block_flops
+
+WPE = ...  # Placeholder for the WPE class, replace with actual import when available
 
 
 class CountFlopsExtra(ExtraMetricOutput):
