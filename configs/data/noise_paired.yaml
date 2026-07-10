@@ -30,6 +30,8 @@ trainset:
 
   degraded_dataset: # the original dataset and degradations are specified in the defauls list above but we still need to specify the target here
     _target_: src.datasets.DegradedDataset
+    deterministic: False
+    probs: 1.0
 
 valset:
   _target_: src.datasets.UnpairedAudioDataset
@@ -41,6 +43,8 @@ valset:
 
   degraded_dataset:
     _target_: src.datasets.DegradedDataset
+    deterministic: True
+    probs: 1.0
 
 testset:
   _target_: src.datasets.UnpairedAudioDataset
@@ -52,3 +56,5 @@ testset:
 
   degraded_dataset:
     _target_: src.datasets.DegradedDataset
+    deterministic: True
+    probs: 1.0

@@ -6,21 +6,21 @@ from torch import Tensor, clamp
 class Clip(BaseDegradation):
     """
     Helper class for clipping an audio clip. Removes power between
-    min_dB and max_dB from the given sample.
+    min_db and max_db from the given sample.
     """
 
     def __init__(
         self,
-        min_dB: float,
-        max_dB: float,
+        min_db: float,
+        max_db: float,
         binary_search_iterations: int = 25,
     ):
-        self.min_dB = min_dB
-        self.max_dB = max_dB
+        self.min_db = min_db
+        self.max_db = max_db
         self.binary_search_iterations = binary_search_iterations
 
-    def _sample_dB(self) -> Tensor:
-        return torch.empty(1).uniform_(self.min_dB, self.max_dB)
+    def _sample_db(self) -> Tensor:
+        return torch.empty(1).uniform_(self.min_db, self.max_db)
 
     def binary_clamp_search(self, audio: Tensor, target_db_loss: float):
         x = audio
@@ -41,8 +41,8 @@ class Clip(BaseDegradation):
         return clamp(x, -mid, mid)
 
     def fun(self, audio: Tensor) -> Tensor:
-        dB = self._sample_dB()
-        return self.binary_clamp_search(audio, dB.item())
+        db = self._sample_db()
+        return self.binary_clamp_search(audio, db.item())
 
 
 if __name__ == "__main__":
