@@ -7,3 +7,4 @@ from .feature_matching import FeatureMatchingLoss as FeatureMatchingLoss
 from .weighted_loss import WeightedLoss as WeightedLoss
 from .feature_matching import HubertFeatureExtractor as HubertFeatureExtractor
 from .feature_matching import Wav2VecFeatureExtractor as Wav2VecFeatureExtractor
+from .drifting_loss import DriftingLoss as DriftingLoss
