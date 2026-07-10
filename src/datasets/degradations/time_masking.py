@@ -9,13 +9,11 @@ class TimeMasking(BaseDegradation):
     T
     """
 
-    def __init__(self, max_mask_proportion: float, prob: float = 1.0, deterministic: bool = False):
-        super().__init__(prob=prob, deterministic=deterministic)
+    def __init__(self, max_mask_proportion: float):
         assert (
             0 <= max_mask_proportion <= 1
         ), "max_mask_proportion must be between 0 and 1 (representing the proportion of the audio to mask)"
         self.max_mask_proportion = max_mask_proportion
-        self.deterministic = deterministic
 
     def fun(self, audio: Tensor) -> Tensor:
         C, T = audio.shape

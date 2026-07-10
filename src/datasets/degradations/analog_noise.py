@@ -48,11 +48,7 @@ class AnalogNoise(BaseDegradation):
         Q_factor=None,  # For how long does the impulse last - for dust, use a low factor, for scratches, use a high factor.
         noise_type: Literal["Click", "Crackle", "Scratch", "Tick", "Thump"] = "Click",
         sample_rate=16000,  # needed for the poisson process. Don't expect a hard call, but maybe.
-        prob: float = 1.0,
-        deterministic: bool = False,
     ):
-        super().__init__(prob=prob, deterministic=deterministic)
-
         _min_db = -30.0
         _max_db = -10.0
         _clicks_per_second = 5.0

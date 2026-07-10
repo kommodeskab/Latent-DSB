@@ -13,14 +13,10 @@ class Clip(BaseDegradation):
         self,
         min_dB: float,
         max_dB: float,
-        prob: float = 1.0,
-        deterministic: bool = False,
         binary_search_iterations: int = 25,
     ):
-        super().__init__(prob=prob, deterministic=deterministic)
         self.min_dB = min_dB
         self.max_dB = max_dB
-        self.deterministic = deterministic
         self.binary_search_iterations = binary_search_iterations
 
     def _sample_dB(self) -> Tensor:

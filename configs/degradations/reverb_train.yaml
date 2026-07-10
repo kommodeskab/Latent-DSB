@@ -1,7 +1,5 @@
 - _target_: src.datasets.degradations.Reverb
   mix: 0.3
-  prob: 1.0
-  deterministic: False
   rir_threshold: -20
   RIR_dataset:
     _target_: src.datasets.AugmentedAudioDataset

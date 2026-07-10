@@ -16,12 +16,9 @@ class Reverb(BaseDegradation):
     def __init__(
         self,
         RIR_dataset: AudioDataset,
-        prob: float = 1.0,
-        deterministic: bool = False,
         rir_threshold: float = -20.0,
         mix: float = 0.5,
     ):
-        super().__init__(prob=prob, deterministic=deterministic)
         self.RIR_dataset = RIR_dataset
         assert rir_threshold < 0, f"rir_threshold must be negative, currently the value is {rir_threshold}"
         self.rir_threshold = rir_threshold

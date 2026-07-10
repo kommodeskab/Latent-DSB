@@ -8,13 +8,9 @@ class AddGaussianNoise(BaseDegradation):
         self,
         min_std: float,
         max_std: float,
-        prob: float = 1.0,
-        deterministic: bool = False,
     ):
-        super().__init__(prob=prob, deterministic=deterministic)
         self.min_std = min_std
         self.max_std = max_std
-        self.deterministic = deterministic
 
     def _sample_std(self) -> float:
         return torch.empty(1).uniform_(self.min_std, self.max_std)

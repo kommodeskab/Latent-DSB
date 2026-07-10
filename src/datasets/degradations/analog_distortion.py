@@ -21,7 +21,7 @@ class AnalogDistortion(BaseDegradation):
             even-order harmonics. [1]
         2. Tracing Distortion
             The vinyl is cut with a sharp, V-shaped lathe, while the sound is played back with a round stylus.
-            This leads to symmetric distortions, since it happens equally on the positive and negative swings of the lateral groove, odd-order harmonics [1] [2].       
+            This leads to symmetric distortions, since it happens equally on the positive and negative swings of the lateral groove, odd-order harmonics [1] [2].
             The leading term in the distortion can be shown to scale by y(t) ~ x(t) + C x'(t)^2*x''(t), where C is a constant [3].
         3. Inner groove distortion
             In the inner grooves, the physical size of the vinyl is so small, that the physical size of the needle can't read it. This leads to a muffling of higher frequencies. Depending on the mass of the needle and cantilever,
@@ -45,17 +45,13 @@ class AnalogDistortion(BaseDegradation):
 
     def __init__(
         self,
-        a2 = 0.2,
-        a3 = 0.2,
-        drive_db = 3.0,
-        low_pass_freq = 3500,
-        high_pass_freq = 200,
+        a2=0.2,
+        a3=0.2,
+        drive_db=3.0,
+        low_pass_freq=3500,
+        high_pass_freq=200,
         sample_rate=16000,
-        prob: float = 1.0,
-        deterministic: bool = False,
     ):
-        super().__init__(prob=prob, deterministic=deterministic)
-
         self.a2 = a2
         self.a3 = a3
         self.drive_db = drive_db
@@ -86,24 +82,23 @@ class AnalogDistortion(BaseDegradation):
         return x
 
     def fun(self, audio: Tensor) -> Tensor:
-
         drive_linear = 10 ** (self.drive_db / 20.0)
         x = audio * drive_linear
 
         x_pre = self._apply_riaa_pre(x)
 
-        tracking_dist = self.a2 * (x_pre ** 2)
+        tracking_dist = self.a2 * (x_pre**2)
         sr_ratio = 16000.0 / self.sample_rate
 
         v = torch.diff(x_pre, dim=-1, prepend=x_pre[..., :1]) * sr_ratio
         a = torch.diff(v, dim=-1, prepend=v[..., :1]) * sr_ratio
-        
-        tracing_dist = (self.a3 * (v ** 2) * a)
+
+        tracing_dist = self.a3 * (v**2) * a
 
         y = x_pre + tracking_dist + tracing_dist
 
-        y = F.lowpass_biquad(y, self.sample_rate,cutoff_freq=self.low_pass_freq)
-        y = F.highpass_biquad(y,self.sample_rate,cutoff_freq=self.high_pass_freq)
+        y = F.lowpass_biquad(y, self.sample_rate, cutoff_freq=self.low_pass_freq)
+        y = F.highpass_biquad(y, self.sample_rate, cutoff_freq=self.high_pass_freq)
         y = self._apply_riaa_de(y)
         return tanh(y)
 
