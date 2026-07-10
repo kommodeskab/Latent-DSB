@@ -112,3 +112,60 @@ class Mamba2DiffusionModel(nn.Module):
         x = self.up_conv(x)
 
         return x
+
+
+class Mamba2Block(nn.Module):
+    def __init__(self, d_model: int, d_state: int):
+        super().__init__()
+        self.norm = nn.LayerNorm(d_model)
+        self.mamba_fwd = Mamba2(d_model=d_model, d_state=d_state)
+        self.mamba_bwd = Mamba2(d_model=d_model, d_state=d_state)
+        self.out_proj = nn.Linear(d_model * 2, d_model)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x_norm = self.norm(x)
+
+        out_fwd = self.mamba_fwd(x_norm)
+
+        x_norm_flipped = torch.flip(x_norm, dims=[1])
+        out_bwd = self.mamba_bwd(x_norm_flipped)
+        out_bwd = torch.flip(out_bwd, dims=[1])
+
+        out = torch.cat([out_fwd, out_bwd], dim=-1)
+        out = self.out_proj(out)
+
+        return x + out
+
+
+class Mamba2Model(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        d_model: int,
+        d_state: int,
+        num_blocks: int,
+        kernel_size: int = 256,
+        stride: int = 16,
+    ):
+        super().__init__()
+        padding = (kernel_size - stride) // 2
+        self.down_conv = nn.Conv1d(
+            in_channels, d_model, kernel_size=kernel_size, stride=stride, padding=padding, bias=False
+        )
+        self.up_conv = nn.ConvTranspose1d(
+            d_model, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=False
+        )
+        self.blocks = nn.ModuleList([Mamba2Block(d_model=d_model, d_state=d_state) for _ in range(num_blocks)])
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.down_conv(x)
+        x = x.transpose(1, 2)
+
+        for block in self.blocks:
+            x = block(x)
+
+        x = x.transpose(1, 2)
+        x = self.up_conv(x)
+
+        return x

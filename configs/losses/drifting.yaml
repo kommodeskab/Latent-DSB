@@ -1,2 +1,2 @@
 _target_: src.losses.DriftingLoss
-temperature: 1.0
+temperature: 100.

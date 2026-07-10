@@ -1,0 +1,9 @@
+_target_: src.lightning_modules.OneStepModel
+
+defaults:
+  - /networks@model: mamba2
+  - /losses@loss_fn: drifting
+  - /optimizer: adamw
+  - /lr_scheduler: constant
+
+ema_decay: 0.9999

@@ -4,3 +4,4 @@ from .scheduler import DSBScheduler as DSBScheduler
 from .dsb import DSB as DSB
 from .gfb import GFB as GFB
 from .dsb import PairedDSB as PairedDSB
+from .onestep import OneStepModel as OneStepModel

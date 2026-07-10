@@ -46,7 +46,7 @@ class SRCS(BaseMetric):
             audio = audio.mean(dim=1)
         audio = resample(audio, orig_freq=sample_rate, new_freq=self.target_sample_rate)
         audio_len = torch.tensor([audio.shape[1]] * audio.shape[0]).to(audio.device)
-        _, emb = self.model.forward(input_signal=audio, input_signal_length=audio_len)
+        _, emb = self.model(input_signal=audio, input_signal_length=audio_len)
         return emb
 
     def add(

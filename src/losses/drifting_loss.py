@@ -7,7 +7,7 @@ import torch
 class DriftingLoss(BaseLossFunction):
     def __init__(
         self,
-        temperature: float = 1.0,
+        temperature: float | str = 1.0,
     ):
         super().__init__()
         self.temperature = temperature
@@ -26,8 +26,20 @@ class DriftingLoss(BaseLossFunction):
 
         dist_neg = dist_neg + torch.eye(batch_size, device=x.device) * 1e6
 
-        logits_pos = -dist_pos / self.temperature
-        logits_neg = -dist_neg / self.temperature
+        if self.temperature == "dynamic":
+            with torch.no_grad():
+                all_dists = torch.cat([dist_pos.flatten(), dist_neg.flatten()])
+                valid_dists = all_dists[all_dists < 1e5]
+                if valid_dists.numel() > 0:
+                    temp = torch.median(valid_dists).item()
+                else:
+                    temp = 1.0
+                temp = max(temp, 1e-4)
+        else:
+            temp = float(self.temperature)
+
+        logits_pos = -dist_pos / temp
+        logits_neg = -dist_neg / temp
 
         logits = torch.cat([logits_pos, logits_neg], dim=1)
 

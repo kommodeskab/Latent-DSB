@@ -7,3 +7,4 @@ from .encoders import HifiGan as HifiGan
 from .transformer import AudioDiffusionTransformer as AudioDiffusionTransformer
 from .diffwave import DiffWave as DiffWave
 from .mamba import Mamba2DiffusionModel as Mamba2DiffusionModel
+from .mamba import Mamba2Model as Mamba2Model
