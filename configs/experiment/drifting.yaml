@@ -7,7 +7,7 @@ defaults:
   - override /callbacks: onestep
   - override /model: onestep
   - override /networks@model.model: mamba2
-  - override /losses@model.loss_fn: l1
+  - override /losses@model.loss_fn: drifting
   - override /logger: default
 
 

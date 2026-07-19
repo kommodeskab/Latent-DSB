@@ -1,13 +1,11 @@
 import torch
-import torch.nn.functional as F
 from transformers import Wav2Vec2Model, HubertModel, AutoModel
 from torch import Tensor
 from src.losses.baseloss import BaseLossFunction
-from src import AudioBatch, ModelOutput, LossOutput
+from src import ModelOutput, LossOutput, Batch
 import torch.nn as nn
-from typing import Union
 import torch._dynamo as dynamo
-
+from typing import Union
 
 class Wav2VecFeatureExtractor(nn.Module):
     def __init__(self):
@@ -53,8 +51,9 @@ class HubertFeatureExtractor(nn.Module):
 
         assert audio.dim() == 3 and audio.shape[1] == 1, "Audio tensor must have shape (batch_size, 1, sequence_length)"
 
-        audio_var = audio.var(dim=-1, unbiased=False, keepdim=True)
-        extract_features = (audio - audio.mean(dim=-1, keepdim=True)) / torch.sqrt(audio_var + 1e-5)
+        # audio_var = audio.var(dim=-1, unbiased=False, keepdim=True)
+        # extract_features = (audio - audio.mean(dim=-1, keepdim=True)) / torch.sqrt(audio_var + 1e-5)
+        extract_features = audio
 
         n_conv_layers = len(self.model.feature_extractor.conv_layers)
         for n, conv_layer in enumerate(self.model.feature_extractor.conv_layers):
@@ -85,23 +84,41 @@ FEATURE_EXTRACTORS = Union[Wav2VecFeatureExtractor, HubertFeatureExtractor]
 
 
 class FeatureMatchingLoss(BaseLossFunction):
-    def __init__(self, feature_extractor: FEATURE_EXTRACTORS):
+    def __init__(
+        self, 
+        feature_extractor: FEATURE_EXTRACTORS,
+        loss_fn: BaseLossFunction
+        ):
         super().__init__()
         self.feature_extractor = feature_extractor
+        self.loss_fn = loss_fn
         # make sure that the feature extractor is in eval mode and does not require gradients
-        self.feature_extractor.eval()
         self.feature_extractor.requires_grad_(False)
 
-    def forward(self, model_output: ModelOutput, batch: AudioBatch) -> LossOutput:
+    def forward(self, model_output: ModelOutput, batch: Batch) -> LossOutput:
+        self.feature_extractor.eval()
         real_features = self.feature_extractor(batch["target"])
         generated_features = self.feature_extractor(model_output["output"])
+        
+        for layer_idx, (real_feat, gen_feat) in enumerate(zip(real_features, generated_features)):
+            layer_loss = self.loss_fn(
+                {"output": gen_feat},
+                {"target": real_feat}
+            )
+            
+            if layer_idx == 0:
+                # initialize the loss dictionary on the first iteration
+                loss = layer_loss
+                
+            else:
+                # for the other iterations, accumulate the loss values for each key
+                for key, value in layer_loss.items():
+                    loss[key] += value
 
-        loss = 0.0
-        for real_feat, gen_feat in zip(real_features, generated_features):
-            loss += F.l1_loss(gen_feat, real_feat)
-
-        loss = loss / len(real_features)
-        return LossOutput(loss=loss)
+        # average the loss values over the number of layers
+        loss = {key: value / len(real_features) for key, value in loss.items()}
+        
+        return loss
 
     def state_dict(self, destination=None, prefix="", keep_vars=False):
         # When saving the state dict, DONT include the weights ofn the feature extractor
