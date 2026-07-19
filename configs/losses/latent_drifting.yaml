@@ -15,4 +15,4 @@ loss_fn:
     - _target_: src.losses.DriftingLoss
       temperature: 0.1
       kernel_type: gaussian
-    # - _target_: src.losses.L1Loss
+    - _target_: src.losses.L1Loss
