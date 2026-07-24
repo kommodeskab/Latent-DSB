@@ -5,5 +5,3 @@ defaults:
   - /losses@loss_fn: drifting
   - /optimizer: adamw
   - /lr_scheduler: constant
-
-ema_decay: 0.9999

@@ -13,13 +13,12 @@ class LogGradsCallback(Callback):
         log_every_n_steps (int): Frequency of logging gradient norms in terms of training steps. Default is 100.
     """
 
-    def __init__(self, log_every_n_steps: int = 100):
+    def __init__(self):
         super().__init__()
-        self.log_every_n_steps = log_every_n_steps
 
     def on_before_optimizer_step(
         self, trainer: pl.Trainer, pl_module: pl.LightningModule, optimizer: Optimizer
     ) -> None:
-        if trainer.global_step % self.log_every_n_steps == 0:
+        if trainer.global_step % trainer.log_every_n_steps == 0:
             norms = grad_norm(pl_module, norm_type=2)
             pl_module.log_dict(norms)

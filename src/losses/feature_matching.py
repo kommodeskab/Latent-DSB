@@ -6,6 +6,10 @@ from src import ModelOutput, LossOutput, Batch
 import torch.nn as nn
 import torch._dynamo as dynamo
 from typing import Union
+from src.lightning_modules.fake_module import FakeModule
+import torchaudio.transforms as T
+from typing import Tuple
+
 
 class Wav2VecFeatureExtractor(nn.Module):
     def __init__(self):
@@ -15,9 +19,14 @@ class Wav2VecFeatureExtractor(nn.Module):
         self.layers_to_use = [0, 4, 8, 12]
 
     def forward(self, audio: Tensor) -> list[Tensor]:
+        # Ensure 2D tensor (batch_size, sequence_length) for Wav2Vec2Model
+        if audio.dim() == 3 and audio.shape[1] == 1:
+            audio = audio.squeeze(1)
+
         # Normalize audio to have zero mean and unit variance
-        audio = audio.squeeze(1)
-        audio = (audio - audio.mean(dim=-1, keepdim=True)) / torch.sqrt(audio.var(dim=-1, keepdim=True) + 1e-5)
+        audio = (audio - audio.mean(dim=-1, keepdim=True)) / torch.sqrt(
+            audio.var(dim=-1, keepdim=True, unbiased=False) + 1e-5
+        )
 
         features = self.model(audio, output_hidden_states=True).hidden_states
         return [features[i] for i in self.layers_to_use]
@@ -51,9 +60,10 @@ class HubertFeatureExtractor(nn.Module):
 
         assert audio.dim() == 3 and audio.shape[1] == 1, "Audio tensor must have shape (batch_size, 1, sequence_length)"
 
-        # audio_var = audio.var(dim=-1, unbiased=False, keepdim=True)
-        # extract_features = (audio - audio.mean(dim=-1, keepdim=True)) / torch.sqrt(audio_var + 1e-5)
-        extract_features = audio
+        # Normalize audio to zero-mean and unit-variance per utterance (standard for HuBERT / Wav2Vec2)
+        extract_features = (audio - audio.mean(dim=-1, keepdim=True)) / torch.sqrt(
+            audio.var(dim=-1, keepdim=True, unbiased=False) + 1e-5
+        )
 
         n_conv_layers = len(self.model.feature_extractor.conv_layers)
         for n, conv_layer in enumerate(self.model.feature_extractor.conv_layers):
@@ -80,67 +90,92 @@ class HubertFeatureExtractor(nn.Module):
         return feature_list
 
 
-FEATURE_EXTRACTORS = Union[Wav2VecFeatureExtractor, HubertFeatureExtractor]
+class MelSpectrogramFeatureExtractor(nn.Module):
+    """
+    Computes multi-resolution Mel Spectrograms for feature matching.
+
+    Returns a list of log-mel spectrogram tensors computed at different STFT resolutions
+    (e.g., varying n_fft, win_length, hop_length, and n_mels).
+    """
+
+    def __init__(
+        self,
+        sample_rate: int = 16000,
+        n_mels: int = 80,
+        fft_sizes: Tuple[int, ...] = (512, 1024, 2048),
+        hop_sizes: Tuple[int, ...] = (128, 256, 512),
+        win_lengths: Tuple[int, ...] = (512, 1024, 2048),
+        log_scale: bool = True,
+        eps: float = 1e-5,
+    ):
+        super().__init__()
+        assert (
+            len(fft_sizes) == len(hop_sizes) == len(win_lengths)
+        ), "fft_sizes, hop_sizes, and win_lengths must have equal length"
+
+        self.sample_rate = sample_rate
+        self.log_scale = log_scale
+        self.eps = eps
+
+        # Store transforms in nn.ModuleList so device placement works (.to, .cuda, etc.)
+        self.mel_transforms = nn.ModuleList(
+            [
+                T.MelSpectrogram(
+                    sample_rate=sample_rate,
+                    n_fft=n_fft,
+                    win_length=win_len,
+                    hop_length=hop_len,
+                    n_mels=n_mels,
+                    power=1.0,
+                )
+                for n_fft, hop_len, win_len in zip(fft_sizes, hop_sizes, win_lengths)
+            ]
+        )
+
+    def forward(self, audio: Tensor) -> list[Tensor]:
+        # Ensure 2D tensor (batch_size, sequence_length) for torchaudio
+        if audio.dim() == 3 and audio.shape[1] == 1:
+            audio = audio.squeeze(1)
+
+        feature_list = []
+        for transform in self.mel_transforms:
+            mel = transform(audio)
+            if self.log_scale:
+                mel = torch.log(torch.clamp(mel, min=self.eps))
+            feature_list.append(mel)
+
+        return feature_list
+
+
+FEATURE_EXTRACTORS = Union[Wav2VecFeatureExtractor, HubertFeatureExtractor, MelSpectrogramFeatureExtractor]
 
 
 class FeatureMatchingLoss(BaseLossFunction):
-    def __init__(
-        self, 
-        feature_extractor: FEATURE_EXTRACTORS,
-        loss_fn: BaseLossFunction
-        ):
+    def __init__(self, feature_extractor: FEATURE_EXTRACTORS, loss_fn: BaseLossFunction):
         super().__init__()
-        self.feature_extractor = feature_extractor
+        feature_extractor.requires_grad_(False)
+        feature_extractor.eval()
+        self.feature_extractor = FakeModule(feature_extractor)
         self.loss_fn = loss_fn
-        # make sure that the feature extractor is in eval mode and does not require gradients
-        self.feature_extractor.requires_grad_(False)
 
     def forward(self, model_output: ModelOutput, batch: Batch) -> LossOutput:
         self.feature_extractor.eval()
-        real_features = self.feature_extractor(batch["target"])
+
+        # Target feature extraction does not need autograd tracking
+        with torch.no_grad():
+            real_features = self.feature_extractor(batch["target"])
+
         generated_features = self.feature_extractor(model_output["output"])
-        
-        for layer_idx, (real_feat, gen_feat) in enumerate(zip(real_features, generated_features)):
-            layer_loss = self.loss_fn(
-                {"output": gen_feat},
-                {"target": real_feat}
-            )
-            
-            if layer_idx == 0:
-                # initialize the loss dictionary on the first iteration
-                loss = layer_loss
-                
-            else:
-                # for the other iterations, accumulate the loss values for each key
-                for key, value in layer_loss.items():
-                    loss[key] += value
 
-        # average the loss values over the number of layers
-        loss = {key: value / len(real_features) for key, value in loss.items()}
-        
+        # Compute element counts and normalize layer weights by element count
+        element_counts = [real_feat.numel() for real_feat in real_features]
+        total_elements = sum(element_counts)
+        layer_weights = [count / total_elements for count in element_counts]
+
+        loss = {}
+        for weight, real_feat, gen_feat in zip(layer_weights, real_features, generated_features):
+            layer_loss = self.loss_fn({"output": gen_feat}, {"target": real_feat})
+            for key, value in layer_loss.items():
+                loss[key] = loss.get(key, 0.0) + weight * value
+
         return loss
-
-    def state_dict(self, destination=None, prefix="", keep_vars=False):
-        # When saving the state dict, DONT include the weights ofn the feature extractor
-        # why? Because the feature extractor is a large but frozen model that we don't need to save.
-        # therefore, we save space and decrease complexity
-
-        state_dict = super().state_dict(destination, prefix, keep_vars)
-
-        keys_to_remove = [k for k in state_dict.keys() if k.startswith(f"{prefix}feature_extractor.")]
-        for k in keys_to_remove:
-            del state_dict[k]
-
-        return state_dict
-
-    def _load_from_state_dict(
-        self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs
-    ):
-        # When loading the state dict, we need to load the weights of the feature extractor from the state dict
-        # they are not included in the state dict, see the state_dict method
-
-        extractor_state = self.feature_extractor.state_dict(prefix=f"{prefix}feature_extractor.")
-        state_dict.update(extractor_state)
-        super()._load_from_state_dict(
-            state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs
-        )

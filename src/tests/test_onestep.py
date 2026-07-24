@@ -21,7 +21,6 @@ def test_onestep_model():
     onestep = OneStepModel(
         model=model,
         loss_fn=loss_fn,
-        ema_decay=0.9,
     )
 
     # Test batch
@@ -40,20 +39,6 @@ def test_onestep_model():
     assert "loss" in step_out
     assert step_out["loss"].item() >= 0
 
-    # Test sample method (runs inside average_parameters context)
+    # Test sample method
     sampled = onestep.sample(x)
     assert sampled.shape == (batch_size, 10)
-
-    # Test EMA updates (using mock optimizer)
-    prev_ema_params = [p.clone() for p in onestep.ema.shadow_params]
-    onestep.on_before_zero_grad(None)
-    curr_ema_params = onestep.ema.shadow_params
-    # hadow params should be updated (or stay consistent if no optimization steps occurred)
-    assert len(curr_ema_params) == len(prev_ema_params)
-
-    # Test checkpoint saving and loading
-    checkpoint = {}
-    onestep.on_save_checkpoint(checkpoint)
-    assert "ema" in checkpoint
-
-    onestep.on_load_checkpoint(checkpoint)

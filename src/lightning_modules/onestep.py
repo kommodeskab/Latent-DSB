@@ -1,10 +1,9 @@
-from src.lightning_modules import BaseLightningModule
-from src.losses import BaseLossFunction
-from src import OptimizerType, LRSchedulerType, Batch, ModelOutput, StepOutput
-from torch_ema import ExponentialMovingAverage
 import torch
 from torch import Tensor
 import torch.nn as nn
+from src.lightning_modules import BaseLightningModule
+from src.losses import BaseLossFunction
+from src import OptimizerType, LRSchedulerType, Batch, ModelOutput, StepOutput
 
 
 class OneStepModel(BaseLightningModule):
@@ -14,27 +13,11 @@ class OneStepModel(BaseLightningModule):
         loss_fn: BaseLossFunction,
         optimizer: OptimizerType = None,
         lr_scheduler: LRSchedulerType = None,
-        ema_decay: float = 0.9999,
     ):
         super().__init__(optimizer=optimizer, lr_scheduler=lr_scheduler)
         self.model = model
         self.network = model  # Alias for compatibility with network/model
         self.loss_fn = loss_fn
-        self.ema = ExponentialMovingAverage(self.parameters(), decay=ema_decay)
-
-    def to(self, device: torch.device):
-        self.ema.to(device)
-        return super().to(device)
-
-    def on_before_zero_grad(self, optimizer: torch.optim.Optimizer):
-        self.ema.update()
-        return super().on_before_zero_grad(optimizer)
-
-    def on_save_checkpoint(self, checkpoint: dict) -> dict:
-        checkpoint["ema"] = self.ema.state_dict()
-
-    def on_load_checkpoint(self, checkpoint: dict):
-        self.ema.load_state_dict(checkpoint["ema"])
 
     def forward(self, batch: Batch) -> ModelOutput:
         output = self.model(batch["x1"])
@@ -53,5 +36,4 @@ class OneStepModel(BaseLightningModule):
 
     @torch.no_grad()
     def sample(self, x_start: Tensor, **kwargs) -> Tensor:
-        with self.ema.average_parameters():
-            return self.model(x_start)
+        return self.model(x_start)

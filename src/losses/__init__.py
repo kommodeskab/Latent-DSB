@@ -8,3 +8,5 @@ from .weighted_loss import WeightedLoss as WeightedLoss
 from .feature_matching import HubertFeatureExtractor as HubertFeatureExtractor
 from .feature_matching import Wav2VecFeatureExtractor as Wav2VecFeatureExtractor
 from .drifting_loss import DriftingLoss as DriftingLoss
+from .feature_matching import MelSpectrogramFeatureExtractor as MelSpectrogramFeatureExtractor
+from .power import PowerLoss as PowerLoss
