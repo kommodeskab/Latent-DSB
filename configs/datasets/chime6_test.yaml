@@ -1,0 +1,17 @@
+_target_: src.datasets.AugmentedAudioDataset
+
+dataset:
+  _target_: src.datasets.SegmentedAudioDataset
+  dataset:
+    _target_: src.datasets.CHiME6
+    split: val
+  subset_size: 10.0
+
+augmentations:
+  - _target_: src.augmentations.ResampleAugmentation
+    new_sample_rate: ${sample_rate}
+  - _target_: src.augmentations.CutAndFitAugmentation
+    target_length: ${test_audio_length}
+    deterministic: True
+  - _target_: src.augmentations.LoudnessAugmentation
+    loudness_db: -20.0

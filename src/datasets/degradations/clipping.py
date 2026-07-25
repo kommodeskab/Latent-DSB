@@ -53,5 +53,7 @@ if __name__ == "__main__":
     x = torch.rand((1, 48000))
     clip = Clip(5.0, 10.0, 1.0)
     x_clipped = clip(x)
-    print(f"Power reduction of clipped x - \
-        {10*torch.log10(torch.mean(x**2))-10*torch.log10(torch.mean(x_clipped**2))}")
+    print(
+        f"Power reduction of clipped x - \
+        {10 * torch.log10(torch.mean(x**2)) - 10 * torch.log10(torch.mean(x_clipped**2))}"
+    )

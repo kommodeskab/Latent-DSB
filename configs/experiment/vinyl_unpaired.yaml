@@ -4,17 +4,17 @@
 
 defaults:
   - override /trainer: gpu
-  - override /data: vinyl_unpaired
-  - override /callbacks: dsb_vinyl
+  - override /data: vinyl
+  - override /callbacks: dsb
   - override /model: dsb
   - override /logger: default
 
-project_name: 'denoising'
-task_name: 'unpaired denoising'
+project_name: 'vinyl'
+task_name: 'vinyl unpaired'
 compile: True
 phase: 'train'
 
-train_audio_length: 48000
+train_audio_length: 16000
 test_audio_length: 48000
 sample_rate: 16000
 
