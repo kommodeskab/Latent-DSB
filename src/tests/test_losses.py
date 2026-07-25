@@ -192,3 +192,13 @@ def test_mel_spectrogram_feature_extractor():
     loss_output["loss"].backward()
     assert output.grad is not None
     assert not torch.all(output.grad == 0)
+
+
+def test_weighted_loss_naming_scheme():
+    from src.losses import WeightedLoss, MSELoss, L1Loss
+
+    loss_fn = WeightedLoss(losses=[MSELoss(), L1Loss(), MSELoss()])
+    assert loss_fn.loss_names == ["MSELoss_1", "L1Loss_1", "MSELoss_2"]
+
+    single_loss_fn = WeightedLoss(losses=[MSELoss()])
+    assert single_loss_fn.loss_names == ["MSELoss_1"]

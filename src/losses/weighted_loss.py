@@ -16,26 +16,24 @@ class WeightedLoss(BaseLossFunction):
         # if it is none, set it to a list of 1.0s
         weights = 1.0 if weights is None else weights
         self.weights = [weights] * len(losses) if isinstance(weights, float) else weights
-            
+
         assert len(self.losses) == len(self.weights), "Losses and weights must have the same length"
-            
+
         # make a list of loss function names
-        # if the two loss functions have the same name, add a suffix to the second one
+        # each loss function name will have a suffix indicating its index among losses with the same name (e.g. Name_1, Name_2)
         self.loss_names = []
+        name_counts = {}
         for loss in self.losses:
-            name = loss.__class__.__name__
-            if name in self.loss_names:
-                count = 1
-                while f"{name}_{count}" in self.loss_names:
-                    count += 1
-                name = f"{name}_{count}"
-            self.loss_names.append(name)
+            base_name = loss.__class__.__name__
+            count = name_counts.get(base_name, 0) + 1
+            name_counts[base_name] = count
+            self.loss_names.append(f"{base_name}_{count}")
 
     def forward(self, model_output: ModelOutput, batch: Batch) -> LossOutput:
         loss = {"loss": 0.0}
 
         for loss_index, (loss_fn, weight) in enumerate(zip(self.losses, self.weights)):
-            loss_output = loss_fn.forward(model_output, batch)
+            loss_output = loss_fn(model_output, batch)
             loss["loss"] += weight * loss_output["loss"]
 
             # the loss outputs might contain other keys than "loss",
