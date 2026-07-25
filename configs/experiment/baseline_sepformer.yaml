@@ -1,0 +1,13 @@
+# @package _global_
+
+defaults:
+  - test
+  - override /model: baseline_sepformer
+  - override /data: reverb_wham
+
+project_name: 'baselines'
+task_name: 'sepformer'
+compile: False
+phase: 'test'
+
+num_steps: 0 # not needed for sepformer
