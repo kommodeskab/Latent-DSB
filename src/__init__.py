@@ -42,6 +42,10 @@ class AudioSample(TypedDict):
     sample_rate: int
 
 
+class AudioPathSample(TypedDict):
+    audio_path: str
+
+
 class AudioBatch(AudioSample):
     """
     A batch of samples from an audio dataset, containing a

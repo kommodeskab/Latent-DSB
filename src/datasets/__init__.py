@@ -1,10 +1,11 @@
 from .basedataset import BaseDataset as BaseDataset
+from .audio import AudioDataset as AudioDataset
 from .dummy import DummyDataset as DummyDataset
 from .vctk import VCTK as VCTK
 from .wham import WHAM as WHAM
 from .rir import RIR as RIR
 from .librispeech import LibriSpeech as LibriSpeech
-from .audio import AudioDataset as AudioDataset
+from .audio import AudioPathDataset as AudioPathDataset
 from .augmented import AugmentedAudioDataset as AugmentedAudioDataset
 from .unpaired import UnpairedAudioDataset as UnpairedAudioDataset
 from .degraded import DegradedDataset as DegradedDataset
@@ -12,3 +13,5 @@ from .fsd50k import FSD50K as FSD50K
 from .news_report import NewsReports01 as NewsReports01
 from .news_report import NewsReports02 as NewsReports02
 from .news_report import NewsReports as NewsReports
+from .chime6 import CHiME6 as CHiME6
+from .segmented import SegmentedAudioDataset as SegmentedAudioDataset
