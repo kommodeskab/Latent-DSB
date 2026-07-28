@@ -1,16 +1,18 @@
-from dotenv import load_dotenv
 from pathlib import Path
 import sys
-import torch
-from torch import Tensor
-from torchaudio.functional import resample
-from src.lightning_modules import BaseLightningModule
-from src.lightning_modules.baselines.universe.open_universe.open_universe.inference_utils.model_loader import load_model
 
-# Add open_universe directory to sys.path
+# Add open_universe directory to sys.path before importing open_universe components
 universe_dir = Path(__file__).parent / "open_universe"
 if str(universe_dir) not in sys.path:
     sys.path.insert(0, str(universe_dir))
+
+from dotenv import load_dotenv  # noqa: E402
+import torch  # noqa: E402
+from torch import Tensor  # noqa: E402
+from torchaudio.functional import resample  # noqa: E402
+
+from open_universe.inference_utils.model_loader import load_model  # noqa: E402
+from src.lightning_modules import BaseLightningModule  # noqa: E402
 
 load_dotenv()
 
