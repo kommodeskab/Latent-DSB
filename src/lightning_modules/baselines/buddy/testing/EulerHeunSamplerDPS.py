@@ -35,7 +35,15 @@ class EulerHeunSamplerDPS(EulerHeunSampler):
             iterations = self.args.tester.posterior_sampling.warm_initialization.wpe.iterations
             taps = self.args.tester.posterior_sampling.warm_initialization.wpe.taps
 
-            Y = stft(self.y.cpu().numpy(), **stft_options)
+            y_np = self.y.cpu().numpy()
+            is_3d = False
+            if y_np.ndim == 3 and y_np.shape[1] == 1:
+                y_np = y_np.squeeze(1)
+                is_3d = True
+
+            Y = stft(y_np, **stft_options)
+            if Y.ndim == 2:
+                Y = Y[None, ...]
             Y = Y.transpose(2, 0, 1)
             Z = wpe(Y, taps=taps, delay=delay, iterations=iterations, statistics_mode="full").transpose(1, 2, 0)
             x_pred = (
@@ -43,10 +51,16 @@ class EulerHeunSamplerDPS(EulerHeunSampler):
                 .to(self.y.device)
                 .type(self.y.dtype)
             )
+            if is_3d and x_pred.ndim == 2:
+                x_pred = x_pred.unsqueeze(1)
             if x_pred.shape[-1] > self.y.shape[-1]:
                 x_pred = x_pred[..., : self.y.shape[-1]]
 
-            x_pred = self.args.tester.posterior_sampling.warm_initialization.scaling_factor * x_pred / x_pred.std()
+            x_pred = (
+                self.args.tester.posterior_sampling.warm_initialization.scaling_factor
+                * x_pred
+                / (x_pred.std(dim=(-2, -1), keepdim=True) + 1e-8)
+            )
             x = x_pred + schedule[0] * torch.randn(shape).to(device)
 
         else:
@@ -60,7 +74,10 @@ class EulerHeunSamplerDPS(EulerHeunSampler):
         rec_grads = torch.autograd.grad(outputs=rec, inputs=x)[0]
 
         # Normalize weighting parameter zeta
-        normguide = torch.norm(rec_grads) / (self.args.exp.audio_len**0.5)
+        if rec_grads.ndim >= 2:
+            normguide = torch.norm(rec_grads, dim=(-2, -1), keepdim=True) / (self.args.exp.audio_len**0.5)
+        else:
+            normguide = torch.norm(rec_grads) / (self.args.exp.audio_len**0.5)
         return self.zeta / (normguide + 1e-8) * rec_grads, rec
 
     def optimize_op(self, x_den, t):
@@ -81,7 +98,7 @@ class EulerHeunSamplerDPS(EulerHeunSampler):
             if self.rec_loss_params is not None:
                 rec_loss = self.rec_loss_params(self.y, y_hat)
                 loss = rec_loss
-                assert torch.isnan(rec_loss).any() == False, "rec_loss is Nan"
+                assert not torch.isnan(rec_loss).any(), "rec_loss is Nan"
             else:
                 loss = 0.0
 
@@ -99,7 +116,7 @@ class EulerHeunSamplerDPS(EulerHeunSampler):
                 )  # detach gradients so that we do not backpropagate through the RIR operator
                 loss += reg_loss
 
-            assert torch.isnan(loss).any() == False, "loss is Nan"
+            assert not torch.isnan(loss).any(), "loss is Nan"
 
             self.optimizer_operator.zero_grad()
             loss.backward()
@@ -124,9 +141,10 @@ class EulerHeunSamplerDPS(EulerHeunSampler):
 
         # Rescale denoised speech estimate magnitude to constraint absolute magnitudes of RIR / speech estimate
         if self.args.tester.posterior_sampling.constraint_speech_magnitude.use:
+            std_val = x_den.detach().std(dim=(-2, -1), keepdim=True) if x_den.ndim >= 2 else x_den.detach().std()
             x_den = (
                 self.args.tester.posterior_sampling.constraint_speech_magnitude.speech_scaling
-                / x_den.detach().std()
+                / (std_val + 1e-8)
                 * x_den
             )  # Match the sigma_data of dataset
 

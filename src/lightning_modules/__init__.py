@@ -4,3 +4,9 @@ from .scheduler import DSBScheduler as DSBScheduler
 from .dsb import DSB as DSB
 from .gfb import GFB as GFB
 from .dsb import PairedDSB as PairedDSB
+from .baselines.sgmse.baseline import SGMSE as SGMSE
+from .baselines.universe.baseline import UniversePlusPlus as UniversePlusPlus
+from .baselines.buddy.buddy import Buddy as Buddy
+from .baselines.sepformer import Sepformer as Sepformer
+from .baselines.identity import Identity as Identity
+from .baselines.wpe import WPE as WPE

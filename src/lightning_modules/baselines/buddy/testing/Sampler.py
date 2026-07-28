@@ -65,7 +65,12 @@ class Sampler:
         return self.diff_params.Tweedie2score(tweedie, xt, t)
 
     def get_Tweedie_estimate(self, x, t_i):
-        x_hat = self.diff_params.denoiser(x.unsqueeze(1), self.model, t_i).squeeze(1)
+        is_2d = x.ndim == 2
+        if is_2d:
+            x = x.unsqueeze(1)
+        x_hat = self.diff_params.denoiser(x, self.model, t_i)
+        if is_2d:
+            x_hat = x_hat.squeeze(1)
         return x_hat
 
 

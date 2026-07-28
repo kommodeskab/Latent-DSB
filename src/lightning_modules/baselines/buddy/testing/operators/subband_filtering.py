@@ -49,6 +49,8 @@ class SubbandFiltering(Operator):
             x = x.unsqueeze(0)
         elif len(x.shape) == 2:
             pass
+        elif len(x.shape) == 3 and x.shape[1] == 1:
+            x = x.squeeze(1)
         else:
             raise ValueError("x must have shape (batch, samples) or (samples)")
 
@@ -129,6 +131,8 @@ class SubbandFiltering(Operator):
             y_subband = self.apply_istft(Y_subband, length=init_shape[-1])
             if len(init_shape) == 1:
                 y_subband = y_subband.squeeze(0)  # remove batch dimension
+            elif len(init_shape) == 3 and init_shape[1] == 1:
+                y_subband = y_subband.unsqueeze(1)
             return y_subband
 
         elif mode == "STFT":
@@ -382,8 +386,8 @@ class BlindSubbandFiltering(SubbandFiltering):
                     self.params[1][i][k], min=10 ** (self.Amin / 20), max=self.params[1][0][k]
                 )
 
-        assert torch.isnan(self.params[0]).any() == False, "decay is Nan"
-        assert torch.isnan(self.params[1]).any() == False, "weights is Nan"
+        assert not torch.isnan(self.params[0]).any(), "decay is Nan"
+        assert not torch.isnan(self.params[1]).any(), "weights is Nan"
 
     def cons(self, X, length=None):
         L = X.shape[-1]

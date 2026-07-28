@@ -1,0 +1,14 @@
+# @package _global_
+
+defaults:
+  - test
+  - override /callbacks: vinyl_metrics
+  - override /model: baseline_universe
+  - override /data: chime6_unpaired
+
+project_name: 'baselines'
+task_name: 'universe++ chime6'
+compile: False
+phase: 'test'
+
+num_steps: 10

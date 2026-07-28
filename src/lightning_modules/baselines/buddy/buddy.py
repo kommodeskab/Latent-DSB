@@ -275,21 +275,20 @@ class Buddy(BaseLightningModule):
         assert (
             num_steps == self.args.tester.sampling_params.T
         ), "Number of steps must be set to the same value in the callbacks and in the model for consistency"
-        output = []
 
-        for x in x_start:
-            x: Tensor = self.args.tester.posterior_sampling.warm_initialization.scaling_factor * x / x.std()
-            with torch.no_grad():
-                operator = BlindSubbandFiltering(
-                    op_hp=self.args.tester.informed_dereverberation.op_hp, sample_rate=16000
-                )
-                operator.update_H(use_noise=True)
+        x = (
+            self.args.tester.posterior_sampling.warm_initialization.scaling_factor
+            * x_start
+            / (x_start.std(dim=(-2, -1), keepdim=True) + 1e-8)
+        )
+        with torch.no_grad():
+            operator = BlindSubbandFiltering(op_hp=self.args.tester.informed_dereverberation.op_hp, sample_rate=16000)
+            operator.update_H(use_noise=True)
 
-            with torch.enable_grad():
-                pred = self.sampler.predict_conditional(x, operator=operator, shape=(1, x.shape[-1]), blind=True)
-            output.append(pred)
+        with torch.enable_grad():
+            pred = self.sampler.predict_conditional(x, operator=operator, shape=x.shape, blind=True)
 
-        return torch.stack(output, dim=0)
+        return pred
 
 
 if __name__ == "__main__":
@@ -300,5 +299,5 @@ if __name__ == "__main__":
         param.requires_grad = False
     with torch.no_grad():
         x = torch.randn(2, 1, 65536).to(device)
-        out = buddy.sample(x)
+        out = buddy.sample(x, num_steps=10)
     print(out.shape)

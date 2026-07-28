@@ -4,8 +4,15 @@ import numpy as np
 import scipy.stats
 from scipy.signal import butter, sosfilt
 
-from pesq import pesq
-from pystoi import stoi
+try:
+    from pesq import pesq
+except ImportError:
+    pesq = None
+
+try:
+    from pystoi import stoi
+except ImportError:
+    stoi = None
 
 
 def si_sdr_components(s_hat, s, n):

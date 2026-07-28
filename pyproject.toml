@@ -62,6 +62,7 @@ dependencies = [
     "timm>=1.0.24",
     "torch==2.8.0",
     "torch-ema==0.3",
+    "torchcde>=0.2.5",
     "torchview>=0.2.7",
     "transformers>=5.2.0",
     "types-requests>=2.32.4.20250913",
