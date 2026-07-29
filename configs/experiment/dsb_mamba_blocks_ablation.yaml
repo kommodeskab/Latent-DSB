@@ -1,0 +1,24 @@
+# @package _global_
+
+defaults:
+  - dsb
+  - override /data: reverb_unpaired
+
+project_name: 'dereverberation'
+task_name: 'dsb mamba blocks ablation'
+
+train_audio_length: 16000
+
+data:
+  batch_size: 12
+
+model:
+  pretraining_steps: 25_000
+  model:
+    num_blocks: 10
+  scheduler:
+    epsilon: 0.1
+
+trainer:
+  max_steps: 50_000
+  val_check_interval: 10_000

@@ -1,0 +1,14 @@
+# @package _global_
+
+defaults:
+  - test
+  - override /callbacks: vinyl_metrics
+  - override /model: baseline_identity
+  - override /data: chime6_unpaired
+
+project_name: 'baselines'
+task_name: 'identity chime6'
+compile: False
+phase: 'test'
+
+num_steps: 0 # isn't required for identity model
