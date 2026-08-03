@@ -3,6 +3,7 @@
 /hpc
 /playgrounds
 /data
+/playgrounds
 /wandb
 /configs/experiment/test*
 /configs/my_experiment/*
