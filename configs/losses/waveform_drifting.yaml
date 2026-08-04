@@ -2,11 +2,10 @@ _target_: src.losses.WeightedLoss
 losses:
   - _target_: src.losses.DriftingLoss
     temperature: 1.0
-    kernel_type: gaussian
+    kernel_type: laplace
   - _target_: src.losses.DriftingLoss
     temperature: 0.5
-    kernel_type: gaussian
+    kernel_type: laplace
   - _target_: src.losses.DriftingLoss
     temperature: 0.1
-    kernel_type: gaussian
-  - _target_: src.losses.L1Loss
+    kernel_type: laplace

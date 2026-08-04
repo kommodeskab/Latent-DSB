@@ -54,6 +54,10 @@ class HubertFeatureExtractor(nn.Module):
             self.first_n_transformer_layers <= self.n_transformer_layers
         ), f"first_n_transformer_layers must be less than or equal to {self.n_transformer_layers}"
 
+        print("Initialized HubertFeatureExtractor with the following configuration:")
+        print(f"  - Last {self.last_n_conv_layers} / {self.n_conv_layers} convolutional layers")
+        print(f"  - First {self.first_n_transformer_layers} / {self.n_transformer_layers} transformer layers")
+
     @dynamo.disable
     def forward(self, audio: Tensor) -> list[Tensor]:
         feature_list = []

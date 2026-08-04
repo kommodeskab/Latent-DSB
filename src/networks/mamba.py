@@ -38,11 +38,15 @@ class AdaLN(nn.Module):
         nn.init.zeros_(self.shift_proj.weight)
         nn.init.zeros_(self.shift_proj.bias)
 
-    def forward(self, x: Tensor, emb: Tensor) -> Tensor:
-        scale = self.scale_proj(emb).unsqueeze(1)  # (batch_size, 1, d_model)
-        shift = self.shift_proj(emb).unsqueeze(1)  # (batch_size, 1, d_model)
-
+    def forward(self, x: Tensor, emb: Optional[Tensor] = None) -> Tensor:
         x_norm = self.norm(x)  # (batch_size, seq_len, d_model)
+        if emb is None:
+            return x_norm
+        scale = self.scale_proj(emb)  # (batch_size, d_model) or (batch_size, seq_len, d_model)
+        shift = self.shift_proj(emb)  # (batch_size, d_model) or (batch_size, seq_len, d_model)
+        if scale.dim() == 2:
+            scale = scale.unsqueeze(1)
+            shift = shift.unsqueeze(1)
         return x_norm * (1 + scale) + shift
 
 
@@ -117,13 +121,13 @@ class Mamba2DiffusionModel(nn.Module):
 class Mamba2Block(nn.Module):
     def __init__(self, d_model: int, d_state: int):
         super().__init__()
-        self.norm = nn.LayerNorm(d_model)
+        self.adaln = AdaLN(d_model)
         self.mamba_fwd = Mamba2(d_model=d_model, d_state=d_state)
         self.mamba_bwd = Mamba2(d_model=d_model, d_state=d_state)
         self.out_proj = nn.Linear(d_model * 2, d_model)
 
-    def forward(self, x: Tensor) -> Tensor:
-        x_norm = self.norm(x)
+    def forward(self, x: Tensor, y: Optional[Tensor] = None) -> Tensor:
+        x_norm = self.adaln(x, y)
 
         out_fwd = self.mamba_fwd(x_norm)
 
@@ -147,23 +151,32 @@ class Mamba2Model(nn.Module):
         num_blocks: int,
         kernel_size: int = 256,
         stride: int = 16,
+        conditional: bool = False,
     ):
         super().__init__()
         padding = (kernel_size - stride) // 2
         self.down_conv = nn.Conv1d(
             in_channels, d_model, kernel_size=kernel_size, stride=stride, padding=padding, bias=False
         )
+        if conditional:
+            self.y_down_conv = nn.Conv1d(
+                in_channels, d_model, kernel_size=kernel_size, stride=stride, padding=padding, bias=False
+            )
         self.up_conv = nn.ConvTranspose1d(
             d_model, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=False
         )
         self.blocks = nn.ModuleList([Mamba2Block(d_model=d_model, d_state=d_state) for _ in range(num_blocks)])
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, y: Optional[Tensor] = None) -> Tensor:
         x = self.down_conv(x)
         x = x.transpose(1, 2)
 
+        if y is not None:
+            y = self.y_down_conv(y)
+            y = y.transpose(1, 2)
+
         for block in self.blocks:
-            x = block(x)
+            x = block(x, y)
 
         x = x.transpose(1, 2)
         x = self.up_conv(x)
