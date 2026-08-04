@@ -29,13 +29,14 @@ class OneStepModel(BaseLightningModule):
     def common_step(self, batch: UnpairedAudioBatch, batch_idx: int) -> StepOutput:
         batch["target"] = batch["x0"]  # add a target key to the batch for the loss function
 
-        sigma = (
-            torch.rand(batch["x1"].shape[0], device=batch["x1"].device, dtype=batch["x1"].dtype)
-            * (self.sigma_max - self.sigma_min)
-            + self.sigma_min
-        )
-        sigma = sigma.view(-1, *([1] * (batch["x1"].ndim - 1)))
-        batch["x1"] = batch["x1"] + sigma * torch.randn_like(batch["x1"])  # inject noise into the input batch
+        if self.training:
+            sigma = (
+                torch.rand(batch["x1"].shape[0], device=batch["x1"].device, dtype=batch["x1"].dtype)
+                * (self.sigma_max - self.sigma_min)
+                + self.sigma_min
+            )
+            sigma = sigma.view(-1, *([1] * (batch["x1"].ndim - 1)))
+            batch["x1"] = batch["x1"] + sigma * torch.randn_like(batch["x1"])  # inject noise into the input batch
 
         output = self(batch)
         loss = self.loss_fn(output, batch)

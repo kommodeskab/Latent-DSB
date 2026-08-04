@@ -5,32 +5,35 @@ from typing import Optional, Literal
 from .baseloss import BaseLossFunction
 from src import Batch, ModelOutput, LossOutput
 
+
 class DriftingLoss(BaseLossFunction):
     def __init__(
-        self, 
+        self,
         temperature: Optional[float] = None,
-        kernel_type: Literal["gaussian", "laplace"] = "gaussian"
+        kernel_type: Literal["gaussian", "laplace"] = "gaussian",
+        log: bool = False,
     ) -> None:
         super().__init__()
         self.temperature = temperature
         if kernel_type not in ("gaussian", "laplace"):
             raise ValueError(f"Invalid kernel_type: {kernel_type}. Expected 'gaussian' or 'laplace'.")
         self.kernel_type = kernel_type
+        self.log = log
 
     def compute_V(self, x: Tensor, y_pos: Tensor, y_neg: Tensor) -> Tensor:
         original_shape = x.shape
         batch_size = x.size(0)
-        
+
         x_flat = x.flatten(start_dim=1)
         y_pos_flat = y_pos.flatten(start_dim=1)
         y_neg_flat = y_neg.flatten(start_dim=1)
-        
+
         n_pos = y_pos_flat.size(0)
-        dim = x_flat.size(1) 
+        dim = x_flat.size(1)
 
         dist_pos = torch.cdist(x_flat, y_pos_flat) / math.sqrt(dim)
         dist_neg = torch.cdist(x_flat, y_neg_flat) / math.sqrt(dim)
-        
+
         dist_neg = dist_neg + torch.eye(batch_size, device=x.device) * 1e6
 
         # normalize the distances with the dimension of the space
@@ -59,25 +62,25 @@ class DriftingLoss(BaseLossFunction):
         A = torch.sqrt(A_row * A_col)
 
         A_pos, A_neg = A[:, :n_pos], A[:, n_pos:]
-        
+
         W_pos = A_pos * A_neg.sum(dim=1, keepdim=True)
         W_neg = A_neg * A_pos.sum(dim=1, keepdim=True)
 
         if self.kernel_type == "gaussian":
             drift_pos = W_pos @ y_pos_flat
             drift_neg = W_neg @ y_neg_flat
-            
+
             V = (drift_pos - drift_neg) * (2.0 / temp)
         else:
             safe_dist_pos = torch.clamp(dist_pos, min=1e-5)
             safe_dist_neg = torch.clamp(dist_neg, min=1e-5)
-            
+
             W_pos = W_pos / safe_dist_pos
             W_neg = W_neg / safe_dist_neg
-            
+
             drift_pos = (W_pos @ y_pos_flat) - x_flat * W_pos.sum(dim=1, keepdim=True)
             drift_neg = (W_neg @ y_neg_flat) - x_flat * W_neg.sum(dim=1, keepdim=True)
-            
+
             V = (drift_pos - drift_neg) * (1.0 / temp)
 
         return V.view(original_shape)
@@ -86,10 +89,13 @@ class DriftingLoss(BaseLossFunction):
         x = model_output["output"]
         y_pos = batch["target"]
         y_neg = x.detach()
-        
+
         V = self.compute_V(x, y_pos, y_neg)
         target = (x + V).detach()
-        
+
         loss = torch.nn.functional.mse_loss(x, target)
-        
+
+        if self.log:
+            loss = 10 * torch.log10(loss + 1e-6)  # Convert to dB scale, adding a small value to avoid log(0)
+
         return LossOutput(loss=loss)
