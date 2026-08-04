@@ -1,0 +1,13 @@
+# @package _global_
+
+defaults:
+  - test
+  - override /model: baseline_universe
+  - override /data: reverb_unpaired_libri
+
+project_name: 'baselines (libri)'
+task_name: 'universe++ reverb libri'
+compile: False
+phase: 'test'
+
+num_steps: 10

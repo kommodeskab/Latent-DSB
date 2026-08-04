@@ -18,7 +18,7 @@ from src import Batch
 from contextlib import contextmanager, nullcontext, AbstractContextManager
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 logger = logging.getLogger(__name__)
 

@@ -39,6 +39,10 @@ unpaired_audio_metrics:
       degraded_key: x1
       output_key: x0_hat
 
+    - _target_: src.callbacks.metrics.WER
+      clean_key: x1_clean
+      output_key: x0_hat
+
     - _target_: src.callbacks.metrics.SRCS
       clean_key: x1_clean
       output_key: x0_hat
