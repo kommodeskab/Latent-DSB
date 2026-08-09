@@ -72,6 +72,9 @@ class DriftingLoss(BaseLossFunction):
 
             V = (drift_pos - drift_neg) * (2.0 / temp)
         else:
+            W_pos = W_pos / dist_pos
+            W_neg = W_neg / dist_neg
+
             drift_pos = (W_pos @ y_pos_flat) - x_flat * W_pos.sum(dim=1, keepdim=True)
             drift_neg = (W_neg @ y_neg_flat) - x_flat * W_neg.sum(dim=1, keepdim=True)
 
