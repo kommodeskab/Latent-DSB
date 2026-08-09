@@ -9,6 +9,7 @@ from typing import Union
 from src.lightning_modules.fake_module import FakeModule
 import torchaudio.transforms as T
 from typing import Tuple
+from src.utils import normalize
 
 
 class Wav2VecFeatureExtractor(nn.Module):
@@ -24,9 +25,7 @@ class Wav2VecFeatureExtractor(nn.Module):
             audio = audio.squeeze(1)
 
         # Normalize audio to have zero mean and unit variance
-        audio = (audio - audio.mean(dim=-1, keepdim=True)) / torch.sqrt(
-            audio.var(dim=-1, keepdim=True, unbiased=False) + 1e-5
-        )
+        audio = normalize(audio, dim=-1)
 
         features = self.model(audio, output_hidden_states=True).hidden_states
         return [features[i] for i in self.layers_to_use]
@@ -65,9 +64,7 @@ class HubertFeatureExtractor(nn.Module):
         assert audio.dim() == 3 and audio.shape[1] == 1, "Audio tensor must have shape (batch_size, 1, sequence_length)"
 
         # Normalize audio to zero-mean and unit-variance per utterance (standard for HuBERT / Wav2Vec2)
-        extract_features = (audio - audio.mean(dim=-1, keepdim=True)) / torch.sqrt(
-            audio.var(dim=-1, keepdim=True, unbiased=False) + 1e-5
-        )
+        extract_features = normalize(audio, dim=-1)
 
         n_conv_layers = len(self.model.feature_extractor.conv_layers)
         for n, conv_layer in enumerate(self.model.feature_extractor.conv_layers):
@@ -155,12 +152,18 @@ FEATURE_EXTRACTORS = Union[Wav2VecFeatureExtractor, HubertFeatureExtractor, MelS
 
 
 class FeatureMatchingLoss(BaseLossFunction):
-    def __init__(self, feature_extractor: FEATURE_EXTRACTORS, loss_fn: BaseLossFunction):
+    def __init__(
+        self,
+        feature_extractor: FEATURE_EXTRACTORS,
+        loss_fn: BaseLossFunction,
+        normalized_layer_weights: bool = False,
+    ):
         super().__init__()
         feature_extractor.requires_grad_(False)
         feature_extractor.eval()
         self.feature_extractor = FakeModule(feature_extractor)
         self.loss_fn = loss_fn
+        self.normalized_layer_weights = normalized_layer_weights
 
     def forward(self, model_output: ModelOutput, batch: Batch) -> LossOutput:
         self.feature_extractor.eval()
@@ -171,10 +174,13 @@ class FeatureMatchingLoss(BaseLossFunction):
 
         generated_features = self.feature_extractor(model_output["output"])
 
-        # Compute element counts and normalize layer weights by element count
-        element_counts = [real_feat.numel() for real_feat in real_features]
-        total_elements = sum(element_counts)
-        layer_weights = [count / total_elements for count in element_counts]
+        if self.normalized_layer_weights:
+            # Compute element counts and normalize layer weights by element count
+            element_counts = [real_feat.numel() for real_feat in real_features]
+            total_elements = sum(element_counts)
+            layer_weights = [count / total_elements for count in element_counts]
+        else:
+            layer_weights = [1 / len(real_features)] * len(real_features)
 
         loss = {}
         for weight, real_feat, gen_feat in zip(layer_weights, real_features, generated_features):

@@ -1,17 +1,23 @@
 _target_: src.losses.FeatureMatchingLoss
+
 feature_extractor:
   _target_: src.losses.HubertFeatureExtractor
   last_n_conv_layers: 7
   first_n_transformer_layers: 6
+
 loss_fn:
+
   _target_: src.losses.WeightedLoss
+
   losses:
     - _target_: src.losses.DriftingLoss
       temperature: 1.0
       kernel_type: laplace
+
     - _target_: src.losses.DriftingLoss
       temperature: 0.5
       kernel_type: laplace
+
     - _target_: src.losses.DriftingLoss
       temperature: 0.1
       kernel_type: laplace

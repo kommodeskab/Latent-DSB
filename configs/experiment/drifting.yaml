@@ -7,7 +7,7 @@ defaults:
   - override /callbacks: onestep
   - override /model: onestep
   - override /networks@model.model: mamba2
-  - override /losses@model.loss_fn: waveform_drifting
+  - override /losses@model.loss_fn: feature_matching
   - override /logger: default
 
 
@@ -21,10 +21,10 @@ test_audio_length: 48000
 sample_rate: 16000
 
 model:
-  sigma: [0.0, 0.3]
+  sigma: [0.0, 0.1]
 
 data:
-  batch_size: 16
+  batch_size: 32
   num_workers: 16
 
 logger:
@@ -34,5 +34,5 @@ trainer:
   max_steps: 200_000
   log_every_n_steps: 100
   max_epochs: -1
-  limit_val_batches: 50
+  limit_val_batches: 1000
   val_check_interval: "00:00:45:00"

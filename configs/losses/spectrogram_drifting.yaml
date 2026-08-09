@@ -15,9 +15,7 @@ losses:
   - _target_: src.losses.FeatureMatchingLoss
 
     feature_extractor:
-      _target_: src.losses.HubertFeatureExtractor
-      last_n_conv_layers: 7
-      first_n_transformer_layers: 6
+      _target_: src.losses.MelSpectrogramFeatureExtractor
 
     loss_fn:
       _target_: src.losses.WeightedLoss

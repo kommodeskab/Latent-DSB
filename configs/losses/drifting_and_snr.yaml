@@ -3,11 +3,16 @@ losses:
   - _target_: src.losses.DriftingLoss
     temperature: 1.0
     kernel_type: laplace
+    log: True
 
   - _target_: src.losses.DriftingLoss
     temperature: 0.5
     kernel_type: laplace
+    log: True
 
   - _target_: src.losses.DriftingLoss
     temperature: 0.1
     kernel_type: laplace
+    log: True
+
+  - _target_: src.losses.SNRLoss

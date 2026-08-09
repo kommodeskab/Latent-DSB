@@ -406,6 +406,18 @@ def get_batch_from_dataset(dataset: Dataset, batch_size: int, shuffle: bool = Fa
     return next(iter(dataloader))
 
 
-if __name__ == "__main__":
-    projectname = project_from_id("220126133817")
-    print(projectname)
+def normalize(x: torch.Tensor, dim: int, eps: float = 1e-5) -> torch.Tensor:
+    """
+    Normalizes a tensor along a specified dimension to have zero mean and unit variance.
+
+    Args:
+        x (torch.Tensor): The input tensor to normalize.
+        dim (int): The dimension along which to compute the mean and variance.
+        eps (float, optional): A small value added to the variance for numerical stability. Defaults to 1e-5.
+
+    Returns:
+        torch.Tensor: The normalized tensor with zero mean and unit variance along the specified dimension.
+    """
+    mean = x.mean(dim=dim, keepdim=True)
+    std = x.std(dim=dim, keepdim=True)
+    return (x - mean) / (std + eps)

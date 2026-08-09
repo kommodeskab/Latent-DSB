@@ -4,6 +4,7 @@ from mamba_ssm.modules.mamba2 import Mamba2
 from torch import Tensor
 import math
 from typing import Optional
+from src.utils import normalize
 
 
 class TimestepEmbedder(nn.Module):
@@ -152,8 +153,10 @@ class Mamba2Model(nn.Module):
         kernel_size: int = 256,
         stride: int = 16,
         conditional: bool = False,
+        normalize: bool = False,
     ):
         super().__init__()
+        self.normalize = normalize
         padding = (kernel_size - stride) // 2
         self.down_conv = nn.Conv1d(
             in_channels, d_model, kernel_size=kernel_size, stride=stride, padding=padding, bias=False
@@ -180,5 +183,8 @@ class Mamba2Model(nn.Module):
 
         x = x.transpose(1, 2)
         x = self.up_conv(x)
+
+        if self.normalize:
+            x = normalize(x, dim=-1)
 
         return x
