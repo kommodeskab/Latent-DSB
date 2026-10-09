@@ -2,12 +2,14 @@ from .base import BaseMetric
 from src.lightning_modules import BaseLightningModule
 from src import StepOutput, TensorDict, AudioBatch
 from typing import Optional, Literal
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 class LogAudioMetric(BaseMetric):
     """
     This "metric" doesn't compute any metrics.
-    Instead, it logs specific audio files to WandB.
+    Instead, it logs specific audio files and waveform plots to WandB.
     """
 
     def __init__(
@@ -68,12 +70,44 @@ class LogAudioMetric(BaseMetric):
         if self.has_logged and self.once:
             return None
 
+        normalized_samples = []
+        for s in self.samples:
+            peak = np.max(np.abs(s))
+            if peak > 0:
+                normalized_samples.append(s / peak)
+            else:
+                normalized_samples.append(s)
+
         self.module.logger.log_audio(
             key=self.name(),
-            audios=self.samples,
+            audios=normalized_samples,
             step=self.module.global_step,
             sample_rate=self.sample_rates,
         )
+
+        fig, axs = plt.subplots(
+            nrows=1,
+            ncols=len(self.samples),
+            figsize=(3.0 * len(self.samples), 3.0),
+            sharey=True,
+            squeeze=False,
+        )
+        for i, sample in enumerate(self.samples):
+            axs[0, i].plot(sample)
+            axs[0, i].set_title(f"Sample {i}")
+            axs[0, i].set_xlabel("Time (samples)")
+            axs[0, i].grid(True)
+
+        axs[0, 0].set_ylabel("Amplitude")
+        plt.tight_layout()
+
+        self.module.logger.log_image(
+            key=self.waveform_name(),
+            images=[fig],
+            step=self.module.global_step,
+        )
+        plt.close(fig)
+
         self.has_logged = True
 
     def reset(self) -> None:
@@ -82,3 +116,6 @@ class LogAudioMetric(BaseMetric):
 
     def name(self) -> str:
         return f"log_audio/{self.key}"
+
+    def waveform_name(self) -> str:
+        return f"log_waveform/{self.key}"

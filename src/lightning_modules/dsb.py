@@ -1,6 +1,6 @@
 from torch import Tensor
 import torch
-from src import UnpairedAudioBatch, ModelOutput, StepOutput, SchedulerBatch
+from src import UnpairedAudioBatch, ModelOutput, StepOutput, SchedulerBatch, LossOutput
 from src.lightning_modules.baselightningmodule import BaseLightningModule
 from torch.nn import Module
 from torch.optim import Optimizer
@@ -107,10 +107,28 @@ class DSB(BaseLightningModule):
             x1_b = self.sample(x0_b, direction="forward", num_steps=self.inference_steps, verbose=False)
             x0_f = self.sample(x1_f, direction="backward", num_steps=self.inference_steps, verbose=False)
 
-        scheduler_batch = self.scheduler.sample_training_batch(x0_b, x1_b, x0_f, x1_f)
-        model_output = self(scheduler_batch)
+        backward_batch = self.scheduler._sample_training_batch(x0_b, x1_b, direction="backward")
+        forward_batch = self.scheduler._sample_training_batch(x0_f, x1_f, direction="forward")
 
-        loss_output = self.loss_fn(model_output, scheduler_batch)
+        b_size = backward_batch["xt"].shape[0]
+        combined_batch = SchedulerBatch(
+            xt=torch.cat([backward_batch["xt"], forward_batch["xt"]], dim=0),
+            timesteps=torch.cat([backward_batch["timesteps"], forward_batch["timesteps"]], dim=0),
+            conditional=torch.cat([backward_batch["conditional"], forward_batch["conditional"]], dim=0),
+            target=torch.cat([backward_batch["target"], forward_batch["target"]], dim=0),
+        )
+
+        model_output: ModelOutput = self(combined_batch)
+        backward_output = ModelOutput(output=model_output["output"][:b_size])
+        forward_output = ModelOutput(output=model_output["output"][b_size:])
+
+        backward_loss: LossOutput = self.loss_fn(backward_output, backward_batch)
+        forward_loss: LossOutput = self.loss_fn(forward_output, forward_batch)
+
+        loss_output = {}
+        loss_output.update({f"backward_{k}": v for k, v in backward_loss.items()})
+        loss_output.update({f"forward_{k}": v for k, v in forward_loss.items()})
+        loss_output["loss"] = (backward_loss["loss"] + forward_loss["loss"]) / 2.0
 
         return StepOutput(
             loss=loss_output["loss"],

@@ -5,6 +5,13 @@
 defaults:
   - dsb
   - override /data: reverb_unpaired
+  - override /losses@model.loss_fn: feature_matching
+
+compile: False
 
 project_name: 'dereverberation'
 task_name: 'unpaired dsb'
+
+model:
+  scheduler:
+    target: terminal

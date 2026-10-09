@@ -13,5 +13,4 @@ augmentations:
   - _target_: src.augmentations.CutAndFitAugmentation
     target_length: ${test_audio_length}
     deterministic: True
-  - _target_: src.augmentations.LoudnessAugmentation
-    loudness_db: -20.0
+  - _target_: src.augmentations.NormalizeAugmentation

@@ -14,16 +14,34 @@ class WeightedLoss(BaseLossFunction):
         self.losses: list[BaseLossFunction] = nn.ModuleList(losses)
         self.weights = weights
 
-    def forward(self, model_output: ModelOutput, batch: Batch) -> LossOutput:
-        loss = {"loss": 0.0}
+        counts: dict[str, int] = {}
+        for loss_fn in losses:
+            name = loss_fn.__class__.__name__
+            counts[name] = counts.get(name, 0) + 1
 
-        for loss_fn, weight in zip(self.losses, self.weights):
-            loss_output = loss_fn.forward(model_output, batch)
+        seen: dict[str, int] = {}
+        self.function_names: list[str] = []
+        for loss_fn in losses:
+            name = loss_fn.__class__.__name__
+            if counts[name] > 1:
+                seen[name] = seen.get(name, 0) + 1
+                self.function_names.append(f"{name}{seen[name]}")
+            else:
+                self.function_names.append(name)
+        self.loss_names: list[str] = self.function_names
+
+    def forward(self, model_output: ModelOutput, batch: Batch) -> LossOutput:
+        loss = LossOutput(loss=0.0)
+
+        for loss_fn, weight, name in zip(self.losses, self.weights, self.function_names):
+            loss_output: LossOutput = loss_fn(model_output, batch)
             loss["loss"] += weight * loss_output["loss"]
 
             # the loss outputs might contain other keys than "loss",
             # we also want to log these, therefore, we add the loss name as prefix to the key
             for key, value in loss_output.items():
-                loss[f"{loss_fn.__class__.__name__}_{key}"] = value
+                loss[f"{name}_{key}"] = value
 
-        return LossOutput(**loss)
+        loss["loss"] = loss["loss"] / sum(self.weights)
+
+        return loss
