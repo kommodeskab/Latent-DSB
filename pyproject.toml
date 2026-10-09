@@ -12,6 +12,7 @@ explicit = true
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu128" }
+latex-table-generator = { path = "../latex-table-generator", editable = true }
 
 [tool.uv]
 # This forces uv to use the PyTorch version installed in your venv to compile the kernels
@@ -38,6 +39,7 @@ dependencies = [
     "hydra-core==1.3.2",
     "invoke>=2.2.1",
     "ipykernel>=7.1.0",
+    "latex-table-generator",
     "librosa>=0.11.0",
     "mamba-ssm[causal-conv1d]>=2.3.1",
     "matplotlib==3.10.8",
