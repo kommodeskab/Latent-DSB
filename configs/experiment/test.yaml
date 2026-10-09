@@ -1,0 +1,32 @@
+# @package _global_
+
+# The standard config for evaluating test metrics
+
+defaults:
+  - override /trainer: gpu
+  - override /data: ???
+  - override /callbacks: test_metrics
+  - override /model: ???
+  - override /logger: default
+
+project_name: ???
+task_name: ???
+compile: False
+phase: 'test'
+
+train_audio_length: 0
+test_audio_length: 81920
+sample_rate: 16000
+
+data:
+  batch_size: 10
+  num_workers: 12
+
+logger:
+  log_model: False
+
+trainer:
+  max_steps: 0
+  log_every_n_steps: 1
+  max_epochs: 0
+  limit_test_batches: 100

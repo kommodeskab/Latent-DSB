@@ -1,0 +1,21 @@
+# @package _global_
+
+defaults:
+  - test
+  - override /callbacks: vinyl_metrics
+  - override /model: dsb
+  - override /data: chime6_unpaired
+
+project_name: 'baselines'
+task_name: 'dsb chime6'
+ckpt_filename: '270726130341/last'
+compile: False
+phase: 'test'
+
+num_steps: 50
+
+data:
+  batch_size: 20
+
+trainer:
+  limit_test_batches: 50

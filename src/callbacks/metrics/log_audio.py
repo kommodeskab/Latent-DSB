@@ -76,7 +76,9 @@ class LogAudioMetric(BaseMetric):
         )
         self.has_logged = True
 
-    def reset(self) -> None: ...
+    def reset(self) -> None:
+        self.samples = []
+        self.sample_rates = []
 
     def name(self) -> str:
         return f"log_audio/{self.key}"

@@ -36,7 +36,7 @@
         new_sample_rate: ${sample_rate}
 
 - _target_: src.datasets.degradations.Clip
-  min_db: 3
-  max_db: 6
+  min_dB: 0
+  max_dB: 1
   prob: 1.0
   deterministic: True

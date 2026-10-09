@@ -3,9 +3,9 @@
 defaults:
   - test
   - override /model: baseline_wpe
-  - override /data: reverb_unpaired
+  - override /data: reverb_unpaired_libri
 
-project_name: 'baselines'
+project_name: 'baselines (libri)'
 task_name: 'wpe'
 compile: False
 phase: 'test'

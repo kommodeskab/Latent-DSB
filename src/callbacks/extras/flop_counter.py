@@ -57,6 +57,8 @@ class CountFlopsExtra(ExtraMetricOutput):
         wpe_flops = 0
         for m in pl_module.modules():
             if isinstance(m, WPE):
+                if not hasattr(m, "__total_flops__") or m.__total_flops__ == 0:
+                    calculate_wpe_block_flops(m, (batch[self.key],), None)
                 wpe_flops += m.__total_flops__
 
         total_flops = torch_flops + mamba_flops + wpe_flops

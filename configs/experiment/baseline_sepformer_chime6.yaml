@@ -1,0 +1,14 @@
+# @package _global_
+
+defaults:
+  - test
+  - override /callbacks: vinyl_metrics
+  - override /model: baseline_sepformer
+  - override /data: chime6_unpaired
+
+project_name: 'baselines'
+task_name: 'sepformer chime6'
+compile: False
+phase: 'test'
+
+num_steps: 0 # not needed for sepformer

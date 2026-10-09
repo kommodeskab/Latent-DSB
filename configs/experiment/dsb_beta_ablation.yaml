@@ -1,0 +1,29 @@
+# @package _global_
+
+defaults:
+  - dsb
+  - override /data: reverb_unpaired
+  - override /callbacks: test_metrics # only add if doing a test, otherwise use train_metrics
+
+phase: 'test'
+
+project_name: 'ablation tests'
+task_name: 'dsb beta ablation'
+
+num_steps: 50
+
+logger:
+  log_model: False
+
+data:
+  batch_size: 10
+
+model:
+  pretraining_steps: 25_000
+  scheduler:
+    epsilon: 0.0
+
+trainer:
+  max_steps: 50_000
+  val_check_interval: 1.0
+  limit_test_batches: 100

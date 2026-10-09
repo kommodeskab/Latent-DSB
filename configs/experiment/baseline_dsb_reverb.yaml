@@ -3,17 +3,17 @@
 defaults:
   - test
   - override /model: baseline_dsb_unpaired
-  - override /data: reverb_unpaired
+  - override /data: reverb_unpaired_libri
 
-project_name: 'baselines'
-task_name: 'dsb reverb'
+project_name: 'baselines (libri)'
+task_name: 'dsb reverb unpaired (50)'
 compile: False
 phase: 'test'
 
-ckpt_filename: "140426074425/model-140426074425:v0"
-num_steps: 10
+ckpt_filename: "300426081933/model-300426081933:v0"
+num_steps: 50
 
 model:
   scheduler:
     epsilon: 0.1
-    target: terminal
+    target: drift
